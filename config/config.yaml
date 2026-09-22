@@ -1,0 +1,42 @@
+project:
+  name: nse-factor-fundamentals
+  timezone: "Asia/Kolkata"
+
+paths:
+  duckdb_file: "data/warehouse.duckdb"
+  raw_prices_dir: "data/raw/prices"
+  raw_fundamentals_dir: "data/raw/fundamentals"
+
+sources:
+  nse_bhavcopy:
+    base_url: "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_{yyyymmdd}_F_0000.csv.zip"
+    format_cutover_date: "2024-07-08"   # legacy format retired; UDiFF only from here on
+    udiff_start_date: "2024-06-21"
+    throttle_requests_per_sec: 3
+    sleep_seconds_min: 0.5
+    sleep_seconds_max: 1.0
+    segment_filter: "CM"
+    series_include: ["EQ", "BE", "BZ"]   # BE/BZ = trade-to-trade, relevant for slippage calibration later
+
+  nse_financial_results:
+    home_url: "https://www.nseindia.com/"
+    api_url: "https://www.nseindia.com/api/corporates-financial-results"
+    xbrl_archive_prefix: "https://nsearchives.nseindia.com/corporate/xbrl/"
+    throttle_requests_per_sec: 3
+    sleep_seconds_min: 0.5
+    sleep_seconds_max: 1.0
+    known_date_field: "broadCastDate"   # exchange dissemination timestamp; NOT financial_year or period_end
+    fallback_lag_days: 45               # only used if broadCastDate is ever missing; flags data_quality
+    fallback_flag_value: "ANNOUNCEMENT_DATE_MISSING_45D_LAG_APPLIED"
+
+  screener_in:
+    enabled: false   # ToS prohibits copying/mirroring/commercial use; see LICENSE_ASSESSMENT.md. Do not build.
+
+  bse_direct:
+    enabled: false   # bseindia.com website disclaimer prohibits reproduction/redistribution; see LICENSE_ASSESSMENT.md.
+                      # Fundamentals are sourced via nse_financial_results instead (same underlying XBRL taxonomy,
+                      # served from nseindia.com under NSE's own data usage terms).
+
+universe:
+  exchange: "NSE"
+  segment: "CM"

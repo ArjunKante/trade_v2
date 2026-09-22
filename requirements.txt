@@ -1,0 +1,10 @@
+pandas>=2.0
+numpy
+duckdb>=0.10
+requests
+pyyaml
+statsmodels
+arch
+pytest
+purgedcv
+anthropic
