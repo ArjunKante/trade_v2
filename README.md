@@ -1,8 +1,32 @@
-# NSE Factor & Fundamentals System — Phase 1 (Data Layer)
+# NSE Factor & Fundamentals System
 
-Status: Phase 1 gate. See `LICENSE_ASSESSMENT.md` for the source-by-source
-licensing decision. See `PREREGISTRATION.md` (to be written before any model
-runs, per project rules) for locked design choices once Phase 6 is reached.
+See `LICENSE_ASSESSMENT.md` for the source-by-source licensing decision.
+See `PREREGISTRATION.md` / `PREREGISTRATION_COMBINATION.md` for locked
+study designs and decision rules.
+
+## Final project state
+
+| component | status |
+|---|---|
+| `momentum_12_1` | **Established.** Replicated in two differently-constructed Indian universes (microcap whole-market, large-cap top-200). Sealed holdout evaluated once and passed. |
+| `earnings_yield` | **Suggestive, not established.** Independent of momentum (near-zero cross-sectional correlation), but fails multiple-comparisons correction on its own. |
+| momentum + earnings_yield combination | **Untestable on this data, at any reachable horizon.** A power analysis (portfolio margin, then the more efficient paired rank-IC difference) found the measurement too noisy relative to any economically plausible effect size — not evidence the effect is absent, evidence it can't be distinguished from noise here. |
+| sealed price holdout | **Spent** (one pre-registered study, passed). Cannot be re-read, re-run, or appealed. |
+| final pre-registered study slot | **Held, unspent** — deliberately not spent on a test that couldn't have passed. |
+
+Full detail, in reading order: `FINDINGS.md` (the momentum studies and the
+combination power-analysis finding), `FUNDAMENTALS.md` (the fundamentals
+data layer build, phase by phase, including the Integrated Filing
+fetcher), `BUGS.md` (every bug found along the way, mechanism and fix),
+`OPERATIONS.md` (logging/resume lessons from long-running extractions).
+
+The most transferable result of this project is arguably not about either
+factor: testing an incremental improvement over an already-working
+strategy is usually limited by the *variance* of the difference between
+the two, not by the size of the improvement — see `FINDINGS.md` Section 12
+for the numbers (an 87-year requirement on the intuitive portfolio-margin
+metric, 8-72 years even on the more efficient paired-IC metric, for
+effect sizes a second factor could plausibly produce).
 
 ## Layout
 ```
