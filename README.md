@@ -36,6 +36,7 @@ src/data_layer/
   prices_nse.py              NSE bhavcopy (UDiFF) fetch + parse + load
   fundamentals_nse.py        NSE-hosted XBRL financial-results fetch + load
   xbrl_parser.py             long-format XBRL fact extraction
+src/reports/fundamental_snapshot.py  per-company fundamental snapshot (research tool, see below)
 scripts/phase1_demo_load.py  one-off driver proving the pipeline against real data
 tests/test_known_date_guard.py  unit tests for the known_date <= as_of invariant
 data/warehouse.duckdb        the point-in-time warehouse (append-only)
@@ -48,3 +49,41 @@ pip install -r requirements.txt
 python scripts/phase1_demo_load.py
 python -m pytest tests/ -v
 ```
+
+## Fundamental snapshot (research tool, not a study)
+
+Reads growth/profitability/returns/balance-sheet/cash-flow/efficiency/
+valuation/momentum-context for one company, or the current momentum top
+decile in batch:
+```
+python scripts/run_fundamental_snapshot.py TCS
+python scripts/run_fundamental_snapshot.py INE467B01029
+python scripts/run_fundamental_snapshot.py --batch-top-decile
+```
+No composite score, no pre-registration, no study slot spent. Deliberately
+reads current (not pre-holdout-truncated) price data and deliberately does
+NOT read the SEBI Integrated Filing fundamentals source (unverified context
+convention) — both explained in `src/reports/fundamental_snapshot.py`'s
+module docstring, along with why quarterly/annual fundamentals in this
+warehouse currently top out around late 2024 / FY2024 regardless of which
+company you ask about.
+
+## Fundamental screener (research tool, not a study)
+
+Filters the current momentum top decile down to a shortlist on fixed,
+pre-stated P&L / balance-sheet / liquidity thresholds:
+```
+python scripts/run_fundamental_screener.py
+```
+**This filter is an untested modification to `momentum_12_1`** — the
+holdout-passed result is on the unfiltered top decile (FINDINGS.md). Every
+company gets a verdict (PASS / FAIL / INSUFFICIENT DATA / FINANCIALS-PARTIAL,
+never silently dropped), FAILs show the specific metric and value, and
+financials get the D/E and interest-coverage checks skipped (flagged, not
+silently passed or failed) since those ratios don't mean the same thing for
+banks/NBFCs. No composite score, no threshold tuning after seeing results.
+Full per-company detail, including known_date/staleness and the FAILED
+names with their reasons (for measuring the filter's cost later, with no
+modelling), is logged to `data/screener_logs/` on every run — see
+`src/reports/fundamental_screener.py`'s module docstring for the verdict
+precedence rule and the accepted turnaround-story trade-off.
