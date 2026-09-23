@@ -41,10 +41,11 @@ mean daily x-sec std of forward 63d return fell from 43.5% to 34.3% when
 just these 14 entities were excluded, and to 28.1% when measured via the
 median instead of the mean.
 
-**Status: investigated further and fixed, with an unexpected result --
-Bug #2's fix already neutralized all 14 known cases before this fix was
-written.** Two follow-up questions, both resolved directly rather than
-argued:
+**Status: built, currently redundant, retained deliberately.** A legitimate
+outcome, not a wasted effort: Bug #2's fix already neutralized all 14
+known cases before this fix was written, and the measurement below
+confirms that rather than assuming it. Two follow-up questions, both
+resolved directly rather than argued:
 
 **(a) Can the parser be extended to these action types?** No -- checked
 against the cached raw feed (22,514 records, not just the ones the bonus/

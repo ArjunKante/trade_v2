@@ -72,11 +72,18 @@ of momentum was net positive. The cost of this specific tail risk is
 foregone upside during a violent recovery, not capital destruction.
 
 This is a genuinely different risk profile from "the strategy crashes when
-momentum crashes," and it should be stated this way -- opportunity cost in
-one specific regime (violent V-shaped recovery), not downside risk -- every
-time this strategy is described going forward. Section 3's holdout result
-does not contradict this; a thin 5-period holdout with no violent reversal
-in it has simply not tested this failure mode at all (see Section 8).
+momentum crashes." Section 3's holdout result does not contradict this; a
+thin 5-period holdout with no violent reversal in it has simply not tested
+this failure mode at all (see Section 8).
+
+**This section's closing instruction ("stated this way... every time this
+strategy is described going forward") is superseded by the amendment
+immediately below and must not be repeated as originally worded.** Any
+future summary of this strategy's known weaknesses must lead with the
+corrected picture: the weakness is real but smaller and more
+window-dependent than originally reported here, and momentum finished
+AHEAD, not behind, over the full mechanically-defined drawdown episode
+that contains 2020.
 
 **Amendment, after a descriptive (not a test, no study slot spent) drawdown
 diagnostic run against a mechanical criterion fixed before any period was
@@ -124,6 +131,23 @@ rather than confirmed -- stated as a real limitation, not resolved by
 this diagnostic, which cannot be: one episode is not enough data to
 settle it either way.
 
+**General lesson, stated plainly because this project got it wrong once
+already**: a performance claim that depends on which calendar window you
+slice it with is not a robust claim, even when every individual number
+feeding it is correctly computed. Calendar-year 2020 is a natural,
+convenient boundary -- twelve months, matches how markets and media talk
+about "2020" -- but it is not a principled one; nothing about the
+market's actual peak or trough respects a January 1st boundary. The
+mechanical definition used here (peak-to-trough-to-recovery, fixed by a
+threshold decided before any period was inspected) is the right default
+for describing a drawdown's cost, specifically because it cannot be
+unconsciously nudged toward whichever twelve-month window makes a
+pre-existing narrative look strongest. This applies beyond this one
+finding: any future characterization of this strategy's behavior in a
+specific regime should default to a mechanically-defined window first,
+and treat a calendar-year framing as a secondary, convenience-only view
+to be reported alongside it, never in place of it.
+
 ## 5. Bugs found
 
 Full mechanism and evidence in `BUGS.md`; summarized here because both
@@ -139,7 +163,18 @@ parser attempts. Correct lineage + silently-absent adjustment fabricated a
 ~90x return. Found in 14 of 318 lineage transitions (4.4%). Confirmed to
 leave rank IC essentially untouched (magnitude-robust) while corrupting the
 mean-based cost-hurdle calculation materially (43.5% -> 34.3% x-sectional
-std just from excluding these 14 entities).
+std just from excluding these 14 entities) -- **this 43.5%/34.3% pair is
+superseded; see the correction below.** It was measured before Bug #2's
+gap-fix existed. On today's production code the uncorrected figure is
+already 36.9% (Bug #2 independently NaNs all 14 boundary returns), and a
+dedicated structural guard for this exact bug
+(`src/data_layer/lineage_jump_guard.py`) was built, tested, and confirmed
+to change nothing further on this dataset -- Bug #2 got there first, for
+all 14 known cases. Built, currently redundant, retained deliberately: a
+capital reduction or scheme of arrangement without a coincident trading
+halt would slip past Bug #2's calendar-gap check but not this guard, and
+this dataset's 14-for-14 pattern is not a guarantee that stays true going
+forward. Full detail in `BUGS.md`'s Bug #1 entry.
 
 **Bug #2 (stale-gap contamination in the LABEL, not just the features).**
 Row-based `shift()` treated a multi-month trading halt as one ordinary
@@ -197,15 +232,32 @@ are both candidates -- not decided here).
   result existed, and that statement binds now that it passed, not only if
   it had failed.
 - **Untested crash behavior.** Two mild drawdowns in the holdout is not a
-  crash test. Section 4's 2020 result (-20 points relative in a V-shaped
-  recovery) remains the only evidence of how this strategy behaves in a
-  violent reversal, and nothing in the holdout period tested that regime.
-- **Soft cost input under real turnover.** The low-liquidity tercile's
-  ~118bps cost is uncalibrated Corwin-Schultz, the least certain number in
-  the whole cost model, applied against realized turnover of roughly 50% of
-  the portfolio per 63-day rebalance (~200% annualized). The strategy's net
-  economics are more exposed to this one estimate than to any other single
-  assumption in the pipeline.
+  crash test. Section 4's 2020 episode remains the only evidence of how
+  this strategy behaves in a violent reversal, and nothing in the holdout
+  period tested that regime -- but Section 4's own amendment now applies
+  here too: the originally-reported "-20 points relative" figure was a
+  calendar-year-2020 artifact, not a mechanically-defined result. Measured
+  from the market's own peak and trough instead of a calendar boundary,
+  momentum finished the full 2017-2021 drawdown episode AHEAD of the
+  benchmark by +32.68 points, and the recovery leg specifically shows
+  +3.73 points, not -20. The weakness this bullet originally pointed to is
+  real but smaller and far more window-dependent than stated here before;
+  see Section 4 for the full reconciliation, not this bullet in isolation.
+- **Low-liquidity cost: checked, not just flagged, and closed.** The
+  ~118bps low-liquidity-tercile cost was uncalibrated Corwin-Schultz, with
+  an unverified calibration argument (borrowing a T2T-name finding for a
+  tercile assumed, not confirmed, to behave like T2T names). Both gaps are
+  now closed by direct measurement, not left open: the tercile is 0% BE/BZ
+  by construction (`entity_panel.py` filters `series='EQ'` unconditionally,
+  so the T2T-calibration borrow never applied to begin with), and a cost
+  sensitivity sweep across the full plausible range (118bps down to a
+  fully-calibrated ~25bps) moves the momentum/benchmark margin by at most
+  +0.30 points -- because low-liquidity names are only ~10.5% of top-decile
+  momentum's mean composition. 118bps is retained as the working number: it
+  is still not a live measurement, but it is now a known-uncertain input
+  with directly measured, low leverage on this strategy's headline result,
+  not an unresolved one. Closed; no live order-book verification is planned
+  for it, since none could change this conclusion.
 - **A sector-rotation pattern with no holdout precedent, but NOT a
   demonstrated risk factor.** Momentum's top decile is not sector-neutral
   and rotated hard into Healthcare in 2020 in both universes tested (see

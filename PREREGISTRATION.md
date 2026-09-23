@@ -196,3 +196,35 @@ pre-holdout backtest and this run:
 ---
 
 **Waiting for approval before any holdout query is written or run.**
+
+---
+
+## Post-hoc annotation (2026-09-23) -- does not alter the locked
+pre-registration above or reopen the spent holdout
+
+The low-liquidity cost line's calibration argument ("CS is accurate on
+thin/T2T-like names") was suggested during this project's later cost-review
+work by extending the mid-liq tercile's live-order-book T2T finding
+(2026-09-15) to the low-liq tercile as well. That extension was checked
+directly and does not hold: the low-liq tercile is **0% BE/BZ (trade-to-
+trade) by construction** -- `entity_panel.py` filters `series='EQ'`
+unconditionally at materialization, so no BE/BZ name is ever eligible for
+this tercile at any date. The calibration argument was borrowed from a
+context where it held (true T2T names, live-measured) and applied to one
+where it structurally cannot (an EQ-only tercile that is merely
+low-turnover, a different market microstructure from T2T entirely).
+
+This does not, on its own, mean 118bps is wrong -- only that the specific
+argument offered for using it uncalibrated was invalid. A follow-up cost
+sensitivity sweep (`scripts/run_lowliq_cost_sensitivity.py`) settled the
+practical question instead of the calibration argument: across the full
+plausible range from 118bps down to a fully-calibrated ~25bps (the same
+~21x correction the high-liq tercile already gets), the momentum/benchmark
+CAGR margin moves by at most +0.30 points, because low-liquidity names are
+only ~10.5% of top-decile momentum's mean composition. This does not change
+Study 1's holdout pass/fail outcome and would not have under any tested
+value in this range. 118bps is retained as the working number: a
+known-uncertain input with directly measured, low leverage on the
+strategy's headline result -- closed on that basis, not on a live
+re-measurement, which was deliberately not pursued because it could not
+change this conclusion either way.
