@@ -78,6 +78,52 @@ time this strategy is described going forward. Section 3's holdout result
 does not contradict this; a thin 5-period holdout with no violent reversal
 in it has simply not tested this failure mode at all (see Section 8).
 
+**Amendment, after a descriptive (not a test, no study slot spent) drawdown
+diagnostic run against a mechanical criterion fixed before any period was
+inspected** (`scripts/run_drawdown_descriptive_diagnostic.py`): benchmark
+peak-to-trough decline exceeding 15% finds exactly **one** episode in the
+whole pre-holdout series -- peak 2017-11-15, trough 2020-03-05, recovery
+2021-03-10 (benchmark -49.82% peak-to-trough). Over the full episode,
+momentum finished net AHEAD, not behind: +42.23% vs the benchmark's +9.56%
+(+32.68 points). Splitting the same episode at its actual trough (not at a
+calendar-year boundary) into a decline leg and a recovery leg:
+
+| leg | window | momentum | benchmark | diff |
+|---|---|---|---|---|
+| decline (peak->trough) | 2018-02-15 to 2020-03-05 | -35.95% | -49.82% | +13.87 pts |
+| recovery (trough->recovery) | 2020-06-11 to 2021-03-10 | +122.07% | +118.35% | +3.73 pts |
+
+**The recovery leg, mechanically defined from the actual trough, does not
+show the ~20-point underperformance this section describes.** That number
+is real and unchanged under the specific window it used (calendar-year
+2020, Jan-Dec: momentum +45.9%, benchmark +65.7%, diff -19.8 points,
+reconfirmed directly) -- but calendar-year 2020 is a different slice than
+trough-to-recovery: it excludes the 2021 Q1 rebalance the mechanical
+recovery leg includes, and it includes the 2020-03-05 rebalance (momentum
+-12.6%, benchmark -6.4%) that the mechanical split instead assigns to the
+decline leg, since that date is the series' actual trough. Most of the
+calendar-year underperformance turns out to be concentrated in that
+boundary-sensitive attribution, not spread evenly through "the recovery."
+A second, smaller episode at a 10% threshold (2021-09-15 peak to
+2022-03-17 trough, benchmark -14.71%) also shows momentum net ahead
+(+6.38 points).
+
+**What this does and does not change**: it does not overturn the
+calendar-year-2020 number, which is correctly reported above and remains
+true under that windowing. It does mean the "opportunity cost in a violent
+recovery" framing is more window-dependent than Section 4 originally
+stated, and that neither mechanically-defined drawdown episode in this
+project's one pre-holdout series (n=2, an extremely thin sample --
+descriptive only, no significance claim) actually shows momentum behind
+the benchmark once the window is drawn from the market's own peak/trough
+rather than from a calendar boundary. The underlying mechanism Section 3
+describes (losing less on the way down) still replicates cleanly in the
+decline leg here. Whether a "recovery-leg opportunity cost" specifically
+survives a mechanical window is, on this one episode, genuinely unclear
+rather than confirmed -- stated as a real limitation, not resolved by
+this diagnostic, which cannot be: one episode is not enough data to
+settle it either way.
+
 ## 5. Bugs found
 
 Full mechanism and evidence in `BUGS.md`; summarized here because both

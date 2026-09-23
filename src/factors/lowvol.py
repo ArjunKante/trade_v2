@@ -30,18 +30,34 @@ BETA_WINDOW = 252
 STALE_GAP_DAYS = 5
 
 
-def _log_returns(panel: pd.DataFrame) -> pd.DataFrame:
+def _is_unexplained_jump_row(p: pd.DataFrame, unexplained_jump_dates: dict | None) -> pd.Series:
+    """See factors.momentum._is_unexplained_jump_row -- same Bug #1 guard,
+    duplicated rather than imported because each factor module is
+    deliberately self-contained (tested independently, per
+    tests/test_gap_awareness.py's own convention)."""
+    if not unexplained_jump_dates:
+        return pd.Series(False, index=p.index)
+    flag = pd.Series(False, index=p.index)
+    for eid, dates in unexplained_jump_dates.items():
+        mask = (p["entity_id"] == eid) & (p["trade_date"].isin(dates))
+        flag |= mask
+    return flag
+
+
+def _log_returns(panel: pd.DataFrame, unexplained_jump_dates: dict | None = None) -> pd.DataFrame:
     p = panel.sort_values(["entity_id", "trade_date"]).copy()
     p["_logret"] = np.log(p["adjusted_close"] / p.groupby("entity_id")["adjusted_close"].shift(1))
     prev_date = p.groupby("entity_id")["trade_date"].shift(1)
     gap_days = (p["trade_date"] - prev_date).dt.days
-    p.loc[gap_days > STALE_GAP_DAYS, "_logret"] = np.nan  # the return spanning a stale gap is not a real 1-day return
+    is_stale = (gap_days > STALE_GAP_DAYS) | _is_unexplained_jump_row(p, unexplained_jump_dates)
+    p.loc[is_stale, "_logret"] = np.nan  # the return spanning a stale gap is not a real 1-day return
     return p
 
 
-def compute_trailing_vol(panel: pd.DataFrame, window: int = VOL_WINDOW) -> pd.DataFrame:
+def compute_trailing_vol(panel: pd.DataFrame, window: int = VOL_WINDOW,
+                          unexplained_jump_dates: dict | None = None) -> pd.DataFrame:
     """Annualized trailing realized volatility of daily log returns, per entity."""
-    p = _log_returns(panel)
+    p = _log_returns(panel, unexplained_jump_dates)
     p["value"] = (
         p.groupby("entity_id")["_logret"]
         .rolling(window, min_periods=window)
@@ -52,10 +68,11 @@ def compute_trailing_vol(panel: pd.DataFrame, window: int = VOL_WINDOW) -> pd.Da
     return p[["entity_id", "trade_date", "value"]]
 
 
-def compute_beta(panel: pd.DataFrame, index_returns: pd.DataFrame, window: int = BETA_WINDOW) -> pd.DataFrame:
+def compute_beta(panel: pd.DataFrame, index_returns: pd.DataFrame, window: int = BETA_WINDOW,
+                  unexplained_jump_dates: dict | None = None) -> pd.DataFrame:
     """Rolling OLS beta of each entity's daily log return against the Nifty
     50 daily log return. index_returns: columns [trade_date, mkt_logret]."""
-    p = _log_returns(panel)
+    p = _log_returns(panel, unexplained_jump_dates)
     p = p.merge(index_returns, on="trade_date", how="left")
 
     def _rolling_beta(g: pd.DataFrame) -> pd.Series:

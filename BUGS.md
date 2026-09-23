@@ -41,11 +41,59 @@ mean daily x-sec std of forward 63d return fell from 43.5% to 34.3% when
 just these 14 entities were excluded, and to 28.1% when measured via the
 median instead of the mean.
 
-**Status: identified and quantified, not fixed.** No new corporate-action
-subject patterns have been added to the parser. The three defensible fixes
--- (a) extend the parser to more action types, (b) exclude entities with an
-unexplained transition-boundary jump from magnitude-sensitive calculations,
-(c) both -- are not decided here.
+**Status: investigated further and fixed, with an unexpected result --
+Bug #2's fix already neutralized all 14 known cases before this fix was
+written.** Two follow-up questions, both resolved directly rather than
+argued:
+
+**(a) Can the parser be extended to these action types?** No -- checked
+against the cached raw feed (22,514 records, not just the ones the bonus/
+split regex matched): all 14 unexplained transitions have **zero** feed
+records of ANY type within +-10 days of the transition date. This is not
+a parser gap, it's a feed coverage gap -- NSE's `corporates-corporateActions`
+endpoint simply never published anything for these events (capital
+reductions/schemes of arrangement approved via NCLT/court order evidently
+route through a different announcement channel this project hasn't
+ingested). No regex extension can parse a record that was never fetched.
+
+**(b) Structural fallback, built and tested**: `src/data_layer/
+lineage_jump_guard.py` detects a lineage transition with a boundary ratio
+outside [0.67, 1.5] and no nearby corporate-actions record, independent of
+calendar gap size (the case Bug #2's calendar-gap check *cannot* catch: a
+fabricated jump with no real trading halt). `factors/momentum.py`,
+`factors/lowvol.py`, and `factors/target.py` all take an optional
+`unexplained_jump_dates` parameter that NaNs only the single boundary
+observation, not the whole entity -- verified against a synthetic
+fixture with a ~90x jump and zero calendar gap (`tests/
+test_lineage_jump_guard.py`, 5/5 passing, all opt-in and backward
+compatible: 94/94 project tests still pass with the parameter omitted).
+
+**Then measured against the real 14, and the measurement changed the
+conclusion**: every one of the 14 turns out to have a calendar gap of
+29 to 2,622 days between the last trade under the old ISIN and the first
+under the new one (measured directly, not assumed) -- comfortably past
+`STALE_GAP_DAYS=5`. Bug #2's existing gap-fix was already NaN-ing every
+one of these 14 boundary returns, in production, before this investigation
+started. The new surgical-NaN mechanism therefore makes **zero** measured
+difference on top of Bug #2 for the current dataset (confirmed: momentum_12_1
+rank IC and daily cross-sectional std of forward 63d return are bit-for-bit
+identical with and without `unexplained_jump_dates` passed). It is kept
+anyway, as defense-in-depth for a future capital reduction/scheme that
+happens *without* a coincident extended halt -- a real possibility this
+dataset's 14-for-14 pattern does not rule out, just hasn't produced yet.
+
+**One number in the original write-up needs correcting as a result**: the
+43.5%->34.3% cross-sectional-std swing was measured before Bug #2's fix
+existed. On today's production code (Bug #2 applied, nothing entity-excluded),
+the mean daily x-sec std of forward 63d return is already 36.9% (median
+27.6%), not 43.5% -- most of the original contamination this bug described
+is gone as a side effect of an unrelated later fix. Full-entity exclusion
+still pulls it down further, to 33.6% (median 28.0%) -- but that residual
+~3 points comes from removing these 14 (evidently distressed/restructuring)
+companies' entire return histories from the sample, a universe-composition
+choice, not a correction of the fabricated-jump mechanism this bug is
+about. Excluding them outright remains undecided and is not done by
+default.
 
 ## Bug #2: row-based shift() treats a stale trading gap as one ordinary trading day
 

@@ -37,15 +37,32 @@ WINDOW_6M = 126
 STALE_GAP_DAYS = 5
 
 
-def _max_gap_in_window(panel: pd.DataFrame, window: int) -> pd.Series:
+def _is_unexplained_jump_row(p: pd.DataFrame, unexplained_jump_dates: dict | None) -> pd.Series:
+    """True on the first row of an entity's series after an unexplained
+    lineage-jump boundary (Bug #1 / lineage_jump_guard) -- a hard boundary
+    regardless of calendar gap size, since these transitions often have no
+    real trading halt at all (the fabricated jump is in the PRICE, not in
+    time)."""
+    if not unexplained_jump_dates:
+        return pd.Series(False, index=p.index)
+    flag = pd.Series(False, index=p.index)
+    for eid, dates in unexplained_jump_dates.items():
+        mask = (p["entity_id"] == eid) & (p["trade_date"].isin(dates))
+        flag |= mask
+    return flag
+
+
+def _max_gap_in_window(panel: pd.DataFrame, window: int, unexplained_jump_dates: dict | None = None) -> pd.Series:
     p = panel.sort_values(["entity_id", "trade_date"])
     prev_date = p.groupby("entity_id")["trade_date"].shift(1)
     gap_days = (p["trade_date"] - prev_date).dt.days
-    is_gap = (gap_days > STALE_GAP_DAYS).astype(int)
+    is_gap = (gap_days > STALE_GAP_DAYS) | _is_unexplained_jump_row(p, unexplained_jump_dates)
+    is_gap = is_gap.astype(int)
     return is_gap.groupby(p["entity_id"]).rolling(window, min_periods=1).max().reset_index(level=0, drop=True)
 
 
-def compute_momentum(panel: pd.DataFrame, window: int, skip: int = SKIP_DAYS) -> pd.DataFrame:
+def compute_momentum(panel: pd.DataFrame, window: int, skip: int = SKIP_DAYS,
+                      unexplained_jump_dates: dict | None = None) -> pd.DataFrame:
     """panel: columns [entity_id, trade_date, adjusted_close], one row per
     entity per trading day it traded. Returns [entity_id, trade_date, value]
     where value = adjusted_close[t-skip] / adjusted_close[t-skip-window] - 1,
@@ -63,14 +80,14 @@ def compute_momentum(panel: pd.DataFrame, window: int, skip: int = SKIP_DAYS) ->
     p["_far"] = grp["adjusted_close"].shift(skip + window)
     p["_near"] = grp["adjusted_close"].shift(skip)
     p["value"] = p["_near"] / p["_far"] - 1
-    p["_gap_in_window"] = _max_gap_in_window(p, skip + window)
+    p["_gap_in_window"] = _max_gap_in_window(p, skip + window, unexplained_jump_dates)
     p.loc[p["_gap_in_window"] == 1, "value"] = np.nan
     return p[["entity_id", "trade_date", "value"]]
 
 
-def compute_momentum_12_1(panel: pd.DataFrame) -> pd.DataFrame:
-    return compute_momentum(panel, window=WINDOW_12M, skip=SKIP_DAYS)
+def compute_momentum_12_1(panel: pd.DataFrame, unexplained_jump_dates: dict | None = None) -> pd.DataFrame:
+    return compute_momentum(panel, window=WINDOW_12M, skip=SKIP_DAYS, unexplained_jump_dates=unexplained_jump_dates)
 
 
-def compute_momentum_6_1(panel: pd.DataFrame) -> pd.DataFrame:
-    return compute_momentum(panel, window=WINDOW_6M, skip=SKIP_DAYS)
+def compute_momentum_6_1(panel: pd.DataFrame, unexplained_jump_dates: dict | None = None) -> pd.DataFrame:
+    return compute_momentum(panel, window=WINDOW_6M, skip=SKIP_DAYS, unexplained_jump_dates=unexplained_jump_dates)
