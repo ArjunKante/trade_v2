@@ -16,6 +16,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.db import get_connection
+from data_layer.corporate_actions import build_symbol_isin_observations
 from data_layer.fundamentals_nse import _session, to_filings_df, load_filings_to_duckdb
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +39,7 @@ def month_ranges(start, end):
 
 con = get_connection(ROOT / "data" / "warehouse.duckdb")
 s = _session()
+symbol_obs = build_symbol_isin_observations(con)  # loaded once, reused every month -- see fundamentals_nse.resolve_isin_for_filings
 
 total_inserted = 0
 total_fetched = 0
@@ -64,7 +66,7 @@ for m_start, m_end in month_ranges(START, END):
     )
     time.sleep(0.8)
     records = resp.json() if resp.status_code == 200 else []
-    df = to_filings_df(records)
+    df = to_filings_df(records, symbol_obs=symbol_obs)
     n_inserted = load_filings_to_duckdb(con, df)
     total_fetched += len(records)
     total_inserted += n_inserted

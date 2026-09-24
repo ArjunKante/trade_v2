@@ -301,3 +301,90 @@ remainder of the ~26,700-document backfill; every recurrence resolved in
 seconds via the tuned session rebuild, and the run completed cleanly
 (26,598 of 26,690 scoped documents loaded, 99.66%). Confirmed fixed by
 observed outcome across the full run, not just by the fix being applied.
+
+## Bug #7: the fundamentals feed has the SAME stale-ISIN defect corporate_actions.py already fixed -- and the fix was never propagated
+
+**This is, per this project's own count across it and its predecessor, the
+FOURTH occurrence of the same meta-pattern: a fix applied where the bug was
+first noticed, not everywhere the same pattern occurs.** Bug #2 already
+needed its own gap-awareness fix applied independently to three different
+factor modules rather than shared once. This is the same lesson one layer
+up: `corporate_actions.py` established, and tested, that NSE's corporate-
+actions feed's `isin` field cannot be trusted (`resolve_isin_for_actions`,
+matching by symbol against this project's own price observations instead).
+Nobody checked whether the OTHER NSE feed built around the same `isin`
+field -- `corporates-financial-results`, i.e. every fundamentals fact in
+this warehouse -- had the identical defect. It did.
+
+**Mechanism**: confirmed live against NSE's API (2026-09-24). BHEL's
+FY2024 annual filing (broadcast 2024-05-21) is tagged `isin=INE257A01018`
+by the feed. This warehouse's own price data has never seen that ISIN
+trade at all; BHEL's actual, currently-trading ISIN (the one in
+`prices_eod`) is `INE257A01026` -- one NSDL serial ahead. Same pattern,
+confirmed independently, for NATIONALUM, GRANULES, and AUROPHARMA. Since
+`fundamentals_nse.py`'s `to_filings_df` trusted the feed's raw `isin`
+field with no cross-check, every one of these companies' fundamentals
+facts were ingested, correctly parsed, and then silently orphaned under an
+ISIN that `isin_lineage`/`prices_eod` had no way to link -- not a lineage
+transition (no predecessor/successor relationship exists; the old ISIN
+simply never appears in this warehouse's price history at all, likely
+predating 2016).
+
+**Scope, measured directly, not assumed**: 200 of 2,487 distinct ISINs in
+`fundamentals_filings` never matched `prices_eod` at all. 166 of those 200
+(83%) resolve to a symbol that trades in this warehouse under a different
+ISIN -- systemic, not a handful of edge cases. **Every fundamental factor
+computed in Phase E (`run_phase_e_factors.py`) had been silently measured
+on a universe missing these 166 companies** -- earnings_yield, P/E, P/S,
+growth, margins, accruals, market_cap, and all five untestable
+balance-sheet factors. Momentum was unaffected (price-only, never touches
+this feed). The remaining 34 orphaned ISINs are genuinely unresolvable --
+their symbol never appears in `prices_eod` at all (delisted pre-2016 or
+otherwise out of this project's price universe), confirmed by the same
+resolution attempt finding no observation to resolve against, not assumed
+absent.
+
+**Status: fixed, applied going forward, and retroactively corrected.**
+`resolve_isin_for_filings` (`src/data_layer/fundamentals_nse.py`) ports
+`resolve_isin_for_actions`'s exact mechanism -- point-in-time by (symbol,
+known_date), never "symbol's current ISIN" (11.1% of symbols in this
+project's own `isin_lineage` have mapped to more than one ISIN over time;
+a naive current-ISIN join would misattribute an older filing to a
+company's newer ISIN, the exact cross-period contamination this
+document-parsing discipline exists to prevent elsewhere). Wired into both
+backfill scripts (`backfill_fundamentals_quarterly.py`,
+`backfill_fundamentals_annual.py`) as an opt-in parameter (`symbol_obs`,
+default `None` preserves the old passthrough behavior so existing tests
+that predate this fix are unaffected). Already-ingested data was corrected
+in place by `scripts/fix_fundamentals_isin_resolution.py` -- a one-time
+key-correction migration (UPDATE, not a new append-only row: this fixes
+this project's own ingestion join key, not a company's disclosed number,
+so the append-only philosophy protecting real-world restatements does not
+apply here), scoped to the two legacy fact sources only. 12,255
+`fundamentals_filings` rows and 226,715 `fundamentals_xbrl_facts` rows
+corrected; verified afterward that exactly the 34 genuinely-unresolvable
+ISINs remain orphaned, no more, no fewer.
+
+**A second, distinct bug was caught before it reached the database**: the
+migration script's first draft resolved isins correctly but then
+reattached `seq_number` from the pre-resolution frame by positional
+`.values` assignment -- since `resolve_isin_for_filings` sorts internally
+by `known_date`, this silently misaligned rows once more than one symbol
+was involved (a dry run surfaced it immediately: CLCIND's filings appeared
+to "resolve" to BHEL's ISIN). Fixed by carrying every passenger column
+(`seq_number`, a copy of the original isin) through the SAME function call
+rather than reattaching them afterward by position -- a regression test
+(`test_passenger_columns_stay_aligned_across_multiple_symbols`) locks this
+in. Caught by dry-running against a read-only connection and sanity-checking
+the output before any UPDATE touched the real database, not by inspecting
+the code a second time and trusting it.
+
+**Effect measured, not assumed** (`scripts/run_phase_e_factors.py`, full
+old-vs-new comparison, pre-holdout only): every factor's `n_obs` and
+per-date coverage increased (~30-43 more names per rebalance date on
+average); `earnings_yield`'s raw t-stat moved from **+2.861 to +2.746** --
+down, not up, and still SUGGESTIVE not established either way (Bonferroni/
+BH threshold 0.00625 at m=8 tests; 0/8 factors survive correction before
+and after this fix). This is a correction of the same already-reported
+measurement, not a new finding, and does not change FINDINGS.md's
+conclusion in either direction. Full comparison logged in `experiments.csv`.

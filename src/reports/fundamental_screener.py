@@ -2,6 +2,24 @@
 shortlist. A research tool, not a study -- no slot spent, no
 pre-registration.
 
+WHAT THIS SCREEN ACTUALLY IS, measured directly (scripts/run_screener_
+diagnostics.py, run against the 2026-09-23 run: 66 FAILs, funnel
+147->119->81->43): this is a CASH-FLOW QUALITY SCREEN with secondary
+checks attached, not a balanced multi-factor filter. tier2.cfo_pat_avg_min
+alone accounts for 48% of FAILs and tier2.cfo_negative_latest for 38% (many
+companies fail both); tier1.operating_margin_decline_3q is the next-largest
+at 33%. debt_equity_max fired exactly once; bottom_liquidity_tercile fired
+exactly once; series_be_bz never fired at all (consistent with this
+project's own earlier finding that the momentum universe is 0% BE/BZ by
+construction -- see FINDINGS.md/PREREGISTRATION.md's low-liquidity-tercile
+annotation). Read this screen's PASS as "not currently failing hard on
+cash-flow quality (primarily) or the secondary checks (occasionally)," not
+as "cleared a battery of independent balance-sheet, leverage, and liquidity
+tests" -- most of that battery is not where the discriminating power is.
+This is a description correction, not a design one: no threshold has been
+changed as a result of this finding, and CFO/PAT is judged to be the right
+thing to weight most heavily here.
+
 THIS FILTER IS AN UNTESTED MODIFICATION TO momentum_12_1. The tested,
 holdout-passed result (FINDINGS.md) is on the UNFILTERED top decile. This
 project has already established (FINDINGS.md Section 12) that testing an
@@ -364,6 +382,15 @@ def run_screener(con: duckdb.DuckDBPyConnection) -> dict:
 HEADER = """\
 ================================================================================================
 FUNDAMENTAL SCREENER -- RESEARCH TOOL, NOT A STUDY. No slot spent, no pre-registration.
+
+WHAT THIS SCREEN ACTUALLY IS: a CASH-FLOW QUALITY SCREEN with secondary checks attached, not
+a balanced multi-factor filter. Measured directly on the 2026-09-23 run (run_screener_
+diagnostics.py): tier2.cfo_pat_avg_min and tier2.cfo_negative_latest alone accounted for 48%
+and 38% of all FAILs; debt_equity_max and bottom_liquidity_tercile each fired exactly once;
+series_be_bz never fired. Read a PASS below as "did not fail hard on cash-flow quality
+(primarily)," not as "cleared a battery of independent tests" -- most of this screen's
+discriminating power sits in two checks, not nine. See this module's docstring for the full
+description-correction note (no threshold changed as a result of this finding).
 
 THIS FILTER IS AN UNTESTED MODIFICATION TO momentum_12_1. The tested, holdout-passed result
 (FINDINGS.md) is on the UNFILTERED momentum top decile. This project has established that

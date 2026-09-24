@@ -70,6 +70,16 @@ company you ask about.
 
 ## Fundamental screener (research tool, not a study)
 
+**What this actually is, measured directly (not assumed): a cash-flow
+quality screen with secondary checks attached, not a balanced multi-factor
+filter.** On the 2026-09-23 run, the two CFO checks alone accounted for
+48%/38% of all FAILs; debt/equity and the liquidity-tercile check each
+fired once; the BE/BZ series check never fired. Read a PASS as "did not
+fail hard on cash-flow quality primarily," not as "cleared nine
+independent tests" — see `src/reports/fundamental_screener.py`'s module
+docstring for the full correction (a description fix, not a threshold
+change).
+
 Filters the current momentum top decile down to a shortlist on fixed,
 pre-stated P&L / balance-sheet / liquidity thresholds:
 ```

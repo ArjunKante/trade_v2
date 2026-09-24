@@ -96,7 +96,72 @@ def _parse_broadcast_ts(raw: str | None) -> dt.datetime | None:
     return dt.datetime.strptime(raw, "%d-%b-%Y %H:%M:%S")
 
 
-def to_filings_df(records: list[dict]) -> pd.DataFrame:
+def resolve_isin_for_filings(filings_df: pd.DataFrame, symbol_obs: pd.DataFrame) -> pd.DataFrame:
+    """Resolve each filing's true ISIN via (symbol, known_date) against our
+    own price observations -- the exact mechanism corporate_actions.py's
+    resolve_isin_for_actions already established, ported here because this
+    feed has the identical defect. Confirmed live (2026-09-24) against NSE's
+    corporates-financial-results API: BHEL's FY2024 annual filing (broadcast
+    2024-05-21) is tagged isin=INE257A01018 -- one NSDL serial behind the
+    ISIN this warehouse's own price feed uses for BHEL (INE257A01026), which
+    never appears in prices_eod at all. Same for NATIONALUM, GRANULES,
+    AUROPHARMA, and (scoped directly) 166 of 2,487 distinct ISINs project-
+    wide (83% of the 200 that never matched prices_eod) -- systemic, not a
+    handful of edge cases.
+
+    THIS IS THE FOURTH OCCURRENCE, PER THIS PROJECT'S OWN RECORD, OF THE
+    SAME META-PATTERN: a fix applied where the bug was first noticed, not
+    everywhere the same feed-ISIN-unreliability pattern occurs. Bug #2
+    (BUGS.md) already needed its own gap-awareness fix applied independently
+    to momentum.py, lowvol.py, AND target.py rather than shared once; this
+    is the same lesson at the module level -- corporate_actions.py solved
+    "the feed's isin field cannot be trusted" for corporate actions, and
+    that fix was never checked against the OTHER NSE feed (financial
+    results) using the identical isin field for the identical reason.
+
+    Point-in-time by (symbol, known_date) -- NEVER "symbol's current ISIN".
+    11.1% of symbols in this project's own isin_lineage have mapped to more
+    than one ISIN over time; a naive current-ISIN join would misattribute
+    an older filing to a company's NEWER ISIN, exactly the cross-company/
+    cross-period contamination this document-body ISIN-parsing discipline
+    exists to prevent elsewhere in this project.
+
+    Unlike corporate_actions.py, does NOT persist a feed_isin audit column
+    -- fundamentals_filings/fundamentals_xbrl_facts already exist in the
+    live warehouse with a fixed schema, and adding a column is a deliberate
+    migration this fix does not make. The original (wrong) feed isin is not
+    retained; it is recoverable from a fresh NSE pull if ever needed. Stated
+    as a scope decision, not a silent omission.
+    """
+    filings_df = filings_df.rename(columns={"isin": "feed_isin"}).copy()
+    symbol_obs = symbol_obs.copy()
+    filings_df["known_date"] = pd.to_datetime(filings_df["known_date"]).astype("datetime64[ns]")
+    symbol_obs["trade_date"] = pd.to_datetime(symbol_obs["trade_date"]).astype("datetime64[ns]")
+    filings_df = filings_df.sort_values("known_date").reset_index(drop=True)
+    symbol_obs = symbol_obs.sort_values("trade_date").reset_index(drop=True)
+
+    resolved_parts = []
+    for direction in ["forward", "backward"]:
+        merged = pd.merge_asof(
+            filings_df, symbol_obs, left_on="known_date", right_on="trade_date",
+            by="symbol", direction=direction,
+        )
+        resolved_parts.append(merged["isin"])
+
+    forward_isin, backward_isin = resolved_parts
+    resolved = forward_isin.combine_first(backward_isin)
+    filings_df["isin"] = resolved
+    filings_df = filings_df.drop(columns=["feed_isin"])
+    return filings_df
+
+
+def to_filings_df(records: list[dict], symbol_obs: pd.DataFrame | None = None) -> pd.DataFrame:
+    """symbol_obs: pass data_layer.corporate_actions.build_symbol_isin_
+    observations(con) to resolve each filing's ISIN point-in-time against
+    this warehouse's own price observations (see resolve_isin_for_filings).
+    Optional and defaults to None (the feed's raw, unreliable isin passed
+    through unchanged) so existing callers/tests that predate this fix keep
+    their exact prior behavior -- every real ingestion path should pass it."""
     rows = []
     now = dt.datetime.now()
     for r in records:
@@ -134,7 +199,11 @@ def to_filings_df(records: list[dict]) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame(columns=columns)
     df = pd.DataFrame(rows)
-    return df.dropna(subset=["isin", "period_end", "known_date"])
+    df = df.dropna(subset=["isin", "period_end", "known_date"])
+    if symbol_obs is not None:
+        df = resolve_isin_for_filings(df, symbol_obs)
+        df = df.dropna(subset=["isin"])  # symbol never observed in prices_eod at all -- genuinely unresolvable, not guessed
+    return df
 
 
 def load_filings_to_duckdb(con: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int:
