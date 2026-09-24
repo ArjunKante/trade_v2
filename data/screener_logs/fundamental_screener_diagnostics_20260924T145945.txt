@@ -1,0 +1,175 @@
+================================================================================================
+DIAGNOSTICS on run: fundamental_screener_20260924T144837
+Descriptive only -- NO thresholds changed, NO verdicts reclassified as a result of this report.
+================================================================================================
+
+--- DIAGNOSTIC 1: FAIL BREAKDOWN BY REASON ---
+(68 total FAILs; counts below are NOT mutually exclusive -- a company failing 3 checks is counted once in each of those 3 metrics' totals)
+
+Tier 1 (P&L):
+  tier1.revenue_decline_2y           7 (10% of all FAILs)
+  tier1.net_loss_latest_fy           2 (3% of all FAILs)
+  tier1.operating_margin_decline_3q  22 (32% of all FAILs)
+
+Tier 2 (balance sheet):
+  tier2.debt_equity_max              1 (1% of all FAILs)
+  tier2.interest_coverage_min       10 (15% of all FAILs)
+  tier2.cfo_pat_avg_min             32 (47% of all FAILs)
+  tier2.cfo_negative_latest         27 (40% of all FAILs)
+
+Tier 3 (practical):
+  tier3.bottom_liquidity_tercile     1 (1% of all FAILs)
+  tier3.series_be_bz                 0 (0% of all FAILs)
+
+Number of checks failed per company (1 = a single borderline metric; 2+ = multiple independent problems):
+  failed on exactly 1 check(s): 41 companies
+  failed on exactly 2 check(s): 21 companies
+  failed on exactly 3 check(s): 5 companies
+  failed on exactly 4 check(s): 1 companies
+  -> 41 companies failed on a single metric; 27 failed on 2 or more.
+
+Single largest contributor: tier2.cfo_pat_avg_min (32 of 68 FAILs, 47% -- no single metric dominates).
+
+--- DIAGNOSTIC 2: INSUFFICIENT DATA GROUP, SPLIT BY CAUSE ---
+(36 total INSUFFICIENT DATA. Priority: (a) short history overrides (b)/(c) even if also true.)
+
+  (a) under 18 months of price history -- genuinely too new to rule on: 5
+  (b) 18+ months of price history but no FY2023+ balance-sheet filing at all: 7
+  (c) has some filings, but a specific required field/check is missing: 24
+  (d) other (did not fit a or b or c): 0
+
+Group (a) detail -- price-history length and listing date (first EQ trade in this warehouse):
+  CPPLUS       rank=   4  history=  13.4mo  listing_date~=2025-08-05
+  SGFIN        rank=  81  history=  13.4mo  listing_date~=2025-08-05
+  EBGNG        rank=  72  history=  13.6mo  listing_date~=2025-07-30
+  BELRISE      rank=  87  history=  15.7mo  listing_date~=2025-05-28
+  ATHERENERG   rank=   2  history=  16.4mo  listing_date~=2025-05-06
+
+Group (b) detail -- mature by price history, balance sheet simply not filed/extracted yet:
+  KMEW         rank=   1  history=22.1mo
+  RPEL         rank=   9  history=25.3mo
+  SENORES      rank=  19  history=20.6mo
+  ROSSTECH     rank=  78  history=20.8mo
+  SAILIFE      rank=  91  history=21.0mo
+  AKUMS        rank= 127  history=25.4mo
+  RACLGEAR     rank= 142  history=21.7mo
+
+Group (c) detail -- specific missing field/check named per company:
+  AEROFLEX     rank=   8:
+      tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+  YASHO        rank=  10:
+      tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+      tier1.operating_margin_decline_3q -- only 3 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  ACUTAAS      rank=  12:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  AVALON       rank=  13:
+      tier1.revenue_decline_2y -- only 2 annual point(s) available, need 3
+  HAPPYFORGE   rank=  16:
+      tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+      tier1.operating_margin_decline_3q -- only 2 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  RRKABEL      rank=  21:
+      tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+      tier1.operating_margin_decline_3q -- only 3 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  NATIONALUM   rank=  40:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  KABRAEXTRU   rank=  48:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- no quarterly P&L
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  GRANULES     rank=  56:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  FCL          rank=  59:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  KTKBANK      rank=  64:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- no quarterly P&L
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  HONASA       rank=  71:
+      tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+      tier1.operating_margin_decline_3q -- only 3 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  FEDERALBNK   rank=  73:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- no quarterly P&L
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  INOXINDIA    rank=  96:
+      tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+      tier1.operating_margin_decline_3q -- only 2 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  UJJIVANSFB   rank= 109:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- no quarterly P&L
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  MINDACORP    rank= 116:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  MUNJALAU     rank= 118:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- no quarterly P&L
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  SMSPHARMA    rank= 119:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  DOLPHIN      rank= 120:
+      tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+      tier1.operating_margin_decline_3q -- only 3 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  GHCLTEXTIL   rank= 121:
+      tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+  EMIL         rank= 124:
+      tier1.revenue_decline_2y -- only 2 annual point(s) available, need 3
+  AUROPHARMA   rank= 128:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  SOUTHBANK    rank= 137:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- no quarterly P&L
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+  APCOTEXIND   rank= 143:
+      tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+      tier1.net_loss_latest_fy -- no annual point available
+      tier1.operating_margin_decline_3q -- no quarterly P&L
+      tier2.interest_coverage_min -- EBIT or finance costs not available
+      tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against

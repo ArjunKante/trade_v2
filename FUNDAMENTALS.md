@@ -421,27 +421,41 @@ return.
 
 ### Raw per-factor results (26 quarterly rebalance dates, 2018-2024, pre-holdout)
 
+**Corrected 2026-09-24 (BUGS.md Bug #7).** The table below originally read
+t=+2.86 for `earnings_yield` (and correspondingly for every other factor).
+A fundamentals-feed ISIN-resolution bug -- the same stale-ISIN defect
+`corporate_actions.py` had already fixed for the corporate-actions feed,
+never checked against this one -- had silently excluded 166 companies
+(83% of 200 orphaned ISINs) from every factor computed here. Fixing it
+added ~30-43 names per rebalance date on average to every factor's
+cross-section (n_dates itself is unchanged for every factor, verified
+directly). This is a corrected remeasurement of the same result, not a
+new finding -- reported as such, not as a discovery, and the headline
+conclusion below (nothing survives multiple-comparisons correction) is
+unchanged either way.
+
 Verified spacing: every factor's used-date subset showed min=median=max=63
 trading days between consecutive dates -- the non-overlap assumption held
 exactly, zero violations.
 
-| factor | n_dates | mean_ic | std_ic | se | t (raw, uncorrected) |
-|---|---|---|---|---|---|
-| earnings_yield | 26 | +0.0424 | 0.0756 | 0.0148 | +2.86 |
-| pe | 26 | -0.0449 | 0.0926 | 0.0182 | -2.47 |
-| margin_trend | 22 | +0.0252 | 0.0523 | 0.0112 | +2.26 |
-| earnings_growth | 22 | +0.0210 | 0.0613 | 0.0131 | +1.61 |
-| revenue_growth | 22 | +0.0159 | 0.0567 | 0.0121 | +1.32 |
-| accruals_simplified | 15 | -0.0183 | 0.0576 | 0.0149 | -1.23 |
-| ps | 26 | -0.0280 | 0.1186 | 0.0233 | -1.20 |
-| operating_margin | 26 | +0.0238 | 0.1020 | 0.0200 | +1.19 |
-| market_cap | 26 | +0.0089 | 0.1747 | 0.0343 | +0.26 |
+| factor | n_dates | mean_ic | std_ic | se | t (raw, uncorrected) | t before Bug #7 fix |
+|---|---|---|---|---|---|---|
+| earnings_yield | 26 | +0.0393 | 0.0729 | 0.0143 | +2.75 | +2.86 |
+| pe | 26 | -0.0431 | 0.0930 | 0.0182 | -2.36 | -2.47 |
+| margin_trend | 22 | +0.0244 | 0.0520 | 0.0111 | +2.20 | +2.26 |
+| earnings_growth | 22 | +0.0214 | 0.0610 | 0.0130 | +1.65 | +1.61 |
+| revenue_growth | 22 | +0.0155 | 0.0559 | 0.0119 | +1.30 | +1.32 |
+| accruals_simplified | 15 | -0.0170 | 0.0478 | 0.0123 | -1.38 | -1.23 |
+| ps | 26 | -0.0259 | 0.1201 | 0.0236 | -1.10 | -1.20 |
+| operating_margin | 26 | +0.0208 | 0.1010 | 0.0198 | +1.05 | +1.19 |
+| market_cap | 26 | +0.0103 | 0.1778 | 0.0349 | +0.30 | +0.26 |
 
 Untestable set (pb, roce, roe, de, interest_coverage), computed on only the
 8 rebalances from 2023 onward where balance-sheet data exists: t ranges
--1.66 to +1.17. **Reported as UNTESTED, not weak or inconclusive** -- 8
-periods cannot distinguish any of these from zero at this project's own
-standard, exactly as predicted by the arithmetic earlier in this document.
+-1.61 to +1.20 (was -1.66 to +1.17). **Reported as UNTESTED, not weak or
+inconclusive** -- 8 periods cannot distinguish any of these from zero at
+this project's own standard, exactly as predicted by the arithmetic
+earlier in this document.
 
 ### Multiple-comparisons correction -- the raw t-stats above must never be cited without this
 
@@ -452,10 +466,10 @@ than `pe`, which drops 19.1% of observations to negative-earnings exclusion)
 as the pair's representative.
 
 - Bonferroni threshold at alpha=0.05, m=8: **0.05/8 = 0.00625**.
-- `earnings_yield`: raw t=+2.86, p~0.0085 -- **fails** Bonferroni (p > 0.00625).
-- `margin_trend`: raw t=+2.26, p~0.035 -- fails Bonferroni.
+- `earnings_yield`: raw t=+2.75, p~0.011 -- **fails** Bonferroni (p > 0.00625).
+- `margin_trend`: raw t=+2.20, p~0.039 -- fails Bonferroni.
 - Benjamini-Hochberg: the smallest p-value must itself beat alpha/m for
-  BH to reject anything -- since `earnings_yield`'s p (0.0085) does not
+  BH to reject anything -- since `earnings_yield`'s p (0.011) does not
   beat 0.00625, **BH rejects zero of 8 factors**, same as Bonferroni here.
 
 **HEADLINE: no fundamental factor clears significance after correcting for
@@ -463,8 +477,8 @@ the number tested.** `earnings_yield` is the strongest candidate and is
 **suggestive, not established**. Full corrected table (t, raw p, Bonferroni
 threshold/reject, BH q-value/reject) is computed and printed by
 `scripts/run_phase_e_factors.py` on every run and must accompany the raw
-t-stat wherever it is cited, per instruction that the raw t=2.86 must not
-appear alone.
+t-stat wherever it is cited, per instruction that the raw t=2.75 (formerly
+2.86; see the correction note above) must not appear alone.
 
 ### Diagnostic: earnings_yield vs momentum_12_1 (no slot spent -- decides whether a combination is worth pre-registering, not itself a study)
 
@@ -489,15 +503,21 @@ single data point, described in words instead of a number.
 
 `earnings_yield`'s IC restricted to entities OUTSIDE momentum's top decile
 per date: mean_ic=+0.0436, se=0.0141, t=+3.09, n_dates=26 (26,790 of 28,915
-obs; 2,125 excluded as in-top-momentum). **Caution**: this is a test of
+obs; 2,125 excluded as in-top-momentum). **This t=3.09 figure predates the
+Bug #7 ISIN-resolution fix and has not been remeasured** -- `n_obs=28,915`
+here matches the OLD (pre-fix) `earnings_yield` universe exactly, since
+this is a separate diagnostic (`scripts/run_ey_momentum_diagnostic.py`),
+not part of the Phase E rerun that produced the corrected 2.75 figure
+above. Flagged rather than silently left stale or guessed at; rerunning it
+is a follow-up, not done here. **Caution**: this is a test of
 *independence* (does EY's signal survive when momentum's own top picks are
 removed), and it supports independence, which is what it checked -- it is
 **not evidence that EY "got stronger."** t=3.09 on a different
-sub-population is not comparable to t=2.86 on the full universe as a
-before/after improvement; they are two different tests answering two
-different questions. **The corrected headline from the multiple-comparisons
-section above stands regardless: earnings_yield alone does not survive
-correction for the number of factors tested.** Both findings together
+sub-population was never comparable to the full-universe raw t (now 2.75,
+formerly 2.86) as a before/after improvement; they are two different tests
+answering two different questions. **The corrected headline from the
+multiple-comparisons section above stands regardless: earnings_yield alone
+does not survive correction for the number of factors tested.** Both findings together
 support pre-registering a future combination study as worthwhile, subject
 to the constraint immediately below -- they do not upgrade earnings_yield's
 own standalone significance.

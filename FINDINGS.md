@@ -619,10 +619,14 @@ negative conclusion trustworthy rather than merely convenient.
 as reported in `FUNDAMENTALS.md`**: near-zero cross-sectional correlation
 with momentum (mean +0.0003, std 0.15), IC holding outside momentum's own
 top decile (a test of independence, not of the factor "getting stronger"),
-raw standalone IC t=+2.86 that fails multiple-comparisons correction at
-m=8 (Bonferroni/BH threshold 0.00625) -- suggestive, not established. None
-of that changed. **This finding is about testability, not about the
-factor**: even a real, economically meaningful combination effect could
+raw standalone IC t=+2.75 (corrected from the originally-reported +2.86
+after fixing a fundamentals-feed ISIN-resolution bug that had silently
+excluded ~30-43 companies per rebalance date -- BUGS.md Bug #7; a
+remeasurement of the same result, not a new one) that fails multiple-
+comparisons correction at m=8 (Bonferroni/BH threshold 0.00625) --
+suggestive, not established. None of that changed. **This finding is
+about testability, not about the factor**: even a real, economically
+meaningful combination effect could
 not be distinguished from noise with this project's data, and that is a
 statement about the measurement's power, not a statement that no such
 effect exists.

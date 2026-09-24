@@ -365,19 +365,23 @@ apply here), scoped to the two legacy fact sources only. 12,255
 corrected; verified afterward that exactly the 34 genuinely-unresolvable
 ISINs remain orphaned, no more, no fewer.
 
-**A second, distinct bug was caught before it reached the database**: the
-migration script's first draft resolved isins correctly but then
-reattached `seq_number` from the pre-resolution frame by positional
-`.values` assignment -- since `resolve_isin_for_filings` sorts internally
-by `known_date`, this silently misaligned rows once more than one symbol
-was involved (a dry run surfaced it immediately: CLCIND's filings appeared
-to "resolve" to BHEL's ISIN). Fixed by carrying every passenger column
-(`seq_number`, a copy of the original isin) through the SAME function call
-rather than reattaching them afterward by position -- a regression test
-(`test_passenger_columns_stay_aligned_across_multiple_symbols`) locks this
-in. Caught by dry-running against a read-only connection and sanity-checking
-the output before any UPDATE touched the real database, not by inspecting
-the code a second time and trusting it.
+**A second, distinct bug was caught before it reached the database -- and
+it is worth stating plainly what kind of bug it was: a fix can recreate
+the bug it fixes.** The migration script's first draft resolved isins
+correctly but then reattached `seq_number` from the pre-resolution frame
+by positional `.values` assignment -- since `resolve_isin_for_filings`
+sorts internally by `known_date`, this silently misaligned rows once more
+than one symbol was involved (a dry run surfaced it immediately: CLCIND's
+filings appeared to "resolve" to BHEL's ISIN). That is the precise
+cross-company contamination the ISIN-from-document-body-parsing discipline
+exists to prevent in the first place, reintroduced by a one-line alignment
+error inside the very fix meant to eliminate it. Fixed by carrying every
+passenger column (`seq_number`, a copy of the original isin) through the
+SAME function call rather than reattaching them afterward by position -- a
+regression test (`test_passenger_columns_stay_aligned_across_multiple_
+symbols`) locks this in. Caught by dry-running against a read-only
+connection and sanity-checking the output before any UPDATE touched the
+real database, not by inspecting the code a second time and trusting it.
 
 **Effect measured, not assumed** (`scripts/run_phase_e_factors.py`, full
 old-vs-new comparison, pre-holdout only): every factor's `n_obs` and

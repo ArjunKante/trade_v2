@@ -10,6 +10,15 @@
 > what was considered and why it was not pursued, per this project's
 > standing practice (`LICENSE_ASSESSMENT.md`'s rejected sources, Phase D's
 > dead ends) -- not as an active plan.
+>
+> **Post-hoc annotation (2026-09-24), historical draft text below left
+> unedited**: the raw t=+2.86 cited in this draft for `earnings_yield` is
+> now superseded -- a fundamentals-feed ISIN-resolution bug (BUGS.md Bug
+> #7) had silently excluded 166 companies from every Phase E factor; fixed,
+> the corrected figure is t=+2.75 (FUNDAMENTALS.md, FINDINGS.md Section
+> 12). Still fails the same Bonferroni/BH threshold either way -- this
+> withdrawal's conclusion is unaffected -- but the number itself should not
+> be read forward from here as current.
 
 Originally drafted to be written and frozen before any forward data exists
 to evaluate it against, with nothing changing after approval. **This would

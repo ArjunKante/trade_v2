@@ -53,3 +53,40 @@ consulted before each fetch, separate from the fetch_log pattern used for
 the price/corporate-actions backfills since this job's resumability
 substrate is the fact table itself, not fetch_log (see the exchange that
 prompted this note for why that distinction matters).
+
+## A fix applied only where the bug was noticed, not everywhere the same pattern occurs (fourth occurrence)
+
+`corporate_actions.py` established, and tested, that NSE's corporate-
+actions feed's `isin` field cannot be trusted for company identification
+(`resolve_isin_for_actions`, matching by symbol against this project's own
+price observations instead). That fix was never checked against the OTHER
+NSE feed built around the same `isin` field -- `corporates-financial-
+results`, i.e. every fundamentals fact in this warehouse -- which had the
+identical defect. It did: 166 of 2,487 companies' fundamentals were
+silently orphaned from every join through `isin_lineage`, and every Phase
+E factor had been measured on a universe missing them, for months, before
+anyone thought to check (BUGS.md Bug #7).
+
+**This is the fourth occurrence of this exact meta-pattern across this
+project and its predecessor.** It is not carelessness -- each individual
+fix was careful, tested, and correct for the case that motivated it. The
+failure is that nobody thinks to ask, at the moment a fix is found and
+verified, "where else does this exact shape of bug live?" A fix's own
+correctness gives no signal that a sibling instance exists elsewhere;
+finding one requires a deliberate, separate step that the relief of having
+just fixed something makes easy to skip.
+
+**Standing rule from here on: when a bug is fixed, grep the codebase for
+the same shape before closing it out.** Concretely, before considering any
+bug resolved:
+- Name the general shape of the defect in one sentence (here: "a feed's
+  own identifier field cannot be trusted and must be re-resolved against
+  this project's own observations"), not just the specific instance fixed.
+- Grep/search for every other place that shape could plausibly recur --
+  every other ingestion path touching a similar external identifier, every
+  other module with a structurally similar assumption -- before marking
+  the bug closed, not after something else breaks and reveals a sibling.
+- If a sibling is found, it is the SAME bug for logging purposes (same
+  BUGS.md entry, or an explicit cross-reference), not a coincidentally
+  similar new one -- treating it as new hides the fact that the first fix
+  should have been searched for siblings and wasn't.
