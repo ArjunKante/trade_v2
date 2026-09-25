@@ -547,6 +547,16 @@ Consolidated) remains live. The dedup rule, preferring Consolidated and
 then latest known_date, reliably picked the dead resubmission every time
 one existed, with no check that it actually resolved.
 
+**The 2018-2019 clustering (95 of 96 flagged switches) has an external
+explanation, not one in this project's own logic.** It lines up with a
+real NSE-side event -- a batch re-registration of that vintage's
+Consolidated annual filings -- not with anything specific to how this
+project's dedup or extraction code behaves. Worth stating plainly rather
+than leaving it looking like a pattern this project introduced: the
+defect is that the dedup never checked its pick resolved, full stop; which
+specific years got hit by that defect is downstream of NSE's own history,
+not evidence of a second, separate problem in this code.
+
 **Fixed, bounded to the 175 real-URL failures already identified** (the
 other 318 of 493 are placeholder URLs with no document at all -- untouched,
 correctly permanent) via `scripts/recover_annual_dead_duplicates.py`:
@@ -574,4 +584,16 @@ reruns produced byte-identical output to the pre-fix run. This is not a
 wasted fix -- the data is now correctly in the warehouse for any future
 analysis that looks earlier than FY2023 -- but it settles nothing about
 the current screener list or Phase E's numbers, and should not be
-mistaken for having done so.
+mistaken for having done so. "Byte-identical, confirmed by rerunning" and
+"this shouldn't change anything" are different claims; this entry makes
+the first one, not the second.
+
+**The general shape, stated once so it is findable independent of either
+instance: a scoping step that selects a registration without checking it
+resolves is the same class of defect as an unresolved feed-identifier
+join -- a selection made on metadata that was never validated against
+reality.** Bug #7's ISIN join and this dedup rule are two instances of
+that shape now, not two unrelated bugs that happen to rhyme. Anywhere else
+in this project a selection is made from several candidates by metadata
+alone (a preference order, a recency rule, a type filter) is worth reading
+with this shape in mind before the next one is found the hard way.
