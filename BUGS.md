@@ -304,6 +304,104 @@ observed outcome across the full run, not just by the fix being applied.
 
 ## Bug #7: the fundamentals feed has the SAME stale-ISIN defect corporate_actions.py already fixed -- and the fix was never propagated
 
+**UPDATE, 2026-09-24: Bug #7 has a second face, confirmed but NOT YET
+FIXED -- the fifth instance of the same meta-pattern, one layer earlier
+than the first fix.** The stored-row correction above (`resolve_isin_for_
+filings`, the retroactive migration) fixes facts that were fetched and
+extracted under the wrong ISIN. It cannot create facts for documents that
+were never fetched at all -- and `scripts/extract_quarterly_xbrl_facts.py`'s
+own fetch list (`data/quarterly_xbrl_to_fetch_v2.csv`) was built by joining
+fundamentals ISINs against `prices_eod` for a "price coverage only" scope
+cut, the EXACT SAME join, using the EXACT SAME unreliable ISIN field, that
+Bug #7's main fix already corrected for stored data. Confirmed directly:
+of the 166 recovered companies' documents (5,596, one per (isin,
+period_end), consolidated-preferred), 5,172 (92.5%) were never in either
+fetch-scope CSV at all -- quarterly essentially 100% excluded (3,093 of
+3,094), annual 67% excluded (871 of 1,294). As a fraction of the TOTAL
+document universe Phase E's factors were actually computed on (56,485
+fetched+extracted documents), this is **8.39% more that should exist and
+doesn't** -- below the 15-20% threshold that would mandate a full
+fundamentals-layer rerun, but well above "a few percent, cleanup only."
+Verified this is fetch-scoping exclusion, not a separate extraction
+failure: for every sampled company, whatever WAS in fetch scope was
+extracted successfully (100% match, e.g. BHEL's 7 in-scope annual
+documents = 7 extracted). Not fixed here -- re-fetching ~5,172 documents
+from NSE is a real, multi-hour undertaking, and the decision of whether
+it's worth it is not made in this entry. See `experiments.csv` for the
+full verification.
+
+**UPDATE, 2026-09-25: fixed, after one abandoned approach worth recording
+in its own right.** First attempt: rebuild both fetch-scope CSVs from
+scratch via `resolve_isin_for_filings`, on the theory that the whole
+universe should simply be re-derived correctly. It produced ~27,000
+"brand-new" documents across ~1,980 distinct ISINs -- an order of
+magnitude more than the confirmed 166-company blast radius. Checked
+against TCS, a company independently confirmed to have never had an ISIN
+issue at all: **TCS still gained 2 phantom "new" periods under the
+reconstruction.** That is a decisive signal, not noise to average away --
+if a confirmed-clean company changes under the "fix," the fix does not
+match the thing it replaces. The reason: this project never committed the
+script that generated the original two CSVs (see the new entry below) --
+only their output survived -- so there is no way to verify a full
+reconstruction's exact boundary/tie-break behavior against 2,300+ companies
+whose original inclusion decisions cannot be re-derived with confidence.
+
+**The general lesson, not just this instance: a fix that cannot be
+verified against the thing it replaces should be narrowed to the confirmed
+blast radius, not generalised.** Reverted both CSVs from backup and took
+the disciplined path instead -- `scripts/build_xbrl_fetch_scope.py` touches
+*only* the 166 confirmed-affected ISINs (whose rows are proven entirely
+absent from the existing CSVs, so there is no existing behavior to
+diverge from), and leaves every other company's entries byte-for-byte
+untouched. Added 5,424 documents (4,096 quarterly + 1,328 annual), 4,984
+not yet extracted; a further 745 documents were already correctly in
+scope but never fetched (a separate, pre-existing, unrelated backlog --
+not part of this bug, refetched anyway since the marginal cost is small).
+
+**ETA used the Bug #4 lesson, not the naive throttle arithmetic.** 5,729
+documents at the 0.33s throttle alone suggests ~31 minutes; this project
+already measured (Bug #4) that the throttle sleep is not the real
+per-document cost -- with session reuse and the seq_number index, the
+real rate is ~0.487s/document, giving ~46-50 minutes. Planned and reported
+against the realistic number, not the optimistic one, before starting.
+
+**A second, self-inflicted bug caught the first time the corrected CSVs
+were actually run, not before.** `build_xbrl_fetch_scope.py`'s first
+version wrote the newly-appended rows' `period_end`/`known_date` as full
+timestamps ("2020-09-30 00:00:00") while every existing row in the CSV was
+a plain date ("2020-09-30"). That mixed format made `pandas.read_csv(...,
+parse_dates=[...])` silently fall back to leaving the WHOLE column as
+strings rather than raising -- and `extract_quarterly_xbrl_facts.py`'s
+`row["period_end"].date()` then failed with a bare `AttributeError`,
+caught by the script's own blanket `except Exception: n_err += 1` with no
+message at all. Observed live: 171 consecutive attempts, 0 successes,
+before this was noticed and the run stopped. Fixed by writing both new and
+old rows through the identical `%Y-%m-%d` string format, verified by
+re-reading the CSV the same way the extraction scripts do and asserting a
+real datetime dtype came back -- not by re-reading the code and trusting
+it. Worth naming plainly: a broad `except Exception` with only a counter,
+no captured message, turned a one-line formatting bug into a silent,
+total failure that looked identical to a slow-but-working run for as long
+as nobody stopped to look inside the CSV.
+
+**UPDATE, 2026-09-25: refetch complete, both faces of Bug #7 now fixed.**
+Quarterly 4,232 ok / 431 errors (of 4,663 attempted); annual 573 ok / 493
+errors (of 1,066 attempted). Failures cluster cleanly: the 745-document
+pre-existing backlog (unrelated to this bug) succeeded only 337 times
+(45%) -- consistent with those being genuinely dead links, plausibly why
+they were never fetched historically -- while the 166-company new-scope
+block succeeded 4,475 of 4,984 times (89.8%), a normal-ish rate. Phase E
+rerun: `earnings_yield`'s raw t moved from 2.746 to **2.833** (up, back
+toward -- not past -- the original pre-Bug-7 value of 2.861), n_obs
+29,745 -> 31,808. Multiple-comparisons conclusion unchanged: 0/8
+Bonferroni, 0/8 BH survive. Screener funnel: 147->114->74->**47**
+survivors (was 43); 9 of the 36 remaining INSUFFICIENT DATA names got a
+real verdict (4 PASS, 5 FAIL). Full comparison table in `experiments.csv`
+-- reported there deliberately without interpreting the direction of the
+earnings_yield move, per instruction, since recovering 166 large,
+established companies could plausibly move it either way and deserves
+scrutiny before being read as a result.
+
 **This is, per this project's own count across it and its predecessor, the
 FOURTH occurrence of the same meta-pattern: a fix applied where the bug was
 first noticed, not everywhere the same pattern occurs.** Bug #2 already
@@ -392,3 +490,37 @@ BH threshold 0.00625 at m=8 tests; 0/8 factors survive correction before
 and after this fix). This is a correction of the same already-reported
 measurement, not a new finding, and does not change FINDINGS.md's
 conclusion in either direction. Full comparison logged in `experiments.csv`.
+
+## Bug #8: the fetch-scope generator scripts were never committed -- a reproducibility gap, not a data-correctness bug
+
+**Mechanism**: `data/quarterly_xbrl_to_fetch_v2.csv` and `data/annual_xbrl_
+to_fetch.csv` -- the documents this project decided were worth fetching,
+the artifacts Bug #7's second face turned out to hinge on -- were produced
+by a script that was run once, interactively, and never committed. Only
+its output survived. Discovered while investigating Bug #7's fetch-scoping
+face: there was no way to inspect, rerun, or verify the original scoping
+logic against anything -- the only evidence of what it did was inference
+from its output's behavior (confirmed via cross-referencing specific
+companies), and even that inference was later shown to be incomplete when
+a full reconstruction attempt diverged from the original for companies
+with no known ISIN issue at all (see Bug #7's update above, the TCS check).
+
+**Why this matters beyond the one incident**: this project's own stated
+discipline is that every step should be re-derivable -- data is fetched by
+committed scripts, facts are extracted by committed scripts, factors are
+computed by committed scripts, every one of them checked into this
+repository specifically so a decision or a number can be traced back to
+the code that produced it. A step whose logic exists only as a historical
+CSV breaks that chain silently: nothing failed loudly, nothing looked
+wrong, until a different bug's investigation happened to need to inspect
+this one step's exact behavior and found there was nothing to inspect.
+
+**Status: the immediate instance is now moot** (the CSVs have been
+superseded by `scripts/build_xbrl_fetch_scope.py`'s narrower, committed,
+rerunnable addition -- see Bug #7), but the general defect is not
+fixed: nothing currently prevents a future one-off script from being run
+directly against the warehouse without being committed first. No
+enforcement mechanism proposed here (this entry records the defect, not a
+fix for the general case) -- worth deciding deliberately rather than
+assuming committing every script is automatically enforced by habit alone,
+since it evidently was not, at least once already.
