@@ -132,6 +132,50 @@ def resolve_isin_for_filings(filings_df: pd.DataFrame, symbol_obs: pd.DataFrame)
     migration this fix does not make. The original (wrong) feed isin is not
     retained; it is recoverable from a fresh NSE pull if ever needed. Stated
     as a scope decision, not a silent omission.
+
+    BACKWARD-PREFERRED, forward only as a fallback -- fixed 2026-09-26 after
+    shipping the opposite preference by mistake. The first version of this
+    function copied resolve_isin_for_actions' FORWARD-preferred direction
+    wholesale, without re-deriving whether the reason it was correct there
+    still held here. It did not: an action's ex_date structurally anchors
+    at the ISIN transition (the action CAUSES the change), so searching
+    forward from ex_date naturally lands on the post-action ISIN -- that is
+    what makes forward-preference correct for corporate_actions.py. A
+    filing's known_date has no such relationship to any ISIN change; it is
+    just "when this became public." Confirmed live: BURNPUR's 2025-02-10
+    and 2025-03-11 filings, and four of SUMEETINDS', have known_dates
+    falling inside the calendar gap between an old ISIN's last trade and a
+    new ISIN's first (BURNPUR: 2025-01-29 -> 2026-08-11, 559 days). The
+    forward-preferred version resolved both to the ISIN that would not
+    start trading for another 17 months -- attributing a filing to an
+    identity that did not exist yet at the time it was made public.
+
+    Backward-first is what belongs here, and matches every other point-in-
+    time convention in this codebase (`known_date <= as_of`,
+    build_entity_resolver, guard_date_range): resolve to whichever ISIN was
+    ACTUALLY trading as of known_date; only fall forward to a later
+    observation when no prior one exists at all (a company's very first
+    filing, disclosed before this warehouse's price history for it begins).
+
+    The general lesson, not just this instance: when porting logic between
+    contexts, re-derive the ASSUMPTIONS the logic depends on, not just the
+    code that implements it. An assumption that holds in the source context
+    (here: "the anchoring event causes the identity change") does not
+    automatically travel with the function into a context where the
+    anchoring event has no such causal relationship. This is a different
+    failure shape from the five fix-not-propagated instances already on
+    record in this project (BUGS.md) -- not "the fix wasn't applied
+    everywhere the bug occurs," but "the fix was applied everywhere, and
+    carried an unexamined assumption into a place it didn't hold."
+
+    Also worth recording plainly: the error direction this shipped with was
+    CONSERVATIVE, not a lookahead -- a misattributed filing vanished from
+    every as-of query for the gap window and reappeared late, rather than
+    becoming visible before it should have. That was luck, not design. The
+    same directional mismatch the other way -- a context where the wrong
+    preference resolves a document EARLY instead of late -- would have been
+    a genuine leak, not a delay, and nothing about how this bug was written
+    would have prevented that version of it.
     """
     filings_df = filings_df.rename(columns={"isin": "feed_isin"}).copy()
     symbol_obs = symbol_obs.copy()
@@ -141,15 +185,15 @@ def resolve_isin_for_filings(filings_df: pd.DataFrame, symbol_obs: pd.DataFrame)
     symbol_obs = symbol_obs.sort_values("trade_date").reset_index(drop=True)
 
     resolved_parts = []
-    for direction in ["forward", "backward"]:
+    for direction in ["backward", "forward"]:
         merged = pd.merge_asof(
             filings_df, symbol_obs, left_on="known_date", right_on="trade_date",
             by="symbol", direction=direction,
         )
         resolved_parts.append(merged["isin"])
 
-    forward_isin, backward_isin = resolved_parts
-    resolved = forward_isin.combine_first(backward_isin)
+    backward_isin, forward_isin = resolved_parts
+    resolved = backward_isin.combine_first(forward_isin)
     filings_df["isin"] = resolved
     filings_df = filings_df.drop(columns=["feed_isin"])
     return filings_df

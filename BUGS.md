@@ -597,3 +597,67 @@ that shape now, not two unrelated bugs that happen to rhyme. Anywhere else
 in this project a selection is made from several candidates by metadata
 alone (a preference order, a recency rule, a type filter) is worth reading
 with this shape in mind before the next one is found the hard way.
+
+## Bug #10: resolve_isin_for_filings ported a direction preference that was correct in its source context and wrong in this one
+
+**A different failure shape from the five fix-not-propagated instances
+already on record** -- not "the fix wasn't applied everywhere the bug
+occurs," but "the fix was applied everywhere, and carried an unexamined
+assumption into a place it didn't hold." `resolve_isin_for_filings`
+(Bug #7) copied `resolve_isin_for_actions`' FORWARD-preferred merge_asof
+direction wholesale. Forward-preference is correct for corporate actions
+because an action's `ex_date` structurally anchors at the ISIN transition
+-- the action *causes* the change, so searching forward from it naturally
+lands on the post-action ISIN. A filing's `known_date` has no such
+relationship to any ISIN change; it is just "when this became public."
+Applying the same preference there meant: a filing whose `known_date`
+falls inside the calendar gap between an old ISIN's last trade and a new
+ISIN's first got resolved to the NEW isin -- an identity that did not
+exist yet at the time the filing was made public.
+
+**Confirmed live, not theorized**: BURNPUR's old ISIN last traded
+2025-01-29; its new ISIN didn't start trading until 2026-08-11, a 559-day
+gap. Two real filings (known 2025-02-10, 2025-03-11) and four of
+SUMEETINDS' fall inside their respective gaps. Scanned all 390 lineage
+transitions in `isin_lineage`; exactly these 6 filing rows, across these
+2 symbols, were affected -- confirmed, not assumed, by an exhaustive
+check, not a sample.
+
+**The error direction this shipped with was conservative, and that was
+luck, not design.** A misattributed filing vanished from every as-of
+query for the gap window and reappeared late, rather than becoming
+visible before it should have -- not a lookahead. The same directional
+mismatch in a context where the wrong preference resolves a document
+EARLY instead of late would have been a genuine leak, and nothing about
+how this bug was written would have prevented that version of it.
+
+**General lesson**: when porting logic between contexts, re-derive the
+ASSUMPTIONS the logic depends on, not just the code that implements it.
+An assumption that holds in the source context does not automatically
+travel with the function.
+
+**Fixed**: swapped to backward-preferred (resolve to whichever ISIN was
+actually trading as of `known_date`), forward only as a fallback when no
+prior observation exists at all (a company's very first filing, pre-dating
+this warehouse's price history for it) -- matching every other
+point-in-time convention already in this codebase (`known_date <= as_of`,
+`build_entity_resolver`, `guard_date_range`). Two new regression tests
+(BURNPUR's real case; the forward-fallback case), 8/8 pass in
+`test_fundamentals_isin_resolution.py`, 118/118 project tests pass.
+Re-scanned all 390 lineage transitions with the fixed function: **0
+misattributions remain**, confirmed exhaustively.
+
+**No retroactive data correction was needed**: BURNPUR's and SUMEETINDS'
+stored `fundamentals_filings.isin` values were never actually corrupted --
+neither symbol was among Bug #7's 166 orphaned companies, so neither the
+migration script nor `build_xbrl_fetch_scope.py` ever passed their rows
+through the buggy function. The bug was live only in the code path, not
+yet in the database; the fix closes it before it could reach stored data
+on a future backfill re-run.
+
+**Screener output confirmed unchanged, not assumed**: reran
+`run_fundamental_screener.py` after the fix; its output is **byte-for-byte
+identical** to the pre-fix run (`diff`, zero output). Phase E was not
+rerun, per instruction -- 6 observations against tens of thousands would
+not move a reported number, and neither affected symbol reaches the
+screener's universe.

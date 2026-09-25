@@ -129,3 +129,42 @@ def test_resolve_isin_for_filings_directly_forward_and_backward_fallback():
     symbol_obs = _symbol_obs([("XCO", "2024-01-01", "INE_REAL_01")])  # only a much-earlier observation exists
     out = resolve_isin_for_filings(filings, symbol_obs)
     assert out.iloc[0]["isin"] == "INE_REAL_01"
+
+
+def test_burnpur_gap_window_filing_resolves_backward_not_forward():
+    """Real case (checked live, 2026-09-26): BURNPUR's old ISIN
+    (INE817H01014) last traded 2025-01-29; its new ISIN (INE817H01022)
+    did not start trading until 2026-08-11, a 559-day gap. Two real
+    filings -- known 2025-02-10 and 2025-03-11 -- fall inside that gap.
+    The first version of resolve_isin_for_filings (forward-preferred,
+    copied from resolve_isin_for_actions without re-deriving whether that
+    preference still held) resolved both to the NEW isin -- an identity
+    BURNPUR would not trade under for another 17 months. Backward-first
+    must resolve to the OLD isin: the one actually trading as of each
+    filing's known_date, matching every other point-in-time convention in
+    this codebase."""
+    symbol_obs = _symbol_obs([
+        ("BURNPUR", "2025-01-20", "INE817H01014"),
+        ("BURNPUR", "2025-01-29", "INE817H01014"),
+        ("BURNPUR", "2026-08-11", "INE817H01022"),
+        ("BURNPUR", "2026-08-20", "INE817H01022"),
+    ])
+    filings = pd.DataFrame({
+        "isin": ["INE817H01014", "INE817H01014"],  # the feed's own value here was already correct
+        "symbol": ["BURNPUR", "BURNPUR"],
+        "known_date": [dt.date(2025, 2, 10), dt.date(2025, 3, 11)],
+    })
+    out = resolve_isin_for_filings(filings, symbol_obs)
+    assert (out["isin"] == "INE817H01014").all()  # OLD isin -- never the not-yet-existing NEW one
+
+
+def test_forward_fallback_still_works_when_nothing_precedes_known_date():
+    """A company's very first filing, disclosed before this warehouse's
+    price history for it begins -- backward finds nothing, so forward must
+    still be used rather than leaving the row unresolved."""
+    symbol_obs = _symbol_obs([("NEWCO", "2024-06-01", "INE_FIRST_01")])
+    filings = pd.DataFrame({
+        "isin": ["INE_WRONG_01"], "symbol": ["NEWCO"], "known_date": [dt.date(2024, 1, 1)],
+    })
+    out = resolve_isin_for_filings(filings, symbol_obs)
+    assert out.iloc[0]["isin"] == "INE_FIRST_01"

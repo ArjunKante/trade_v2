@@ -1,0 +1,1055 @@
+================================================================================================
+FUNDAMENTAL SCREENER -- RESEARCH TOOL, NOT A STUDY. No slot spent, no pre-registration.
+
+WHAT THIS SCREEN ACTUALLY IS: a CASH-FLOW QUALITY SCREEN with secondary checks attached, not
+a balanced multi-factor filter. Measured directly on the 2026-09-23 run (run_screener_
+diagnostics.py): tier2.cfo_pat_avg_min and tier2.cfo_negative_latest alone accounted for 48%
+and 38% of all FAILs; debt_equity_max and bottom_liquidity_tercile each fired exactly once;
+series_be_bz never fired. Read a PASS below as "did not fail hard on cash-flow quality
+(primarily)," not as "cleared a battery of independent tests" -- most of this screen's
+discriminating power sits in two checks, not nine. See this module's docstring for the full
+description-correction note (no threshold changed as a result of this finding).
+
+THIS FILTER IS AN UNTESTED MODIFICATION TO momentum_12_1. The tested, holdout-passed result
+(FINDINGS.md) is on the UNFILTERED momentum top decile. This project has established that
+testing an incremental modification's effect needs 8-72 years of data at realistic effect
+sizes (FINDINGS.md Section 12) -- this screener has not been tested in either direction. It
+may help or hurt subsequent returns.
+
+KNOWN AND ACCEPTED TRADE-OFF: these filters will remove turnaround stories -- some of
+momentum's historically best individual performers are fundamentally weak companies newly
+showing strong price momentum, before the accounting catches up. Filtering them out trades
+some of momentum's own edge for a fundamentally-cleaner shortlist. This is not a free
+improvement, and is not claimed to be one.
+
+Thresholds were fixed before this run examined which companies they would remove. No
+threshold has been adjusted based on this run's output.
+================================================================================================
+
+As of 2026-09-18   momentum universe size: 1465   top decile evaluated: 147
+
+--- PER-COMPANY VERDICTS (all 147 names, none dropped silently) ---
+#   1  KMEW         Knowledge Marine & Engineering Works Lim verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+#   2  ATHERENERG   NOT AVAILABLE                            verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- no quarterly P&L
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+#   3  SANSERA      Sansera Engineering Limited              verdict=PASS
+#   4  CPPLUS       NOT AVAILABLE                            verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- no quarterly P&L
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+#   5  RPTECH       Rashi Peripherals Limited                verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_negative_latest = -1,020,050,000
+#   6  SKYGOLD      SKY GOLD AND DIAMONDS LIMITED            verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = -3.41x avg over 1 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -1,380,953,000
+#   7  THANGAMAYL   Thangamayil Jewellery Limited            verdict=PASS
+#   8  AEROFLEX     Aeroflex Industries Limited              verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+#   9  RPEL         Raghav Productivity Enhancers Limited    verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+#  10  YASHO        Yasho Industries Limited                 verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+         [N/A]  tier1.operating_margin_decline_3q -- only 3 margin quarter(s) available, need 4
+         [N/A]  tier2.interest_coverage_min -- EBIT or finance costs not available
+         [N/A]  tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+#  11  NGLFINE      NGL Fine-Chem Limited                    verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 16.5% -> 16.1% -> 15.3% -> 11.9%
+#  12  ACUTAAS      Acutaas Chemicals Limited                verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+         [N/A]  tier2.interest_coverage_min -- EBIT or finance costs not available
+         [N/A]  tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+#  13  AVALON       Avalon Technologies Limited              verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 2 annual point(s) available, need 3
+#  14  PRECWIRE     Precision Wires India Limited            verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+#  15  UNIPARTS     Uniparts India Limited                   verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 14.8% -> 14.0% -> 13.3% -> 13.3%
+#  16  HAPPYFORGE   Happy Forgings Limited                   verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+         [N/A]  tier1.operating_margin_decline_3q -- only 2 margin quarter(s) available, need 4
+         [N/A]  tier2.interest_coverage_min -- EBIT or finance costs not available
+         [N/A]  tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+#  17  NETWEB       Netweb Technologies India Limited        verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = 0.24x avg over 1 year(s) (threshold 0.5x)
+#  18  PARAS        Paras Defence and Space Technologies Lim verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = -0.13x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -455,600,000
+#  19  SENORES      Senores Pharmaceuticals Limited          verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+#  20  UNIVCABLES   Universal Cables Limited                 verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.interest_coverage_min = 1.77x (threshold 2.0x)
+#  21  RRKABEL      R R Kabel Limited                        verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+         [N/A]  tier1.operating_margin_decline_3q -- only 3 margin quarter(s) available, need 4
+         [N/A]  tier2.interest_coverage_min -- EBIT or finance costs not available
+         [N/A]  tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+#  22  HINDCOPPER   Hindustan Copper Limited                 verdict=PASS
+#  23  TFCILTD      Tourism Finance Corporation of India Lim verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_pat_avg_min = -0.81x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -66,371,000
+#  24  KIRLOSENG    Kirloskar Oil Engines Limited            verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = -1.92x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -4,687,790,000
+#  25  PAISALO      Paisalo Digital Limited                  verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.interest_coverage_min = 1.89x (threshold 2.0x)
+         [FAIL] tier2.cfo_pat_avg_min = -4.01x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -5,697,507,000
+#  26  WELCORP      Welspun Corp Limited                     verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = 0.24x avg over 2 year(s) (threshold 0.5x)
+#  27  CHENNPETRO   Chennai Petroleum Corporation Limited    verdict=FAIL
+         [FAIL] tier1.operating_margin_decline_3q = 4.9% -> 4.4% -> 1.5% -> 1.0%
+#  28  AETHER       Aether Industries Limited                verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = -0.20x avg over 1 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -164,580,000
+#  29  GRWRHITECH   Garware Hi-Tech Films Limited            verdict=PASS
+#  30  SBC          SBC Exports Limited                      verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_pat_avg_min = -0.85x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -48,285,000
+#  31  BAJAJCON     Bajaj Consumer Care Limited              verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 19.3% -> 18.7% -> 18.0% -> 16.7%
+#  32  LAURUSLABS   Laurus Labs Limited                      verdict=PASS
+#  33  APOLLO       Apollo Micro Systems Limited             verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = -1.52x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -687,267,000
+#  34  STYLAMIND    Stylam Industries Limited                verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+#  35  IDEA         Vodafone Idea Limited                    verdict=FAIL
+         [FAIL] tier1.net_loss_latest_fy = -278,919,000,000
+         [FAIL] tier2.interest_coverage_min = -0.21x (threshold 2.0x)
+         [FAIL] tier2.cfo_pat_avg_min = -0.67x avg over 2 year(s) (threshold 0.5x)
+#  36  SJS          S.J.S. Enterprises Limited               verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+#  37  MMFL         MM Forgings Limited                      verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+#  38  SYRMA        Syrma SGS Technology Limited             verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = -0.91x avg over 1 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -1,136,080,000
+#  39  SHAILY       Shaily Engineering Plastics Limited      verdict=PASS
+#  40  NATIONALUM   National Aluminium Company Limited       verdict=PASS
+#  41  SEAMECLTD    Seamec Limited                           verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+#  42  WHEELS       Wheels India Limited                     verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.interest_coverage_min = 1.55x (threshold 2.0x)
+#  43  LUMAXTECH    Lumax Auto Technologies Limited          verdict=PASS
+#  44  CNL          Creative Newtech Limited                 verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_pat_avg_min = -0.68x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -281,763,000
+#  45  IMFA         Indian Metals & Ferro Alloys Limited     verdict=FAIL
+         [FAIL] tier1.revenue_decline_2y = 27,962,000,000 -> 27,165,100,000 -> 26,979,800,000
+#  46  SBCL         Shivalik Bimetal Controls Limited        verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+#  47  SPORTKING    Sportking India Limited                  verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_pat_avg_min = -3.35x avg over 1 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -2,357,949,000
+#  48  KABRAEXTRU   Kabra Extrusion Technik Limited          verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.revenue_decline_2y = 6,548,819,000 -> 6,178,496,000 -> 5,053,580,000
+         [FAIL] tier2.cfo_pat_avg_min = 0.45x avg over 2 year(s) (threshold 0.5x)
+#  49  DATAPATTNS   Data Patterns (India) Limited            verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = 0.31x avg over 2 year(s) (threshold 0.5x)
+#  50  RATEGAIN     Rategain Travel Technologies Limited     verdict=PASS
+#  51  TMB          Tamilnad Mercantile Bank Limited         verdict=FAIL
+         [FAIL] tier2.cfo_negative_latest = -6,105,300,000
+#  52  ADANIENSOL   Adani Energy Solutions Limited           verdict=FAIL
+         [FAIL] tier2.debt_equity_max = 2.70x (threshold 2.0x)
+         [FAIL] tier2.interest_coverage_min = 1.81x (threshold 2.0x)
+#  53  DIVGIITTS    Divgi Torqtransfer Systems Limited       verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 21.3% -> 19.1% -> 18.6% -> 17.1%
+#  54  GNA          GNA Axles Limited                        verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+#  55  RICOAUTO     Rico Auto Industries Limited             verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 5.5% -> 5.2% -> 5.2% -> 4.7%
+#  56  GRANULES     Granules India Limited                   verdict=FAIL
+         [FAIL] tier1.revenue_decline_2y = 38,301,728,000 -> 38,287,750,000 -> 32,023,280,000
+#  57  AEGISLOG     Aegis Logistics Limited                  verdict=FAIL
+         [FAIL] tier1.revenue_decline_2y = 85,763,200,000 -> 73,632,200,000 -> 68,959,200,000
+#  58  APARINDS     Apar Industries Limited                  verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = 0.38x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -2,832,900,000
+#  59  FCL          Fineotex Chemical Limited                verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+#  60  PRICOLLTD    Pricol Limited                           verdict=PASS
+#  61  ICIL         Indo Count Industries Limited            verdict=FAIL
+         [FAIL] tier1.operating_margin_decline_3q = 14.6% -> 14.3% -> 13.5% -> 13.0%
+#  62  BHEL         Bharat Heavy Electricals Limited         verdict=FAIL
+         [FAIL] tier2.interest_coverage_min = 0.34x (threshold 2.0x)
+         [FAIL] tier2.cfo_negative_latest = -37,129,000,000
+#  63  RATNAVEER    Ratnaveer Precision Engineering Limited  verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_pat_avg_min = 0.40x avg over 1 year(s) (threshold 0.5x)
+#  64  KTKBANK      The Karnataka Bank Limited               verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- no quarterly P&L
+         [N/A]  tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+#  65  AZAD         Azad Engineering Limited                 verdict=FAIL
+         [FAIL] tier2.cfo_negative_latest = -69,520,000
+#  66  MOREPENLAB   Morepen Laboratories Limited             verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_pat_avg_min = -0.62x avg over 2 year(s) (threshold 0.5x)
+#  67  DREDGECORP   Dredging Corporation of India Limited    verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.revenue_decline_2y = 11,166,663,000 -> 10,048,333,000 -> 9,576,213,000
+         [FAIL] tier1.net_loss_latest_fy = -723,231,000
+         [FAIL] tier1.operating_margin_decline_3q = 7.0% -> 2.3% -> -4.8% -> -5.0%
+#  68  MOTHERSON    Samvardhana Motherson International Limi verdict=PASS
+#  69  SHRIPISTON   SPR Auto Technologies Limited            verdict=FAIL
+         [FAIL] tier1.operating_margin_decline_3q = 20.1% -> 19.9% -> 19.7% -> 19.7%
+#  70  SONACOMS     Sona BLW Precision Forgings Limited      verdict=PASS
+#  71  HONASA       Honasa Consumer Limited                  verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+         [N/A]  tier1.operating_margin_decline_3q -- only 3 margin quarter(s) available, need 4
+         [N/A]  tier2.interest_coverage_min -- EBIT or finance costs not available
+         [N/A]  tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+#  72  EBGNG        NOT AVAILABLE                            verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- no quarterly P&L
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+#  73  FEDERALBNK   The Federal Bank  Limited                verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- no quarterly P&L
+         [N/A]  tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+#  74  BHARATFORG   Bharat Forge Limited                     verdict=PASS
+#  75  SHRIRAMFIN   Shriram Finance Limited                  verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = -3.82x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -311,014,000,000
+#  76  PGIL         Pearl Global Industries Limited          verdict=PASS
+#  77  APEX         Apex Frozen Foods Limited                verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.revenue_decline_2y = 9,315,715,000 -> 8,543,179,000 -> 7,778,769,000
+#  78  ROSSTECH     Rossell Techsys Limited                  verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+#  79  ASTRAMICRO   Astra Microwave Products Limited         verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = -0.93x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -1,815,158,000
+#  80  NEULANDLAB   Neuland Laboratories Limited             verdict=PASS
+#  81  SGFIN        NOT AVAILABLE                            verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- no quarterly P&L
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+#  82  ADANIPOWER   Adani Power Limited                      verdict=PASS
+#  83  DYNAMATECH   Dynamatic Technologies Limited           verdict=FAIL
+         [FAIL] tier1.operating_margin_decline_3q = 9.5% -> 8.5% -> 8.4% -> 7.9%
+#  84  STEELCAS     Steelcast Limited                        verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.revenue_decline_2y = 4,495,515,000 -> 4,317,334,000 -> 3,537,756,000
+#  85  CEMPRO       Cemindia Projects Limited                verdict=PASS
+#  86  NITINSPIN    Nitin Spinners Limited                   verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+#  87  BELRISE      NOT AVAILABLE                            verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- no quarterly P&L
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+#  88  ARVIND       Arvind Limited                           verdict=PASS
+#  89  NRBBEARING   NRB Bearing Limited                      verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+#  90  NAVINFLUOR   Navin Fluorine International Limited     verdict=PASS
+#  91  SAILIFE      Sai Life Sciences Limited                verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+#  92  TVSSRICHAK   TVS Srichakra Limited                    verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 6.8% -> 6.2% -> 4.8% -> 3.8%
+#  93  JAYNECOIND   Jayaswal Neco Industries Limited         verdict=FAIL
+         [FAIL] tier1.revenue_decline_2y = 64,655,400,000 -> 59,914,100,000 -> 57,358,900,000
+         [FAIL] tier1.operating_margin_decline_3q = 13.1% -> 12.5% -> 10.7% -> 9.8%
+         [FAIL] tier2.interest_coverage_min = 1.66x (threshold 2.0x)
+#  94  CUPID        Cupid Limited                            verdict=PASS
+#  95  IOLCP        IOL Chemicals and Pharmaceuticals Limite verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 9.3% -> 8.4% -> 7.2% -> 7.0%
+#  96  INOXINDIA    INOX India Limited                       verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+         [N/A]  tier1.operating_margin_decline_3q -- only 2 margin quarter(s) available, need 4
+         [N/A]  tier2.interest_coverage_min -- EBIT or finance costs not available
+         [N/A]  tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+#  97  GAEL         Gujarat Ambuja Exports Limited           verdict=PASS
+#  98  SOTL         Savita Oil Technologies Limited          verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 8.1% -> 7.4% -> 7.0% -> 4.9%
+         [FAIL] tier2.cfo_pat_avg_min = 0.27x avg over 2 year(s) (threshold 0.5x)
+#  99  CYIENTDLM    Cyient DLM Limited                       verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_pat_avg_min = -1.15x avg over 1 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -705,410,000
+# 100  HSCL         Himadri Speciality Chemical Limited      verdict=PASS
+# 101  POWERINDIA   Hitachi Energy India Limited             verdict=PASS
+# 102  RADICO       Radico Khaitan Limited                   verdict=PASS
+# 103  LUMAXIND     Lumax Industries Limited                 verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+# 104  CRAFTSMAN    Craftsman Automation Limited             verdict=FAIL
+         [FAIL] tier1.operating_margin_decline_3q = 13.9% -> 13.1% -> 11.9% -> 9.8%
+# 105  NEOGEN       Neogen Chemicals Limited                 verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = -0.71x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -291,500,000
+# 106  GANDHAR      Gandhar Oil Refinery (India) Limited     verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_negative_latest = -693,372,000
+# 107  GOKULAGRO    Gokul Agro Resources Limited             verdict=PASS
+# 108  VINDHYATEL   Vindhya Telelinks Limited                verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 7.2% -> 6.6% -> 6.5% -> 6.3%
+# 109  UJJIVANSFB   Ujjivan Small Finance Bank Limited       verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- no quarterly P&L
+         [N/A]  tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+# 110  VARROC       Varroc Engineering Limited               verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = 0.20x avg over 2 year(s) (threshold 0.5x)
+# 111  SANGHVIMOV   Sanghvi Movers Limited                   verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 44.8% -> 44.5% -> 42.0% -> 33.9%
+# 112  NYKAA        FSN E-Commerce Ventures Limited          verdict=FAIL
+         [FAIL] tier2.interest_coverage_min = 1.83x (threshold 2.0x)
+         [FAIL] tier2.cfo_pat_avg_min = -2.80x avg over 2 year(s) (threshold 0.5x)
+# 113  VIYASH       Viyash Scientific Limited                verdict=FAIL
+         [FAIL] tier2.interest_coverage_min = 0.23x (threshold 2.0x)
+         [FAIL] tier2.cfo_pat_avg_min = -0.59x avg over 2 year(s) (threshold 0.5x)
+# 114  ADOR         Ador Welding Limited                     verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_pat_avg_min = 0.39x avg over 2 year(s) (threshold 0.5x)
+# 115  LTF          L&T Finance Limited                      verdict=FAIL
+         [FAIL] tier1.operating_margin_decline_3q = 61.6% -> 60.6% -> 59.3% -> 58.5%
+# 116  MINDACORP    Minda Corporation Limited                verdict=PASS
+# 117  TALBROAUTO   Talbros Automotive Components Limited    verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+# 118  MUNJALAU     Munjal Auto Industries Limited           verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.revenue_decline_2y = 15,566,041,000 -> 15,244,098,000 -> 12,365,519,000
+# 119  SMSPHARMA    SMS Pharmaceuticals Limited              verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+# 120  DOLPHIN      Dolphin Offshore Enterprises (India) Lim verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+         [N/A]  tier1.operating_margin_decline_3q -- only 3 margin quarter(s) available, need 4
+         [N/A]  tier2.interest_coverage_min -- EBIT or finance costs not available
+         [N/A]  tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+# 121  GHCLTEXTIL   GHCL Textiles Limited                    verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 1 annual point(s) available, need 3
+# 122  TATVA        Tatva Chintan Pharma Chem Limited        verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 12.7% -> 10.6% -> 6.9% -> 5.5%
+# 123  JNKINDIA     JNK India Limited                        verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_negative_latest = -100,690,000
+# 124  EMIL         Electronics Mart India Limited           verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 2 annual point(s) available, need 3
+# 125  SATIN        Satin Creditcare Network Limited         verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 66.3% -> 65.3% -> 61.0% -> 54.5%
+         [FAIL] tier2.interest_coverage_min = 1.65x (threshold 2.0x)
+         [FAIL] tier2.cfo_pat_avg_min = -4.13x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -20,688,909,000
+# 126  FILATEX      Filatex India Limited                    verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.revenue_decline_2y = 43,471,000,000 -> 43,068,400,000 -> 41,979,700,000
+# 127  AKUMS        Akums Drugs and Pharmaceuticals Limited  verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+# 128  AUROPHARMA   Aurobindo Pharma Limited                 verdict=FAIL
+         [FAIL] tier1.revenue_decline_2y = 121,320,100,000 -> 112,990,500,000 -> 110,953,400,000
+# 129  SANGAMIND    Sangam (India) Limited                   verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.interest_coverage_min = 1.86x (threshold 2.0x)
+# 130  MMP          MMP Industries Limited                   verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+# 131  FINCABLES    Finolex Cables Limited                   verdict=PASS
+# 132  AARVI        Aarvi Encon Limited                      verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 3.3% -> 3.1% -> 2.9% -> 2.9%
+         [FAIL] tier2.cfo_pat_avg_min = 0.25x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier3.bottom_liquidity_tercile = low_liq
+# 133  MARKSANS     Marksans Pharma Limited                  verdict=PASS
+# 134  HINDALCO     Hindalco Industries Limited              verdict=PASS
+# 135  M&MFIN       Mahindra & Mahindra Financial Services L verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = -9.59x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -184,485,500,000
+# 136  WELSPUNLIV   Welspun Living Limited                   verdict=PASS
+# 137  SOUTHBANK    The South Indian Bank Limited            verdict=INSUFFICIENT DATA
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- no quarterly P&L
+         [N/A]  tier2.cfo_pat_avg_min -- CFO present but no matching TTM PAT to ratio against
+# 138  IFCI         IFCI Limited                             verdict=FINANCIALS-PARTIAL
+# 139  MUFIN        Mufin Green Finance Limited              verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_negative_latest = -3,586,646,000
+# 140  PREMEXPLN    Premier Explosives Limited               verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 18.8% -> 17.3% -> 14.9% -> 12.6%
+# 141  MANINDS      Man Industries (India) Limited           verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier2.cfo_pat_avg_min = 0.35x avg over 2 year(s) (threshold 0.5x)
+# 142  RACLGEAR     RACL Geartech Limited                    verdict=INSUFFICIENT DATA  [sector unknown -- leverage checks applied without financials exemption]
+         [N/A]  tier1.revenue_decline_2y -- only 0 annual point(s) available, need 3
+         [N/A]  tier1.net_loss_latest_fy -- no annual point available
+         [N/A]  tier1.operating_margin_decline_3q -- only 0 margin quarter(s) available, need 4
+         [N/A]  tier2.debt_equity_max -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.interest_coverage_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_pat_avg_min -- no FY2023+ balance-sheet data at all
+         [N/A]  tier2.cfo_negative_latest -- no FY2023+ balance-sheet data at all
+# 143  APCOTEXIND   Apcotex Industries Limited               verdict=FAIL  [sector unknown -- leverage checks applied without financials exemption]
+         [FAIL] tier1.operating_margin_decline_3q = 8.0% -> 7.9% -> 7.0% -> 6.6%
+# 144  PNBHOUSING   PNB Housing Finance Limited              verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = -2.50x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -46,615,100,000
+# 145  VADILALIND   Vadilal Industries Limited               verdict=PASS  [sector unknown -- leverage checks applied without financials exemption]
+# 146  NAM-INDIA    Nippon Life India Asset Management Limit verdict=FINANCIALS-PARTIAL
+# 147  VTL          Vardhman Textiles Limited                verdict=FAIL
+         [FAIL] tier2.cfo_pat_avg_min = 0.35x avg over 2 year(s) (threshold 0.5x)
+         [FAIL] tier2.cfo_negative_latest = -10,551,900,000
+
+--- FUNNEL ---
+start (momentum top decile):     147
+after Tier 1 (P&L):               114
+after Tier 2 (balance sheet):     74
+after Tier 3 (liquidity/series):  47
+  survivors (PASS + FINANCIALS-PARTIAL): 47
+  INSUFFICIENT DATA:                     27
+  FAIL:                                   73
+
+--- SURVIVORS (key metrics, known_date, staleness) ---
+
+SANSERA  (Sansera Engineering Limited)  momentum_rank=3  momentum_12_1=+2.1482  sector=Automobile and Auto Components  verdict=PASS
+    tier1.revenue_decline_2y: PASS 22,960,510,000 -> 26,821,610,000 -> 29,809,440,000  (known_date=2025-02-11, staleness=584d)
+    tier1.net_loss_latest_fy: PASS 2,041,330,000  (known_date=2025-02-11, staleness=584d)
+    tier1.operating_margin_decline_3q: PASS 11.8% -> 11.8% -> 11.9% -> 12.0%  (known_date=2025-02-11, staleness=584d)
+    tier2.debt_equity_max: PASS 0.59x (threshold 2.0x)  (known_date=2024-05-17, staleness=854d)
+    tier2.interest_coverage_min: PASS 4.32x (threshold 2.0x)  (known_date=2024-05-17, staleness=854d)
+    tier2.cfo_pat_avg_min: PASS 1.86x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-17, staleness=854d)
+    tier2.cfo_negative_latest: PASS 3,743,400,000  (known_date=2024-05-17, staleness=854d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+THANGAMAYL  (Thangamayil Jewellery Limited)  momentum_rank=7  momentum_12_1=+1.7930  sector=Consumer Durables  verdict=PASS
+    tier1.revenue_decline_2y: PASS 27,957,403,000 -> 36,153,410,000 -> 45,112,334,000  (known_date=2025-02-06, staleness=589d)
+    tier1.net_loss_latest_fy: PASS 1,155,470,000  (known_date=2025-02-06, staleness=589d)
+    tier1.operating_margin_decline_3q: PASS 5.3% -> 4.9% -> 3.9% -> 4.3%  (known_date=2025-02-06, staleness=589d)
+    tier2.debt_equity_max: PASS 1.01x (threshold 2.0x)  (known_date=2024-05-20, staleness=851d)
+    tier2.interest_coverage_min: PASS 5.54x (threshold 2.0x)  (known_date=2024-05-20, staleness=851d)
+    tier2.cfo_pat_avg_min: PASS 1.42x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-20, staleness=851d)
+    tier2.cfo_negative_latest: PASS 3,303,794,000  (known_date=2024-05-20, staleness=851d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+PRECWIRE  (Precision Wires India Limited)  momentum_rank=14  momentum_12_1=+1.4985  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 29,829,536,000 -> 32,159,284,000 -> 38,470,380,000  (known_date=2025-02-12, staleness=583d)
+    tier1.net_loss_latest_fy: PASS 823,728,000  (known_date=2025-02-12, staleness=583d)
+    tier1.operating_margin_decline_3q: PASS 4.1% -> 4.2% -> 4.1% -> 4.0%  (known_date=2025-02-12, staleness=583d)
+    tier2.debt_equity_max: PASS 0.19x (threshold 2.0x)  (known_date=2024-05-18, staleness=853d)
+    tier2.interest_coverage_min: PASS 3.66x (threshold 2.0x)  (known_date=2024-05-18, staleness=853d)
+    tier2.cfo_pat_avg_min: PASS 1.05x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-18, staleness=853d)
+    tier2.cfo_negative_latest: PASS 596,762,000  (known_date=2024-05-18, staleness=853d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+HINDCOPPER  (Hindustan Copper Limited)  momentum_rank=22  momentum_12_1=+1.3230  sector=Metals & Mining  verdict=PASS
+    tier1.revenue_decline_2y: PASS 16,630,300,000 -> 17,113,900,000 -> 19,049,300,000  (known_date=2025-02-08, staleness=587d)
+    tier1.net_loss_latest_fy: PASS 4,022,700,000  (known_date=2025-02-08, staleness=587d)
+    tier1.operating_margin_decline_3q: PASS 24.9% -> 28.2% -> 28.7% -> 29.7%  (known_date=2025-02-08, staleness=587d)
+    tier2.debt_equity_max: PASS 0.10x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.interest_coverage_min: PASS 26.48x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_pat_avg_min: PASS 1.63x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_negative_latest: PASS 2,920,600,000  (known_date=2024-05-24, staleness=847d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+GRWRHITECH  (Garware Hi-Tech Films Limited)  momentum_rank=29  momentum_12_1=+1.2331  sector=Capital Goods  verdict=PASS
+    tier1.revenue_decline_2y: PASS 13,974,600,000 -> 15,794,500,000 -> 20,080,000,000  (known_date=2025-02-07, staleness=588d)
+    tier1.net_loss_latest_fy: PASS 3,112,300,000  (known_date=2025-02-07, staleness=588d)
+    tier1.operating_margin_decline_3q: PASS 16.8% -> 19.1% -> 20.8% -> 21.1%  (known_date=2025-02-07, staleness=588d)
+    tier2.debt_equity_max: PASS 0.00x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.interest_coverage_min: PASS 23.94x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_pat_avg_min: PASS 1.08x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_negative_latest: PASS 1,721,100,000  (known_date=2024-05-29, staleness=842d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+LAURUSLABS  (Laurus Labs Limited)  momentum_rank=32  momentum_12_1=+1.1924  sector=Healthcare  verdict=PASS
+    tier1.revenue_decline_2y: PASS 60,844,800,000 -> 49,820,600,000 -> 52,733,300,000  (known_date=2025-01-24, staleness=602d)
+    tier1.net_loss_latest_fy: PASS 2,005,900,000  (known_date=2025-01-24, staleness=602d)
+    tier1.operating_margin_decline_3q: PASS 8.3% -> 8.1% -> 7.6% -> 9.3%  (known_date=2025-01-24, staleness=602d)
+    tier2.debt_equity_max: PASS 0.61x (threshold 2.0x)  (known_date=2024-04-25, staleness=876d)
+    tier2.interest_coverage_min: PASS 2.29x (threshold 2.0x)  (known_date=2024-04-25, staleness=876d)
+    tier2.cfo_pat_avg_min: PASS 2.68x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-04-25, staleness=876d)
+    tier2.cfo_negative_latest: PASS 6,656,900,000  (known_date=2024-04-25, staleness=876d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+STYLAMIND  (Stylam Industries Limited)  momentum_rank=34  momentum_12_1=+1.1757  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 8,173,677,000 -> 9,110,266,000 -> 9,996,950,000  (known_date=2025-02-08, staleness=587d)
+    tier1.net_loss_latest_fy: PASS 1,298,644,000  (known_date=2025-02-08, staleness=587d)
+    tier1.operating_margin_decline_3q: PASS 18.4% -> 18.2% -> 18.4% -> 17.4%  (known_date=2025-02-08, staleness=587d)
+    tier2.debt_equity_max: PASS 0.00x (threshold 2.0x)  (known_date=2024-05-28, staleness=843d)
+    tier2.interest_coverage_min: PASS 67.24x (threshold 2.0x)  (known_date=2024-05-28, staleness=843d)
+    tier2.cfo_pat_avg_min: PASS 0.81x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-28, staleness=843d)
+    tier2.cfo_negative_latest: PASS 1,129,060,000  (known_date=2024-05-28, staleness=843d)
+    tier3.bottom_liquidity_tercile: PASS mid_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+SJS  (S.J.S. Enterprises Limited)  momentum_rank=36  momentum_12_1=+1.1394  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 4,009,460,000 -> 5,475,800,000 -> 7,467,632,000  (known_date=2025-01-30, staleness=596d)
+    tier1.net_loss_latest_fy: PASS 1,122,750,000  (known_date=2025-01-30, staleness=596d)
+    tier1.operating_margin_decline_3q: PASS 19.3% -> 19.4% -> 20.5% -> 20.9%  (known_date=2025-01-30, staleness=596d)
+    tier2.debt_equity_max: PASS 0.12x (threshold 2.0x)  (known_date=2024-05-21, staleness=850d)
+    tier2.interest_coverage_min: PASS 14.22x (threshold 2.0x)  (known_date=2024-05-21, staleness=850d)
+    tier2.cfo_pat_avg_min: PASS 1.30x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-21, staleness=850d)
+    tier2.cfo_negative_latest: PASS 1,088,273,000  (known_date=2024-05-21, staleness=850d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+MMFL  (MM Forgings Limited)  momentum_rank=37  momentum_12_1=+1.1271  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 13,143,950,000 -> 15,538,729,000 -> 15,520,369,000  (known_date=2025-02-04, staleness=591d)
+    tier1.net_loss_latest_fy: PASS 1,253,693,000  (known_date=2025-02-04, staleness=591d)
+    tier1.operating_margin_decline_3q: PASS 14.7% -> 15.1% -> 15.3% -> 15.1%  (known_date=2025-02-04, staleness=591d)
+    tier2.debt_equity_max: PASS 1.02x (threshold 2.0x)  (known_date=2024-05-30, staleness=841d)
+    tier2.interest_coverage_min: PASS 5.42x (threshold 2.0x)  (known_date=2024-05-30, staleness=841d)
+    tier2.cfo_pat_avg_min: PASS 1.18x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-30, staleness=841d)
+    tier2.cfo_negative_latest: PASS 1,312,361,000  (known_date=2024-05-30, staleness=841d)
+    tier3.bottom_liquidity_tercile: PASS mid_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+SHAILY  (Shaily Engineering Plastics Limited)  momentum_rank=39  momentum_12_1=+1.1044  sector=Consumer Durables  verdict=PASS
+    tier1.revenue_decline_2y: PASS 6,270,286,000 -> 6,078,083,000 -> 7,395,291,000  (known_date=2025-02-08, staleness=587d)
+    tier1.net_loss_latest_fy: PASS 838,663,000  (known_date=2025-02-08, staleness=587d)
+    tier1.operating_margin_decline_3q: PASS 13.6% -> 14.2% -> 15.3% -> 16.1%  (known_date=2025-02-08, staleness=587d)
+    tier2.debt_equity_max: PASS 0.45x (threshold 2.0x)  (known_date=2024-05-25, staleness=846d)
+    tier2.interest_coverage_min: PASS 4.90x (threshold 2.0x)  (known_date=2024-05-25, staleness=846d)
+    tier2.cfo_pat_avg_min: PASS 2.09x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-25, staleness=846d)
+    tier2.cfo_negative_latest: PASS 922,647,000  (known_date=2024-05-25, staleness=846d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+NATIONALUM  (National Aluminium Company Limited)  momentum_rank=40  momentum_12_1=+1.0626  sector=Metals & Mining  verdict=PASS
+    tier1.revenue_decline_2y: PASS 149,036,900,000 -> 132,395,400,000 -> 150,988,500,000  (known_date=2025-02-10, staleness=585d)
+    tier1.net_loss_latest_fy: PASS 42,621,300,000  (known_date=2025-02-10, staleness=585d)
+    tier1.operating_margin_decline_3q: PASS 18.1% -> 21.2% -> 28.2% -> 35.5%  (known_date=2025-02-10, staleness=585d)
+    tier2.debt_equity_max: PASS 0.00x (threshold 2.0x)  (known_date=2024-05-27, staleness=844d)
+    tier2.interest_coverage_min: PASS 137.94x (threshold 2.0x)  (known_date=2024-05-27, staleness=844d)
+    tier2.cfo_pat_avg_min: PASS 0.97x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-27, staleness=844d)
+    tier2.cfo_negative_latest: PASS 27,193,200,000  (known_date=2024-05-27, staleness=844d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+SEAMECLTD  (Seamec Limited)  momentum_rank=41  momentum_12_1=+1.0618  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 3,967,000,000 -> 6,351,534,000 -> 6,885,800,000  (known_date=2025-02-11, staleness=584d)
+    tier1.net_loss_latest_fy: PASS 996,300,000  (known_date=2025-02-11, staleness=584d)
+    tier1.operating_margin_decline_3q: PASS 19.2% -> 21.7% -> 22.9% -> 16.1%  (known_date=2025-02-11, staleness=584d)
+    tier2.debt_equity_max: PASS 0.34x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.interest_coverage_min: PASS 6.24x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_pat_avg_min: PASS 1.42x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_negative_latest: PASS 1,499,900,000  (known_date=2024-05-29, staleness=842d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+LUMAXTECH  (Lumax Auto Technologies Limited)  momentum_rank=43  momentum_12_1=+1.0031  sector=Automobile and Auto Components  verdict=PASS
+    tier1.revenue_decline_2y: PASS 17,710,610,000 -> 25,576,846,000 -> 32,611,643,000  (known_date=2025-02-13, staleness=582d)
+    tier1.net_loss_latest_fy: PASS 2,008,325,000  (known_date=2025-02-13, staleness=582d)
+    tier1.operating_margin_decline_3q: PASS 10.5% -> 10.6% -> 10.7% -> 10.4%  (known_date=2025-02-13, staleness=582d)
+    tier2.debt_equity_max: PASS 0.67x (threshold 2.0x)  (known_date=2024-05-27, staleness=844d)
+    tier2.interest_coverage_min: PASS 4.32x (threshold 2.0x)  (known_date=2024-05-27, staleness=844d)
+    tier2.cfo_pat_avg_min: PASS 1.41x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-27, staleness=844d)
+    tier2.cfo_negative_latest: PASS 2,653,736,000  (known_date=2024-05-27, staleness=844d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+SBCL  (Shivalik Bimetal Controls Limited)  momentum_rank=46  momentum_12_1=+0.9747  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 4,360,909,000 -> 5,047,635,000 -> 5,036,727,000  (known_date=2025-02-12, staleness=583d)
+    tier1.net_loss_latest_fy: PASS 816,846,000  (known_date=2025-02-12, staleness=583d)
+    tier1.operating_margin_decline_3q: PASS 22.3% -> 21.4% -> 21.1% -> 21.6%  (known_date=2025-02-12, staleness=583d)
+    tier2.debt_equity_max: PASS 0.12x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.interest_coverage_min: PASS 22.99x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_pat_avg_min: PASS 0.82x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_negative_latest: PASS 685,130,000  (known_date=2024-05-29, staleness=842d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+RATEGAIN  (Rategain Travel Technologies Limited)  momentum_rank=50  momentum_12_1=+0.9633  sector=Information Technology  verdict=PASS
+    tier1.revenue_decline_2y: PASS 4,900,730,000 -> 8,841,530,000 -> 10,717,900,000  (known_date=2025-02-14, staleness=581d)
+    tier1.net_loss_latest_fy: PASS 2,041,460,000  (known_date=2025-02-14, staleness=581d)
+    tier1.operating_margin_decline_3q: PASS 19.9% -> 21.6% -> 23.5% -> 24.9%  (known_date=2025-02-14, staleness=581d)
+    tier2.debt_equity_max: PASS 0.00x (threshold 2.0x)  (known_date=2024-05-21, staleness=850d)
+    tier2.interest_coverage_min: PASS 139.27x (threshold 2.0x)  (known_date=2024-05-21, staleness=850d)
+    tier2.cfo_pat_avg_min: PASS 0.90x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-21, staleness=850d)
+    tier2.cfo_negative_latest: PASS 1,518,100,000  (known_date=2024-05-21, staleness=850d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+GNA  (GNA Axles Limited)  momentum_rank=54  momentum_12_1=+0.9319  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 14,996,614,000 -> 15,189,942,000 -> 15,332,619,000  (known_date=2025-01-10, staleness=616d)
+    tier1.net_loss_latest_fy: PASS 983,847,000  (known_date=2025-01-10, staleness=616d)
+    tier1.operating_margin_decline_3q: PASS 9.7% -> 9.1% -> 9.2% -> 9.3%  (known_date=2025-01-10, staleness=616d)
+    tier2.debt_equity_max: PASS 0.24x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.interest_coverage_min: PASS 12.67x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_pat_avg_min: PASS 0.90x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_negative_latest: PASS 984,092,000  (known_date=2024-05-24, staleness=847d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+FCL  (Fineotex Chemical Limited)  momentum_rank=59  momentum_12_1=+0.9092  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 3,498,871,000 -> 3,919,632,000 -> 4,497,459,000  (known_date=2025-02-13, staleness=582d)
+    tier1.net_loss_latest_fy: PASS 1,106,778,000  (known_date=2025-02-13, staleness=582d)
+    tier1.operating_margin_decline_3q: PASS 33.7% -> 32.4% -> 32.7% -> 31.4%  (known_date=2025-02-13, staleness=582d)
+    tier2.debt_equity_max: PASS 0.01x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.interest_coverage_min: PASS 174.32x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_pat_avg_min: PASS 1.33x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_negative_latest: PASS 973,805,000  (known_date=2024-05-29, staleness=842d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+PRICOLLTD  (Pricol Limited)  momentum_rank=60  momentum_12_1=+0.9053  sector=Automobile and Auto Components  verdict=PASS
+    tier1.revenue_decline_2y: PASS 18,493,821,000 -> 22,111,022,000 -> 25,067,229,000  (known_date=2025-01-30, staleness=596d)
+    tier1.net_loss_latest_fy: PASS 1,735,833,000  (known_date=2025-01-30, staleness=596d)
+    tier1.operating_margin_decline_3q: PASS 9.0% -> 9.3% -> 9.5% -> 9.6%  (known_date=2025-01-30, staleness=596d)
+    tier2.debt_equity_max: PASS 0.06x (threshold 2.0x)  (known_date=2024-05-15, staleness=856d)
+    tier2.interest_coverage_min: PASS 11.19x (threshold 2.0x)  (known_date=2024-05-15, staleness=856d)
+    tier2.cfo_pat_avg_min: PASS 1.57x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-15, staleness=856d)
+    tier2.cfo_negative_latest: PASS 2,547,773,000  (known_date=2024-05-15, staleness=856d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+MOTHERSON  (Samvardhana Motherson International Limited)  momentum_rank=68  momentum_12_1=+0.8621  sector=Automobile and Auto Components  verdict=PASS
+    tier1.revenue_decline_2y: PASS 732,865,400,000 -> 941,103,800,000 -> 1,114,039,600,000  (known_date=2025-02-14, staleness=581d)
+    tier1.net_loss_latest_fy: PASS 44,743,400,000  (known_date=2025-02-14, staleness=581d)
+    tier1.operating_margin_decline_3q: PASS 5.7% -> 6.0% -> 6.1% -> 6.3%  (known_date=2025-02-14, staleness=581d)
+    tier2.debt_equity_max: PASS 0.61x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.interest_coverage_min: PASS 3.13x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_pat_avg_min: PASS 2.64x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_negative_latest: PASS 75,689,200,000  (known_date=2024-05-29, staleness=842d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+SONACOMS  (Sona BLW Precision Forgings Limited)  momentum_rank=70  momentum_12_1=+0.8506  sector=Automobile and Auto Components  verdict=PASS
+    tier1.revenue_decline_2y: PASS 24,718,893,000 -> 30,435,320,000 -> 35,713,759,000  (known_date=2025-01-23, staleness=603d)
+    tier1.net_loss_latest_fy: PASS 5,840,826,000  (known_date=2025-01-23, staleness=603d)
+    tier1.operating_margin_decline_3q: PASS 22.2% -> 22.3% -> 22.5% -> 23.0%  (known_date=2025-01-23, staleness=603d)
+    tier2.debt_equity_max: PASS 0.08x (threshold 2.0x)  (known_date=2024-04-30, staleness=871d)
+    tier2.interest_coverage_min: PASS 27.36x (threshold 2.0x)  (known_date=2024-04-30, staleness=871d)
+    tier2.cfo_pat_avg_min: PASS 1.34x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-04-30, staleness=871d)
+    tier2.cfo_negative_latest: PASS 6,927,512,000  (known_date=2024-04-30, staleness=871d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+BHARATFORG  (Bharat Forge Limited)  momentum_rank=74  momentum_12_1=+0.8226  sector=Automobile and Auto Components  verdict=PASS
+    tier1.revenue_decline_2y: PASS 128,543,020,000 -> 151,469,150,000 -> 154,344,050,000  (known_date=2025-02-13, staleness=582d)
+    tier1.net_loss_latest_fy: PASS 8,577,670,000  (known_date=2025-02-13, staleness=582d)
+    tier1.operating_margin_decline_3q: PASS 12.4% -> 12.9% -> 13.2% -> 13.0%  (known_date=2025-02-13, staleness=582d)
+    tier2.debt_equity_max: PASS 1.05x (threshold 2.0x)  (known_date=2024-05-08, staleness=863d)
+    tier2.interest_coverage_min: PASS 3.94x (threshold 2.0x)  (known_date=2024-05-08, staleness=863d)
+    tier2.cfo_pat_avg_min: PASS 2.19x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-08, staleness=863d)
+    tier2.cfo_negative_latest: PASS 16,643,950,000  (known_date=2024-05-08, staleness=863d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+PGIL  (Pearl Global Industries Limited)  momentum_rank=76  momentum_12_1=+0.8113  sector=Textiles  verdict=PASS
+    tier1.revenue_decline_2y: PASS 33,244,829,000 -> 32,887,370,000 -> 41,546,161,000  (known_date=2025-02-12, staleness=583d)
+    tier1.net_loss_latest_fy: PASS 2,147,803,000  (known_date=2025-02-12, staleness=583d)
+    tier1.operating_margin_decline_3q: PASS 8.0% -> 8.1% -> 8.1% -> 8.1%  (known_date=2025-02-12, staleness=583d)
+    tier2.debt_equity_max: PASS 0.54x (threshold 2.0x)  (known_date=2024-05-20, staleness=851d)
+    tier2.interest_coverage_min: PASS 3.31x (threshold 2.0x)  (known_date=2024-05-20, staleness=851d)
+    tier2.cfo_pat_avg_min: PASS 2.23x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-20, staleness=851d)
+    tier2.cfo_negative_latest: PASS 3,520,858,000  (known_date=2024-05-20, staleness=851d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+NEULANDLAB  (Neuland Laboratories Limited)  momentum_rank=80  momentum_12_1=+0.7780  sector=Healthcare  verdict=PASS
+    tier1.revenue_decline_2y: PASS 10,399,979,000 -> 15,806,434,000 -> 15,334,870,000  (known_date=2025-02-10, staleness=585d)
+    tier1.net_loss_latest_fy: PASS 2,998,641,000  (known_date=2025-02-10, staleness=585d)
+    tier1.operating_margin_decline_3q: PASS 26.7% -> 27.0% -> 24.0% -> 21.7%  (known_date=2025-02-10, staleness=585d)
+    tier2.debt_equity_max: PASS 0.06x (threshold 2.0x)  (known_date=2024-05-10, staleness=861d)
+    tier2.interest_coverage_min: PASS 29.68x (threshold 2.0x)  (known_date=2024-05-10, staleness=861d)
+    tier2.cfo_pat_avg_min: PASS 1.16x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-10, staleness=861d)
+    tier2.cfo_negative_latest: PASS 2,611,767,000  (known_date=2024-05-10, staleness=861d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+ADANIPOWER  (Adani Power Limited)  momentum_rank=82  momentum_12_1=+0.7682  sector=Power  verdict=PASS
+    tier1.revenue_decline_2y: PASS 391,290,200,000 -> 472,296,200,000 -> 553,293,800,000  (known_date=2025-01-29, staleness=597d)
+    tier1.net_loss_latest_fy: PASS 128,876,200,000  (known_date=2025-01-29, staleness=597d)
+    tier1.operating_margin_decline_3q: PASS 48.0% -> 37.2% -> 34.8% -> 36.2%  (known_date=2025-01-29, staleness=597d)
+    tier2.debt_equity_max: PASS 0.80x (threshold 2.0x)  (known_date=2024-05-02, staleness=869d)
+    tier2.interest_coverage_min: PASS 7.14x (threshold 2.0x)  (known_date=2024-05-02, staleness=869d)
+    tier2.cfo_pat_avg_min: PASS 0.73x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-02, staleness=869d)
+    tier2.cfo_negative_latest: PASS 141,701,500,000  (known_date=2024-05-02, staleness=869d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+CEMPRO  (Cemindia Projects Limited)  momentum_rank=85  momentum_12_1=+0.7442  sector=Construction  verdict=PASS
+    tier1.revenue_decline_2y: PASS 46,333,479,000 -> 70,915,575,000 -> 88,749,461,000  (known_date=2025-02-13, staleness=582d)
+    tier1.net_loss_latest_fy: PASS 3,489,757,000  (known_date=2025-02-13, staleness=582d)
+    tier1.operating_margin_decline_3q: PASS 7.6% -> 7.8% -> 8.0% -> 7.9%  (known_date=2025-02-13, staleness=582d)
+    tier2.debt_equity_max: PASS 0.58x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.interest_coverage_min: PASS 2.68x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_pat_avg_min: PASS 3.17x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_negative_latest: PASS 7,043,414,000  (known_date=2024-05-29, staleness=842d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+NITINSPIN  (Nitin Spinners Limited)  momentum_rank=86  momentum_12_1=+0.7337  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 25,209,804,000 -> 27,597,310,000 -> 32,650,733,000  (known_date=2025-03-10, staleness=557d)
+    tier1.net_loss_latest_fy: PASS 1,682,310,000  (known_date=2025-03-10, staleness=557d)
+    tier1.operating_margin_decline_3q: PASS 9.0% -> 9.4% -> 9.8% -> 9.9%  (known_date=2025-03-10, staleness=557d)
+    tier2.debt_equity_max: PASS 1.17x (threshold 2.0x)  (known_date=2024-05-09, staleness=862d)
+    tier2.interest_coverage_min: PASS 3.13x (threshold 2.0x)  (known_date=2024-05-09, staleness=862d)
+    tier2.cfo_pat_avg_min: PASS 1.21x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-09, staleness=862d)
+    tier2.cfo_negative_latest: PASS 1,634,802,000  (known_date=2024-05-09, staleness=862d)
+    tier3.bottom_liquidity_tercile: PASS mid_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+ARVIND  (Arvind Limited)  momentum_rank=88  momentum_12_1=+0.7286  sector=Textiles  verdict=PASS
+    tier1.revenue_decline_2y: PASS 87,052,200,000 -> 75,440,000,000 -> 81,826,300,000  (known_date=2025-01-28, staleness=598d)
+    tier1.net_loss_latest_fy: PASS 3,171,600,000  (known_date=2025-01-28, staleness=598d)
+    tier1.operating_margin_decline_3q: PASS 8.0% -> 7.6% -> 7.6% -> 7.8%  (known_date=2025-01-28, staleness=598d)
+    tier2.debt_equity_max: PASS 0.37x (threshold 2.0x)  (known_date=2024-05-06, staleness=865d)
+    tier2.interest_coverage_min: PASS 3.89x (threshold 2.0x)  (known_date=2024-05-06, staleness=865d)
+    tier2.cfo_pat_avg_min: PASS 1.79x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-06, staleness=865d)
+    tier2.cfo_negative_latest: PASS 6,963,600,000  (known_date=2024-05-06, staleness=865d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+NRBBEARING  (NRB Bearing Limited)  momentum_rank=89  momentum_12_1=+0.7218  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 10,003,500,000 -> 11,218,602,000 -> 11,539,323,000  (known_date=2025-02-07, staleness=588d)
+    tier1.net_loss_latest_fy: PASS 1,154,205,000  (known_date=2025-02-07, staleness=588d)
+    tier1.operating_margin_decline_3q: PASS 13.8% -> 13.3% -> 14.0% -> 14.1%  (known_date=2025-02-07, staleness=588d)
+    tier2.debt_equity_max: PASS 0.20x (threshold 2.0x)  (known_date=2024-05-27, staleness=844d)
+    tier2.interest_coverage_min: PASS 6.77x (threshold 2.0x)  (known_date=2024-05-27, staleness=844d)
+    tier2.cfo_pat_avg_min: PASS 0.56x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-27, staleness=844d)
+    tier2.cfo_negative_latest: PASS 1,163,000,000  (known_date=2024-05-27, staleness=844d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+NAVINFLUOR  (Navin Fluorine International Limited)  momentum_rank=90  momentum_12_1=+0.7196  sector=Chemicals  verdict=PASS
+    tier1.revenue_decline_2y: PASS 17,892,400,000 -> 21,618,600,000 -> 22,503,900,000  (known_date=2025-01-31, staleness=595d)
+    tier1.net_loss_latest_fy: PASS 2,639,900,000  (known_date=2025-01-31, staleness=595d)
+    tier1.operating_margin_decline_3q: PASS 17.3% -> 16.2% -> 15.6% -> 17.8%  (known_date=2025-01-31, staleness=595d)
+    tier2.debt_equity_max: PASS 0.56x (threshold 2.0x)  (known_date=2024-05-08, staleness=863d)
+    tier2.interest_coverage_min: PASS 4.80x (threshold 2.0x)  (known_date=2024-05-08, staleness=863d)
+    tier2.cfo_pat_avg_min: PASS 1.30x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-08, staleness=863d)
+    tier2.cfo_negative_latest: PASS 7,498,900,000  (known_date=2024-05-08, staleness=863d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+CUPID  (Cupid Limited)  momentum_rank=94  momentum_12_1=+0.6968  sector=Fast Moving Consumer Goods  verdict=PASS
+    tier1.revenue_decline_2y: PASS 1,491,933,000 -> 1,496,894,000 -> 1,899,369,000  (known_date=2025-02-15, staleness=580d)
+    tier1.net_loss_latest_fy: PASS 530,505,000  (known_date=2025-02-15, staleness=580d)
+    tier1.operating_margin_decline_3q: PASS 31.8% -> 35.4% -> 38.6% -> 38.6%  (known_date=2025-02-15, staleness=580d)
+    tier2.debt_equity_max: PASS 0.04x (threshold 2.0x)  (known_date=2024-04-08, staleness=893d)
+    tier2.interest_coverage_min: PASS 30.05x (threshold 2.0x)  (known_date=2024-04-08, staleness=893d)
+    tier2.cfo_pat_avg_min: PASS 0.62x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-04-08, staleness=893d)
+    tier2.cfo_negative_latest: PASS 78,423,000  (known_date=2024-04-08, staleness=893d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+GAEL  (Gujarat Ambuja Exports Limited)  momentum_rank=97  momentum_12_1=+0.6910  sector=Fast Moving Consumer Goods  verdict=PASS
+    tier1.revenue_decline_2y: PASS 47,359,800,000 -> 50,087,600,000 -> 46,924,000,000  (known_date=2025-01-25, staleness=601d)
+    tier1.net_loss_latest_fy: PASS 3,087,700,000  (known_date=2025-01-25, staleness=601d)
+    tier1.operating_margin_decline_3q: PASS 9.5% -> 9.7% -> 9.4% -> 9.0%  (known_date=2025-01-25, staleness=601d)
+    tier2.debt_equity_max: PASS 0.07x (threshold 2.0x)  (known_date=2024-05-18, staleness=853d)
+    tier2.interest_coverage_min: PASS 25.35x (threshold 2.0x)  (known_date=2024-05-18, staleness=853d)
+    tier2.cfo_pat_avg_min: PASS 0.67x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-18, staleness=853d)
+    tier2.cfo_negative_latest: PASS 2,131,500,000  (known_date=2024-05-18, staleness=853d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+HSCL  (Himadri Speciality Chemical Limited)  momentum_rank=100  momentum_12_1=+0.6696  sector=Chemicals  verdict=PASS
+    tier1.revenue_decline_2y: PASS 39,154,300,000 -> 40,368,400,000 -> 46,549,400,000  (known_date=2025-01-14, staleness=612d)
+    tier1.net_loss_latest_fy: PASS 5,148,100,000  (known_date=2025-01-14, staleness=612d)
+    tier1.operating_margin_decline_3q: PASS 15.2% -> 15.7% -> 16.4% -> 17.1%  (known_date=2025-01-14, staleness=612d)
+    tier2.debt_equity_max: PASS 0.20x (threshold 2.0x)  (known_date=2024-04-25, staleness=876d)
+    tier2.interest_coverage_min: PASS 9.98x (threshold 2.0x)  (known_date=2024-04-25, staleness=876d)
+    tier2.cfo_pat_avg_min: PASS 0.62x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-04-25, staleness=876d)
+    tier2.cfo_negative_latest: PASS 4,047,500,000  (known_date=2024-04-25, staleness=876d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+POWERINDIA  (Hitachi Energy India Limited)  momentum_rank=101  momentum_12_1=+0.6654  sector=Capital Goods  verdict=PASS
+    tier1.revenue_decline_2y: PASS 37,809,200,000 -> 48,762,200,000 -> 61,965,300,000  (known_date=2025-01-29, staleness=597d)
+    tier1.net_loss_latest_fy: PASS 3,137,500,000  (known_date=2025-01-29, staleness=597d)
+    tier1.operating_margin_decline_3q: PASS 5.1% -> 5.1% -> 5.5% -> 7.6%  (known_date=2025-01-29, staleness=597d)
+    tier2.debt_equity_max: PASS 0.11x (threshold 2.0x)  (known_date=2024-05-21, staleness=850d)
+    tier2.interest_coverage_min: PASS 5.76x (threshold 2.0x)  (known_date=2024-05-21, staleness=850d)
+    tier2.cfo_pat_avg_min: PASS 0.79x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-21, staleness=850d)
+    tier2.cfo_negative_latest: PASS 2,523,100,000  (known_date=2024-05-21, staleness=850d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+RADICO  (Radico Khaitan Limited)  momentum_rank=102  momentum_12_1=+0.6628  sector=Fast Moving Consumer Goods  verdict=PASS
+    tier1.revenue_decline_2y: PASS 125,930,051,000 -> 153,596,818,000 -> 165,077,487,000  (known_date=2025-01-29, staleness=597d)
+    tier1.net_loss_latest_fy: PASS 3,074,490,000  (known_date=2025-01-29, staleness=597d)
+    tier1.operating_margin_decline_3q: PASS 2.5% -> 2.6% -> 2.8% -> 3.0%  (known_date=2025-01-29, staleness=597d)
+    tier2.debt_equity_max: PASS 0.30x (threshold 2.0x)  (known_date=2024-05-14, staleness=857d)
+    tier2.interest_coverage_min: PASS 6.78x (threshold 2.0x)  (known_date=2024-05-14, staleness=857d)
+    tier2.cfo_pat_avg_min: PASS 0.89x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-14, staleness=857d)
+    tier2.cfo_negative_latest: PASS 1,828,569,000  (known_date=2024-05-14, staleness=857d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+LUMAXIND  (Lumax Industries Limited)  momentum_rank=103  momentum_12_1=+0.6600  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 22,607,905,000 -> 25,020,088,000 -> 32,073,889,000  (known_date=2025-02-10, staleness=585d)
+    tier1.net_loss_latest_fy: PASS 1,207,221,000  (known_date=2025-02-10, staleness=585d)
+    tier1.operating_margin_decline_3q: PASS 5.6% -> 5.7% -> 5.4% -> 5.3%  (known_date=2025-02-10, staleness=585d)
+    tier2.debt_equity_max: PASS 0.89x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.interest_coverage_min: PASS 3.11x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_pat_avg_min: PASS 1.12x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_negative_latest: PASS 1,323,835,000  (known_date=2024-05-24, staleness=847d)
+    tier3.bottom_liquidity_tercile: PASS mid_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+GOKULAGRO  (Gokul Agro Resources Limited)  momentum_rank=107  momentum_12_1=+0.6346  sector=Fast Moving Consumer Goods  verdict=PASS
+    tier1.revenue_decline_2y: PASS 111,457,963,000 -> 125,724,063,000 -> 180,285,943,000  (known_date=2025-02-11, staleness=584d)
+    tier1.net_loss_latest_fy: PASS 2,411,158,000  (known_date=2025-02-11, staleness=584d)
+    tier1.operating_margin_decline_3q: PASS 2.3% -> 2.3% -> 2.6% -> 2.7%  (known_date=2025-02-11, staleness=584d)
+    tier2.debt_equity_max: PASS 0.75x (threshold 2.0x)  (known_date=2024-05-16, staleness=855d)
+    tier2.interest_coverage_min: PASS 2.32x (threshold 2.0x)  (known_date=2024-05-16, staleness=855d)
+    tier2.cfo_pat_avg_min: PASS 1.38x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-16, staleness=855d)
+    tier2.cfo_negative_latest: PASS 3,553,851,000  (known_date=2024-05-16, staleness=855d)
+    tier3.bottom_liquidity_tercile: PASS mid_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+MINDACORP  (Minda Corporation Limited)  momentum_rank=116  momentum_12_1=+0.6105  sector=Automobile and Auto Components  verdict=PASS
+    tier1.revenue_decline_2y: PASS 33,934,700,000 -> 37,247,800,000 -> 40,657,700,000  (known_date=2025-02-06, staleness=589d)
+    tier1.net_loss_latest_fy: PASS 2,336,600,000  (known_date=2025-02-06, staleness=589d)
+    tier1.operating_margin_decline_3q: PASS 8.2% -> 8.5% -> 8.7% -> 8.8%  (known_date=2025-02-06, staleness=589d)
+    tier2.debt_equity_max: PASS 0.18x (threshold 2.0x)  (known_date=2024-05-22, staleness=849d)
+    tier2.interest_coverage_min: PASS 5.74x (threshold 2.0x)  (known_date=2024-05-22, staleness=849d)
+    tier2.cfo_pat_avg_min: PASS 2.00x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-22, staleness=849d)
+    tier2.cfo_negative_latest: PASS 2,868,500,000  (known_date=2024-05-22, staleness=849d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+TALBROAUTO  (Talbros Automotive Components Limited)  momentum_rank=117  momentum_12_1=+0.6095  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 6,202,832,000 -> 7,505,366,000 -> 8,238,675,000  (known_date=2025-02-11, staleness=584d)
+    tier1.net_loss_latest_fy: PASS 1,176,368,000  (known_date=2025-02-11, staleness=584d)
+    tier1.operating_margin_decline_3q: PASS 13.0% -> 13.3% -> 13.5% -> 13.5%  (known_date=2025-02-11, staleness=584d)
+    tier2.debt_equity_max: PASS 0.16x (threshold 2.0x)  (known_date=2024-05-23, staleness=848d)
+    tier2.interest_coverage_min: PASS 7.64x (threshold 2.0x)  (known_date=2024-05-23, staleness=848d)
+    tier2.cfo_pat_avg_min: PASS 0.81x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-23, staleness=848d)
+    tier2.cfo_negative_latest: PASS 667,491,000  (known_date=2024-05-23, staleness=848d)
+    tier3.bottom_liquidity_tercile: PASS mid_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+SMSPHARMA  (SMS Pharmaceuticals Limited)  momentum_rank=119  momentum_12_1=+0.5873  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 4,335,448,000 -> 6,128,906,000 -> 7,803,508,000  (known_date=2025-02-12, staleness=583d)
+    tier1.net_loss_latest_fy: PASS 636,806,000  (known_date=2025-02-12, staleness=583d)
+    tier1.operating_margin_decline_3q: PASS 12.7% -> 13.1% -> 13.1% -> 13.4%  (known_date=2025-02-12, staleness=583d)
+    tier2.debt_equity_max: PASS 0.52x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.interest_coverage_min: PASS 3.83x (threshold 2.0x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_pat_avg_min: PASS 3.26x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-29, staleness=842d)
+    tier2.cfo_negative_latest: PASS 501,247,000  (known_date=2024-05-29, staleness=842d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+MMP  (MMP Industries Limited)  momentum_rank=130  momentum_12_1=+0.5539  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 5,481,319,000 -> 5,619,006,000 -> 6,289,008,000  (known_date=2025-02-13, staleness=582d)
+    tier1.net_loss_latest_fy: PASS 380,231,000  (known_date=2025-02-13, staleness=582d)
+    tier1.operating_margin_decline_3q: PASS 6.8% -> 7.7% -> 8.0% -> 8.2%  (known_date=2025-02-13, staleness=582d)
+    tier2.debt_equity_max: PASS 0.32x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.interest_coverage_min: PASS 5.79x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_pat_avg_min: PASS 0.95x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_negative_latest: PASS 113,953,000  (known_date=2024-05-24, staleness=847d)
+    tier3.bottom_liquidity_tercile: PASS mid_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+FINCABLES  (Finolex Cables Limited)  momentum_rank=131  momentum_12_1=+0.5524  sector=Capital Goods  verdict=PASS
+    tier1.revenue_decline_2y: PASS 44,436,400,000 -> 48,376,900,000 -> 51,253,300,000  (known_date=2025-02-12, staleness=583d)
+    tier1.net_loss_latest_fy: PASS 6,951,600,000  (known_date=2025-02-12, staleness=583d)
+    tier1.operating_margin_decline_3q: PASS 14.4% -> 14.0% -> 13.1% -> 13.2%  (known_date=2025-02-12, staleness=583d)
+    tier2.debt_equity_max: PASS 0.00x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.interest_coverage_min: PASS 354.53x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_pat_avg_min: PASS 0.81x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_negative_latest: PASS 5,769,000,000  (known_date=2024-05-24, staleness=847d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+MARKSANS  (Marksans Pharma Limited)  momentum_rank=133  momentum_12_1=+0.5501  sector=Healthcare  verdict=PASS
+    tier1.revenue_decline_2y: PASS 17,842,050,000 -> 21,033,720,000 -> 24,744,000,000  (known_date=2025-02-11, staleness=584d)
+    tier1.net_loss_latest_fy: PASS 3,695,370,000  (known_date=2025-02-11, staleness=584d)
+    tier1.operating_margin_decline_3q: PASS 20.0% -> 20.3% -> 19.8% -> 20.3%  (known_date=2025-02-11, staleness=584d)
+    tier2.debt_equity_max: PASS 0.01x (threshold 2.0x)  (known_date=2024-05-30, staleness=841d)
+    tier2.interest_coverage_min: PASS 38.80x (threshold 2.0x)  (known_date=2024-05-30, staleness=841d)
+    tier2.cfo_pat_avg_min: PASS 0.81x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-30, staleness=841d)
+    tier2.cfo_negative_latest: PASS 2,304,069,000  (known_date=2024-05-30, staleness=841d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+HINDALCO  (Hindalco Industries Limited)  momentum_rank=134  momentum_12_1=+0.5443  sector=Metals & Mining  verdict=PASS
+    tier1.revenue_decline_2y: PASS 2,231,090,000,000 -> 2,158,250,000,000 -> 2,296,000,000,000  (known_date=2025-02-13, staleness=582d)
+    tier1.net_loss_latest_fy: PASS 138,920,000,000  (known_date=2025-02-13, staleness=582d)
+    tier1.operating_margin_decline_3q: PASS 8.3% -> 8.9% -> 10.0% -> 10.6%  (known_date=2025-02-13, staleness=582d)
+    tier2.debt_equity_max: PASS 0.51x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.interest_coverage_min: PASS 4.63x (threshold 2.0x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_pat_avg_min: PASS 2.14x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-24, staleness=847d)
+    tier2.cfo_negative_latest: PASS 240,560,000,000  (known_date=2024-05-24, staleness=847d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+WELSPUNLIV  (Welspun Living Limited)  momentum_rank=136  momentum_12_1=+0.5419  sector=Textiles  verdict=PASS
+    tier1.revenue_decline_2y: PASS 81,669,500,000 -> 92,579,000,000 -> 104,744,300,000  (known_date=2025-01-30, staleness=596d)
+    tier1.net_loss_latest_fy: PASS 6,417,700,000  (known_date=2025-01-30, staleness=596d)
+    tier1.operating_margin_decline_3q: PASS 11.6% -> 11.7% -> 11.7% -> 11.0%  (known_date=2025-01-30, staleness=596d)
+    tier2.debt_equity_max: PASS 0.55x (threshold 2.0x)  (known_date=2024-04-25, staleness=876d)
+    tier2.interest_coverage_min: PASS 7.30x (threshold 2.0x)  (known_date=2024-04-25, staleness=876d)
+    tier2.cfo_pat_avg_min: PASS 2.26x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-04-25, staleness=876d)
+    tier2.cfo_negative_latest: PASS 5,328,400,000  (known_date=2024-04-25, staleness=876d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+IFCI  (IFCI Limited)  momentum_rank=138  momentum_12_1=+0.5403  sector=Financial Services  verdict=FINANCIALS-PARTIAL
+    tier1.revenue_decline_2y: PASS 14,423,300,000 -> 17,948,100,000 -> 20,679,100,000  (known_date=2025-02-13, staleness=582d)
+    tier1.net_loss_latest_fy: PASS 2,455,000,000  (known_date=2025-02-13, staleness=582d)
+    tier1.operating_margin_decline_3q: PASS 66.4% -> 71.9% -> 59.3% -> 59.5%  (known_date=2025-02-13, staleness=582d)
+    tier2.debt_equity_max: SKIPPED (financials) sector=Financial Services -- leverage checks not applied
+    tier2.interest_coverage_min: SKIPPED (financials) sector=Financial Services -- leverage checks not applied
+    tier2.cfo_pat_avg_min: PASS 0.67x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-01, staleness=870d)
+    tier2.cfo_negative_latest: PASS 118,700,000  (known_date=2024-05-01, staleness=870d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+VADILALIND  (Vadilal Industries Limited)  momentum_rank=145  momentum_12_1=+0.5218  sector=unknown  verdict=PASS
+    tier1.revenue_decline_2y: PASS 10,144,754,000 -> 11,301,208,000 -> 12,150,600,000  (known_date=2025-01-31, staleness=595d)
+    tier1.net_loss_latest_fy: PASS 1,559,700,000  (known_date=2025-01-31, staleness=595d)
+    tier1.operating_margin_decline_3q: PASS 17.6% -> 17.6% -> 17.5% -> 18.2%  (known_date=2025-01-31, staleness=595d)
+    tier2.debt_equity_max: PASS 0.22x (threshold 2.0x)  (known_date=2024-05-26, staleness=845d)
+    tier2.interest_coverage_min: PASS 11.05x (threshold 2.0x)  (known_date=2024-05-26, staleness=845d)
+    tier2.cfo_pat_avg_min: PASS 0.86x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-05-26, staleness=845d)
+    tier2.cfo_negative_latest: PASS 1,920,100,000  (known_date=2024-05-26, staleness=845d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+NAM-INDIA  (Nippon Life India Asset Management Limited)  momentum_rank=146  momentum_12_1=+0.5201  sector=Financial Services  verdict=FINANCIALS-PARTIAL
+    tier1.revenue_decline_2y: PASS 13,464,100,000 -> 15,232,900,000 -> 21,324,200,000  (known_date=2025-01-23, staleness=603d)
+    tier1.net_loss_latest_fy: PASS 13,307,100,000  (known_date=2025-01-23, staleness=603d)
+    tier1.operating_margin_decline_3q: PASS 82.7% -> 82.9% -> 84.5% -> 79.6%  (known_date=2025-01-23, staleness=603d)
+    tier2.debt_equity_max: SKIPPED (financials) sector=Financial Services -- leverage checks not applied
+    tier2.interest_coverage_min: SKIPPED (financials) sector=Financial Services -- leverage checks not applied
+    tier2.cfo_pat_avg_min: PASS 0.77x avg over 2 year(s) (threshold 0.5x)  (known_date=2024-04-24, staleness=877d)
+    tier2.cfo_negative_latest: PASS 7,774,800,000  (known_date=2024-04-24, staleness=877d)
+    tier3.bottom_liquidity_tercile: PASS high_liq
+    tier3.series_be_bz: PASS series=EQ as of 2026-09-18
+
+--- INSUFFICIENT DATA (not counted as PASS) ---
+KMEW (Knowledge Marine & Engineering Works Limited) rank=1: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (only 0 margin quarter(s) available, need 4); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+ATHERENERG (NOT AVAILABLE) rank=2: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (no quarterly P&L); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+CPPLUS (NOT AVAILABLE) rank=4: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (no quarterly P&L); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+AEROFLEX (Aeroflex Industries Limited) rank=8: tier1.revenue_decline_2y (only 1 annual point(s) available, need 3)
+RPEL (Raghav Productivity Enhancers Limited) rank=9: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (only 0 margin quarter(s) available, need 4); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+YASHO (Yasho Industries Limited) rank=10: tier1.revenue_decline_2y (only 1 annual point(s) available, need 3); tier1.operating_margin_decline_3q (only 3 margin quarter(s) available, need 4); tier2.interest_coverage_min (EBIT or finance costs not available); tier2.cfo_pat_avg_min (CFO present but no matching TTM PAT to ratio against)
+ACUTAAS (Acutaas Chemicals Limited) rank=12: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (only 0 margin quarter(s) available, need 4); tier2.interest_coverage_min (EBIT or finance costs not available); tier2.cfo_pat_avg_min (CFO present but no matching TTM PAT to ratio against)
+AVALON (Avalon Technologies Limited) rank=13: tier1.revenue_decline_2y (only 2 annual point(s) available, need 3)
+HAPPYFORGE (Happy Forgings Limited) rank=16: tier1.revenue_decline_2y (only 1 annual point(s) available, need 3); tier1.operating_margin_decline_3q (only 2 margin quarter(s) available, need 4); tier2.interest_coverage_min (EBIT or finance costs not available); tier2.cfo_pat_avg_min (CFO present but no matching TTM PAT to ratio against)
+SENORES (Senores Pharmaceuticals Limited) rank=19: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (only 0 margin quarter(s) available, need 4); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+RRKABEL (R R Kabel Limited) rank=21: tier1.revenue_decline_2y (only 1 annual point(s) available, need 3); tier1.operating_margin_decline_3q (only 3 margin quarter(s) available, need 4); tier2.interest_coverage_min (EBIT or finance costs not available); tier2.cfo_pat_avg_min (CFO present but no matching TTM PAT to ratio against)
+KTKBANK (The Karnataka Bank Limited) rank=64: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (no quarterly P&L); tier2.cfo_pat_avg_min (CFO present but no matching TTM PAT to ratio against)
+HONASA (Honasa Consumer Limited) rank=71: tier1.revenue_decline_2y (only 1 annual point(s) available, need 3); tier1.operating_margin_decline_3q (only 3 margin quarter(s) available, need 4); tier2.interest_coverage_min (EBIT or finance costs not available); tier2.cfo_pat_avg_min (CFO present but no matching TTM PAT to ratio against)
+EBGNG (NOT AVAILABLE) rank=72: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (no quarterly P&L); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+FEDERALBNK (The Federal Bank  Limited) rank=73: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (no quarterly P&L); tier2.cfo_pat_avg_min (CFO present but no matching TTM PAT to ratio against)
+ROSSTECH (Rossell Techsys Limited) rank=78: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (only 0 margin quarter(s) available, need 4); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+SGFIN (NOT AVAILABLE) rank=81: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (no quarterly P&L); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+BELRISE (NOT AVAILABLE) rank=87: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (no quarterly P&L); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+SAILIFE (Sai Life Sciences Limited) rank=91: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (only 0 margin quarter(s) available, need 4); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+INOXINDIA (INOX India Limited) rank=96: tier1.revenue_decline_2y (only 1 annual point(s) available, need 3); tier1.operating_margin_decline_3q (only 2 margin quarter(s) available, need 4); tier2.interest_coverage_min (EBIT or finance costs not available); tier2.cfo_pat_avg_min (CFO present but no matching TTM PAT to ratio against)
+UJJIVANSFB (Ujjivan Small Finance Bank Limited) rank=109: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (no quarterly P&L); tier2.cfo_pat_avg_min (CFO present but no matching TTM PAT to ratio against)
+DOLPHIN (Dolphin Offshore Enterprises (India) Limited) rank=120: tier1.revenue_decline_2y (only 1 annual point(s) available, need 3); tier1.operating_margin_decline_3q (only 3 margin quarter(s) available, need 4); tier2.interest_coverage_min (EBIT or finance costs not available); tier2.cfo_pat_avg_min (CFO present but no matching TTM PAT to ratio against)
+GHCLTEXTIL (GHCL Textiles Limited) rank=121: tier1.revenue_decline_2y (only 1 annual point(s) available, need 3)
+EMIL (Electronics Mart India Limited) rank=124: tier1.revenue_decline_2y (only 2 annual point(s) available, need 3)
+AKUMS (Akums Drugs and Pharmaceuticals Limited) rank=127: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (only 0 margin quarter(s) available, need 4); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+SOUTHBANK (The South Indian Bank Limited) rank=137: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (no quarterly P&L); tier2.cfo_pat_avg_min (CFO present but no matching TTM PAT to ratio against)
+RACLGEAR (RACL Geartech Limited) rank=142: tier1.revenue_decline_2y (only 0 annual point(s) available, need 3); tier1.net_loss_latest_fy (no annual point available); tier1.operating_margin_decline_3q (only 0 margin quarter(s) available, need 4); tier2.debt_equity_max (no FY2023+ balance-sheet data at all); tier2.interest_coverage_min (no FY2023+ balance-sheet data at all); tier2.cfo_pat_avg_min (no FY2023+ balance-sheet data at all); tier2.cfo_negative_latest (no FY2023+ balance-sheet data at all)
+
+--- FAILED (for later cost-of-filter measurement -- no modelling, just a record) ---
+RPTECH (Rashi Peripherals Limited) rank=5 momentum_12_1=+1.9905: tier2.cfo_negative_latest=-1,020,050,000
+SKYGOLD (SKY GOLD AND DIAMONDS LIMITED) rank=6 momentum_12_1=+1.8210: tier2.cfo_pat_avg_min=-3.41x avg over 1 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-1,380,953,000
+NGLFINE (NGL Fine-Chem Limited) rank=11 momentum_12_1=+1.5240: tier1.operating_margin_decline_3q=16.5% -> 16.1% -> 15.3% -> 11.9%
+UNIPARTS (Uniparts India Limited) rank=15 momentum_12_1=+1.4175: tier1.operating_margin_decline_3q=14.8% -> 14.0% -> 13.3% -> 13.3%
+NETWEB (Netweb Technologies India Limited) rank=17 momentum_12_1=+1.4065: tier2.cfo_pat_avg_min=0.24x avg over 1 year(s) (threshold 0.5x)
+PARAS (Paras Defence and Space Technologies Limited) rank=18 momentum_12_1=+1.3962: tier2.cfo_pat_avg_min=-0.13x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-455,600,000
+UNIVCABLES (Universal Cables Limited) rank=20 momentum_12_1=+1.3721: tier2.interest_coverage_min=1.77x (threshold 2.0x)
+TFCILTD (Tourism Finance Corporation of India Limited) rank=23 momentum_12_1=+1.3107: tier2.cfo_pat_avg_min=-0.81x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-66,371,000
+KIRLOSENG (Kirloskar Oil Engines Limited) rank=24 momentum_12_1=+1.2986: tier2.cfo_pat_avg_min=-1.92x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-4,687,790,000
+PAISALO (Paisalo Digital Limited) rank=25 momentum_12_1=+1.2789: tier2.interest_coverage_min=1.89x (threshold 2.0x); tier2.cfo_pat_avg_min=-4.01x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-5,697,507,000
+WELCORP (Welspun Corp Limited) rank=26 momentum_12_1=+1.2698: tier2.cfo_pat_avg_min=0.24x avg over 2 year(s) (threshold 0.5x)
+CHENNPETRO (Chennai Petroleum Corporation Limited) rank=27 momentum_12_1=+1.2382: tier1.operating_margin_decline_3q=4.9% -> 4.4% -> 1.5% -> 1.0%
+AETHER (Aether Industries Limited) rank=28 momentum_12_1=+1.2343: tier2.cfo_pat_avg_min=-0.20x avg over 1 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-164,580,000
+SBC (SBC Exports Limited) rank=30 momentum_12_1=+1.2091: tier2.cfo_pat_avg_min=-0.85x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-48,285,000
+BAJAJCON (Bajaj Consumer Care Limited) rank=31 momentum_12_1=+1.1943: tier1.operating_margin_decline_3q=19.3% -> 18.7% -> 18.0% -> 16.7%
+APOLLO (Apollo Micro Systems Limited) rank=33 momentum_12_1=+1.1814: tier2.cfo_pat_avg_min=-1.52x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-687,267,000
+IDEA (Vodafone Idea Limited) rank=35 momentum_12_1=+1.1613: tier1.net_loss_latest_fy=-278,919,000,000; tier2.interest_coverage_min=-0.21x (threshold 2.0x); tier2.cfo_pat_avg_min=-0.67x avg over 2 year(s) (threshold 0.5x)
+SYRMA (Syrma SGS Technology Limited) rank=38 momentum_12_1=+1.1265: tier2.cfo_pat_avg_min=-0.91x avg over 1 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-1,136,080,000
+WHEELS (Wheels India Limited) rank=42 momentum_12_1=+1.0244: tier2.interest_coverage_min=1.55x (threshold 2.0x)
+CNL (Creative Newtech Limited) rank=44 momentum_12_1=+0.9921: tier2.cfo_pat_avg_min=-0.68x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-281,763,000
+IMFA (Indian Metals & Ferro Alloys Limited) rank=45 momentum_12_1=+0.9845: tier1.revenue_decline_2y=27,962,000,000 -> 27,165,100,000 -> 26,979,800,000
+SPORTKING (Sportking India Limited) rank=47 momentum_12_1=+0.9746: tier2.cfo_pat_avg_min=-3.35x avg over 1 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-2,357,949,000
+KABRAEXTRU (Kabra Extrusion Technik Limited) rank=48 momentum_12_1=+0.9740: tier1.revenue_decline_2y=6,548,819,000 -> 6,178,496,000 -> 5,053,580,000; tier2.cfo_pat_avg_min=0.45x avg over 2 year(s) (threshold 0.5x)
+DATAPATTNS (Data Patterns (India) Limited) rank=49 momentum_12_1=+0.9667: tier2.cfo_pat_avg_min=0.31x avg over 2 year(s) (threshold 0.5x)
+TMB (Tamilnad Mercantile Bank Limited) rank=51 momentum_12_1=+0.9531: tier2.cfo_negative_latest=-6,105,300,000
+ADANIENSOL (Adani Energy Solutions Limited) rank=52 momentum_12_1=+0.9499: tier2.debt_equity_max=2.70x (threshold 2.0x); tier2.interest_coverage_min=1.81x (threshold 2.0x)
+DIVGIITTS (Divgi Torqtransfer Systems Limited) rank=53 momentum_12_1=+0.9370: tier1.operating_margin_decline_3q=21.3% -> 19.1% -> 18.6% -> 17.1%
+RICOAUTO (Rico Auto Industries Limited) rank=55 momentum_12_1=+0.9145: tier1.operating_margin_decline_3q=5.5% -> 5.2% -> 5.2% -> 4.7%
+GRANULES (Granules India Limited) rank=56 momentum_12_1=+0.9137: tier1.revenue_decline_2y=38,301,728,000 -> 38,287,750,000 -> 32,023,280,000
+AEGISLOG (Aegis Logistics Limited) rank=57 momentum_12_1=+0.9136: tier1.revenue_decline_2y=85,763,200,000 -> 73,632,200,000 -> 68,959,200,000
+APARINDS (Apar Industries Limited) rank=58 momentum_12_1=+0.9105: tier2.cfo_pat_avg_min=0.38x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-2,832,900,000
+ICIL (Indo Count Industries Limited) rank=61 momentum_12_1=+0.9015: tier1.operating_margin_decline_3q=14.6% -> 14.3% -> 13.5% -> 13.0%
+BHEL (Bharat Heavy Electricals Limited) rank=62 momentum_12_1=+0.8850: tier2.interest_coverage_min=0.34x (threshold 2.0x); tier2.cfo_negative_latest=-37,129,000,000
+RATNAVEER (Ratnaveer Precision Engineering Limited) rank=63 momentum_12_1=+0.8845: tier2.cfo_pat_avg_min=0.40x avg over 1 year(s) (threshold 0.5x)
+AZAD (Azad Engineering Limited) rank=65 momentum_12_1=+0.8763: tier2.cfo_negative_latest=-69,520,000
+MOREPENLAB (Morepen Laboratories Limited) rank=66 momentum_12_1=+0.8757: tier2.cfo_pat_avg_min=-0.62x avg over 2 year(s) (threshold 0.5x)
+DREDGECORP (Dredging Corporation of India Limited) rank=67 momentum_12_1=+0.8694: tier1.revenue_decline_2y=11,166,663,000 -> 10,048,333,000 -> 9,576,213,000; tier1.net_loss_latest_fy=-723,231,000; tier1.operating_margin_decline_3q=7.0% -> 2.3% -> -4.8% -> -5.0%
+SHRIPISTON (SPR Auto Technologies Limited) rank=69 momentum_12_1=+0.8598: tier1.operating_margin_decline_3q=20.1% -> 19.9% -> 19.7% -> 19.7%
+SHRIRAMFIN (Shriram Finance Limited) rank=75 momentum_12_1=+0.8142: tier2.cfo_pat_avg_min=-3.82x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-311,014,000,000
+APEX (Apex Frozen Foods Limited) rank=77 momentum_12_1=+0.7941: tier1.revenue_decline_2y=9,315,715,000 -> 8,543,179,000 -> 7,778,769,000
+ASTRAMICRO (Astra Microwave Products Limited) rank=79 momentum_12_1=+0.7812: tier2.cfo_pat_avg_min=-0.93x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-1,815,158,000
+DYNAMATECH (Dynamatic Technologies Limited) rank=83 momentum_12_1=+0.7531: tier1.operating_margin_decline_3q=9.5% -> 8.5% -> 8.4% -> 7.9%
+STEELCAS (Steelcast Limited) rank=84 momentum_12_1=+0.7450: tier1.revenue_decline_2y=4,495,515,000 -> 4,317,334,000 -> 3,537,756,000
+TVSSRICHAK (TVS Srichakra Limited) rank=92 momentum_12_1=+0.7163: tier1.operating_margin_decline_3q=6.8% -> 6.2% -> 4.8% -> 3.8%
+JAYNECOIND (Jayaswal Neco Industries Limited) rank=93 momentum_12_1=+0.7086: tier1.revenue_decline_2y=64,655,400,000 -> 59,914,100,000 -> 57,358,900,000; tier1.operating_margin_decline_3q=13.1% -> 12.5% -> 10.7% -> 9.8%; tier2.interest_coverage_min=1.66x (threshold 2.0x)
+IOLCP (IOL Chemicals and Pharmaceuticals Limited) rank=95 momentum_12_1=+0.6930: tier1.operating_margin_decline_3q=9.3% -> 8.4% -> 7.2% -> 7.0%
+SOTL (Savita Oil Technologies Limited) rank=98 momentum_12_1=+0.6888: tier1.operating_margin_decline_3q=8.1% -> 7.4% -> 7.0% -> 4.9%; tier2.cfo_pat_avg_min=0.27x avg over 2 year(s) (threshold 0.5x)
+CYIENTDLM (Cyient DLM Limited) rank=99 momentum_12_1=+0.6820: tier2.cfo_pat_avg_min=-1.15x avg over 1 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-705,410,000
+CRAFTSMAN (Craftsman Automation Limited) rank=104 momentum_12_1=+0.6532: tier1.operating_margin_decline_3q=13.9% -> 13.1% -> 11.9% -> 9.8%
+NEOGEN (Neogen Chemicals Limited) rank=105 momentum_12_1=+0.6418: tier2.cfo_pat_avg_min=-0.71x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-291,500,000
+GANDHAR (Gandhar Oil Refinery (India) Limited) rank=106 momentum_12_1=+0.6408: tier2.cfo_negative_latest=-693,372,000
+VINDHYATEL (Vindhya Telelinks Limited) rank=108 momentum_12_1=+0.6300: tier1.operating_margin_decline_3q=7.2% -> 6.6% -> 6.5% -> 6.3%
+VARROC (Varroc Engineering Limited) rank=110 momentum_12_1=+0.6262: tier2.cfo_pat_avg_min=0.20x avg over 2 year(s) (threshold 0.5x)
+SANGHVIMOV (Sanghvi Movers Limited) rank=111 momentum_12_1=+0.6209: tier1.operating_margin_decline_3q=44.8% -> 44.5% -> 42.0% -> 33.9%
+NYKAA (FSN E-Commerce Ventures Limited) rank=112 momentum_12_1=+0.6195: tier2.interest_coverage_min=1.83x (threshold 2.0x); tier2.cfo_pat_avg_min=-2.80x avg over 2 year(s) (threshold 0.5x)
+VIYASH (Viyash Scientific Limited) rank=113 momentum_12_1=+0.6151: tier2.interest_coverage_min=0.23x (threshold 2.0x); tier2.cfo_pat_avg_min=-0.59x avg over 2 year(s) (threshold 0.5x)
+ADOR (Ador Welding Limited) rank=114 momentum_12_1=+0.6134: tier2.cfo_pat_avg_min=0.39x avg over 2 year(s) (threshold 0.5x)
+LTF (L&T Finance Limited) rank=115 momentum_12_1=+0.6112: tier1.operating_margin_decline_3q=61.6% -> 60.6% -> 59.3% -> 58.5%
+MUNJALAU (Munjal Auto Industries Limited) rank=118 momentum_12_1=+0.5892: tier1.revenue_decline_2y=15,566,041,000 -> 15,244,098,000 -> 12,365,519,000
+TATVA (Tatva Chintan Pharma Chem Limited) rank=122 momentum_12_1=+0.5812: tier1.operating_margin_decline_3q=12.7% -> 10.6% -> 6.9% -> 5.5%
+JNKINDIA (JNK India Limited) rank=123 momentum_12_1=+0.5758: tier2.cfo_negative_latest=-100,690,000
+SATIN (Satin Creditcare Network Limited) rank=125 momentum_12_1=+0.5742: tier1.operating_margin_decline_3q=66.3% -> 65.3% -> 61.0% -> 54.5%; tier2.interest_coverage_min=1.65x (threshold 2.0x); tier2.cfo_pat_avg_min=-4.13x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-20,688,909,000
+FILATEX (Filatex India Limited) rank=126 momentum_12_1=+0.5703: tier1.revenue_decline_2y=43,471,000,000 -> 43,068,400,000 -> 41,979,700,000
+AUROPHARMA (Aurobindo Pharma Limited) rank=128 momentum_12_1=+0.5589: tier1.revenue_decline_2y=121,320,100,000 -> 112,990,500,000 -> 110,953,400,000
+SANGAMIND (Sangam (India) Limited) rank=129 momentum_12_1=+0.5548: tier2.interest_coverage_min=1.86x (threshold 2.0x)
+AARVI (Aarvi Encon Limited) rank=132 momentum_12_1=+0.5505: tier1.operating_margin_decline_3q=3.3% -> 3.1% -> 2.9% -> 2.9%; tier2.cfo_pat_avg_min=0.25x avg over 2 year(s) (threshold 0.5x); tier3.bottom_liquidity_tercile=low_liq
+M&MFIN (Mahindra & Mahindra Financial Services Limited) rank=135 momentum_12_1=+0.5430: tier2.cfo_pat_avg_min=-9.59x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-184,485,500,000
+MUFIN (Mufin Green Finance Limited) rank=139 momentum_12_1=+0.5353: tier2.cfo_negative_latest=-3,586,646,000
+PREMEXPLN (Premier Explosives Limited) rank=140 momentum_12_1=+0.5337: tier1.operating_margin_decline_3q=18.8% -> 17.3% -> 14.9% -> 12.6%
+MANINDS (Man Industries (India) Limited) rank=141 momentum_12_1=+0.5320: tier2.cfo_pat_avg_min=0.35x avg over 2 year(s) (threshold 0.5x)
+APCOTEXIND (Apcotex Industries Limited) rank=143 momentum_12_1=+0.5255: tier1.operating_margin_decline_3q=8.0% -> 7.9% -> 7.0% -> 6.6%
+PNBHOUSING (PNB Housing Finance Limited) rank=144 momentum_12_1=+0.5232: tier2.cfo_pat_avg_min=-2.50x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-46,615,100,000
+VTL (Vardhman Textiles Limited) rank=147 momentum_12_1=+0.5167: tier2.cfo_pat_avg_min=0.35x avg over 2 year(s) (threshold 0.5x); tier2.cfo_negative_latest=-10,551,900,000
+
+================================================================================================
