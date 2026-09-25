@@ -524,3 +524,54 @@ enforcement mechanism proposed here (this entry records the defect, not a
 fix for the general case) -- worth deciding deliberately rather than
 assuming committing every script is automatically enforced by habit alone,
 since it evidently was not, at least once already.
+
+## Bug #9: the annual dedup rule picked a registration without ever checking it resolves -- the same class of defect as Bug #7's ISIN join
+
+**The defect is the selection rule itself, not the fetcher.** Diagnosing
+the 493 annual extraction failures (experiments.csv, 2026-09-25) found
+that `_pick_pit_series`' consolidated-preferred, latest-known_date
+tie-break -- used unmodified by `build_xbrl_fetch_scope.py` to decide
+which of several duplicate registrations to fetch for a given (isin,
+period_end) -- has no way to know that its pick is a dead resubmission
+until the fetch actually 404s. It selects on metadata (consolidated flag,
+known_date) that was never checked against whether the URL it points to
+still exists. That is structurally the same mistake as Bug #7: a decision
+made by trusting a field's value instead of verifying it against reality
+(there, the feed's isin; here, which duplicate registration is live).
+
+**Mechanism, confirmed live**: NSE re-registered a batch of FY2018-2019
+Consolidated annual filings under new seq_numbers (mostly `_WEB_2`-suffixed
+URLs) at some point after original filing; the resubmission URLs are now
+dead, while the ORIGINAL registration (frequently filed as Non-
+Consolidated) remains live. The dedup rule, preferring Consolidated and
+then latest known_date, reliably picked the dead resubmission every time
+one existed, with no check that it actually resolved.
+
+**Fixed, bounded to the 175 real-URL failures already identified** (the
+other 318 of 493 are placeholder URLs with no document at all -- untouched,
+correctly permanent) via `scripts/recover_annual_dead_duplicates.py`:
+before giving up on a picked seq_number, try a live same-(isin,
+period_end,consolidated) sibling first (no basis change); if none
+resolves, try a live sibling of the OTHER consolidated type and flag the
+substitution explicitly (`data/annual_basis_switch_log.csv`) -- never a
+silent basis change, per instruction. Results: 1 recovered via a live
+same-type sibling, 96 recovered via a flagged basis switch (95 of 96
+Consolidated-dead/Non-Consolidated-live, 1 the reverse), 78 confirmed
+genuinely dead under every variant tried (no fix possible). 91 distinct
+companies now carry exactly one (86) or two (5) explicitly-flagged
+single-period basis switches in their otherwise-Consolidated series --
+accepted as-is, since a flagged single-period standalone is the stated
+acceptable outcome; none are silent.
+
+**Zero effect on Phase E or the screener, confirmed by rerunning both, not
+assumed**: every one of the 97 recovered documents has `period_end` in
+2018-2019 (96) or 2021 (1) -- none in FY2023+, the only window this
+project's own balance-sheet analysis uses (`BS_START` in the screener,
+the "2023 onward" filter in Phase E), because of the same coverage cliff
+FUNDAMENTALS.md already documents. The fix is real and correctly scoped,
+but it recovers a vintage of data nothing downstream currently reads. Both
+reruns produced byte-identical output to the pre-fix run. This is not a
+wasted fix -- the data is now correctly in the warehouse for any future
+analysis that looks earlier than FY2023 -- but it settles nothing about
+the current screener list or Phase E's numbers, and should not be
+mistaken for having done so.
