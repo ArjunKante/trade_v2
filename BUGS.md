@@ -661,3 +661,91 @@ identical** to the pre-fix run (`diff`, zero output). Phase E was not
 rerun, per instruction -- 6 observations against tens of thousands would
 not move a reported number, and neither affected symbol reaches the
 screener's universe.
+
+## Bug #11: a same-ISIN corporate action is unguarded anywhere in this codebase -- a new bug shape, not another instance of Bug #1
+
+**Found via the swing project's Phase 3 backtest** (a separate research
+module, `src/swing/`), while sanity-checking the single worst trade in a
+4,346-trade distribution, not by a test or a proactive audit.
+
+**Mechanism, and why it is NOT Bug #1 recurring**: `lineage_jump_guard.py`
+(Bug #1's fix) detects a large, unexplained price ratio at the boundary
+between an ISIN and its LINEAGE SUCCESSOR -- it structurally cannot see a
+jump that happens within a single ISIN's own continuous row sequence,
+because that isn't a lineage transition at all. MAJESCO
+(`INE898S01029`) collapsed from ~985 to ~12.2 between 2020-12-22 and
+2020-12-23 -- the real December 2020 Majesco demerger -- on the SAME isin
+throughout. `adjustment_factors.factor` stays flat 1.0 across the
+collapse and `corporate_actions` has zero rows for this isin at all.
+Same underlying mechanism as Bug #1 (a real corporate action the
+bonus/split-only parser cannot capture), but a structurally different
+gap in the DEFENSE, not a failure to propagate an existing one -- there
+was never a guard checking within-ISIN consecutive-row jumps at all.
+
+**Detector built and tested**: `src/data_layer/same_isin_jump_guard.py`
+(`find_unexplained_same_isin_jumps`, `unexplained_same_isin_jump_entities`),
+mirroring `lineage_jump_guard.py`'s own ratio/explanation-window
+convention (RATIO_HIGH=1.5, EXPLANATION_WINDOW_DAYS=10) for consistency.
+4 tests in `tests/test_same_isin_jump_guard.py`, all passing.
+
+**Full-warehouse scan result, and the nuance that matters**: 1,345 rows
+exceed the ratio threshold with no nearby `corporate_actions` record.
+1,057 of those have a >5-day calendar gap to the prior row -- these are
+NOT part of this bug's blast radius, because every factor computation in
+this codebase (`factors.momentum`, `factors.lowvol`, `factors.target`)
+already NaNs out any window containing a >`STALE_GAP_DAYS` gap; a jump
+across a multi-month halt was already guarded, just for a different
+reason (calendar-gap unreliability, not a missing-adjustment claim).
+
+**The remaining 288 rows (gap <= 5 days, 78 distinct entities) are the
+real, previously-unguarded blast radius -- and even within that set, not
+all 78 are the same finding**: 5 symbols (VISESHINFO, UVSL, BIRLACOT,
+VKSPL, KSERASERA) contribute 208 of the 288 rows via an exact-ratio
+(2.0x / 0.5x) pattern repeating dozens of times each -- almost certainly a
+thin/illiquid-pricing artifact, a DIFFERENT mechanism from a missed
+corporate action, not individually diagnosed here. The remaining 73
+entities have 1-2 flagged rows each, consistent with one-off events --
+spot-checking a handful found a mix of (a) real, well-documented market
+crashes needing no adjustment at all (YES Bank's March 2020 AT1
+write-off crash, Jet Airways' 2019 insolvency slide -- a genuine crash is
+not a data error), and (b) plausible missed splits/bonuses on names with
+**zero** `corporate_actions` coverage at all (JSWSTEEL, GRASIM, TRENT,
+KAJARIACER -- ratios close to common split factors like 1/2, 1/5, 1/10).
+**Not individually verified one by one** -- reported as a structural
+finding with this nuance stated, not as "78 confirmed bugs."
+
+**Impact on the swing backtest this was found through**: excluding all 78
+entities moved the strategy's own mean gross return from 0.792% to
+0.793% and its percentile in a random-entry null distribution from 9.0 to
+9.8 -- i.e., **this contamination was not material to that particular
+finding**, checked directly rather than assumed. That does not make the
+underlying gap unimportant: `adjustment_factors`/`corporate_actions`
+coverage gaps of this shape would affect the MAIN momentum project's own
+`momentum_12_1`, `trailing_vol_252`, and forward-return target computations
+identically, for any of these same entities that entered THAT project's
+universe at the wrong time -- not checked here, flagged for a decision.
+
+**Not fixed.** This entry records the detector, the scan, and the
+quantified impact on the one place it was found to matter; it does not
+correct any stored data, thread the new detector through
+`factors.momentum`/`factors.lowvol`/`factors.target` the way
+`lineage_jump_guard` already is, or re-run the main project's Phase
+E/Study 1/2 numbers.
+
+**Correction to the initial plan for the sibling `trade-info` project**:
+checked before writing anything there, per this project's own "verify
+before act" discipline -- `trade-info` is NOT missing this defense.
+`src/nsepit/quality.py`'s `PriceDiscontinuity` detector (classifications
+`split_like` / `extreme_outlier` / `stale_resumed`) already exists there,
+already uses the same `STALE_GAP_DAYS=5` convention, and its own
+docstring cites the identical real case this session independently
+re-found in `trade-new`'s data (`INE784B01035`/WINSOME, a multi-year gap
+misread as a 38x single-day move) -- confirming this pattern was already
+known and handled in that project before this session started. It is
+referenced from `bulk_ingest.py`, `isin_lineage.py`, `analysis.py`, and
+`fresh_data.py`, i.e. wired into the pipeline, not dead code -- not
+independently confirmed whether every downstream computation there
+actually excludes flagged rows the way `trade-new`'s factor modules
+consume `unexplained_jump_dates`, but there is no unaddressed gap of the
+kind assumed when this bug was first found. No entry was added to
+`trade-info`'s `DESIGN.md`; reported to the user instead of guessing.
