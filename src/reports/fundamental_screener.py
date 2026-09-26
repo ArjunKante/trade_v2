@@ -340,8 +340,14 @@ def load_company_names(con: duckdb.DuckDBPyConnection, isins: list[str]) -> dict
 # Orchestrator
 # ---------------------------------------------------------------------------
 
-def run_screener(con: duckdb.DuckDBPyConnection) -> dict:
-    universe = compute_momentum_universe(con)
+def run_screener(con: duckdb.DuckDBPyConnection, universe: pd.DataFrame | None = None) -> dict:
+    """universe: pass a precomputed compute_momentum_universe(con) result to
+    avoid recomputing it -- e.g. when a caller also needs the same universe
+    for build_company_report per company (screener_web.py does this; the
+    momentum computation alone costs tens of seconds and must not be paid
+    once per company)."""
+    if universe is None:
+        universe = compute_momentum_universe(con)
     top_decile = universe[universe["in_top_decile"]].sort_values("rank").reset_index(drop=True)
     as_of = universe["as_of_date"].max()
 
@@ -369,7 +375,7 @@ def run_screener(con: duckdb.DuckDBPyConnection) -> dict:
     failed = [r for r in results if r["verdict"] == "FAIL"]
 
     return {
-        "as_of": as_of, "n_universe": int(universe["n_universe"].iloc[0]), "results": results,
+        "as_of": as_of, "n_universe": int(universe["n_universe"].iloc[0]), "universe": universe, "results": results,
         "funnel": {"start": n_start, "after_tier1": after_t1, "after_tier2": after_t2, "after_tier3": after_t3},
         "survivors": survivors, "insufficient": insufficient, "failed": failed,
     }

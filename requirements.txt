@@ -8,3 +8,5 @@ arch
 pytest
 purgedcv
 anthropic
+fastapi
+uvicorn

@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fundamental Screener</title>
+<style>
+  :root {
+    --bg: #1b1c1e;
+    --panel: #232426;
+    --border: #383a3d;
+    --text: #d8d8d6;
+    --text-dim: #8a8c90;
+    --text-faint: #5c5e62;
+    --accent: #b7b9bd;
+    --pass: #6f9c78;
+    --fail: #b06a63;
+    --insuff: #8a8c90;
+    --finpartial: #a8944f;
+    --row-hover: #262729;
+    --row-selected: #2c3730;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+    font-size: 13px;
+  }
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  #banner {
+    background: #3a2f22; color: #e0c9a0; border-bottom: 1px solid #5a4a30;
+    padding: 8px 16px; font-size: 12.5px; line-height: 1.5;
+    position: sticky; top: 0; z-index: 50;
+  }
+  #meta {
+    padding: 4px 16px; color: var(--text-dim); font-size: 11.5px;
+    border-bottom: 1px solid var(--border); display: flex; gap: 18px; flex-wrap: wrap;
+  }
+  #controls {
+    padding: 8px 16px; display: flex; gap: 14px; align-items: center;
+    border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  #controls label { color: var(--text-dim); margin-right: 4px; }
+  #controls select, #controls input {
+    background: #141516; color: var(--text); border: 1px solid var(--border);
+    font-family: inherit; font-size: 12.5px; padding: 3px 6px;
+  }
+  #count { color: var(--text-dim); margin-left: auto; }
+
+  #main { display: flex; height: calc(100vh - 0px); }
+  #tablewrap { flex: 1; overflow: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  thead th {
+    position: sticky; top: 0; background: var(--panel); color: var(--text-dim);
+    text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border);
+    cursor: pointer; user-select: none; white-space: nowrap; font-weight: normal;
+  }
+  thead th:hover { color: var(--text); }
+  thead th.sorted { color: var(--accent); }
+  thead th .arrow { font-size: 10px; margin-left: 3px; color: var(--text-faint); }
+  tbody td {
+    padding: 5px 10px; border-bottom: 1px solid #262729; white-space: nowrap;
+  }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--row-hover); }
+  tbody tr.selected { background: var(--row-selected); }
+  td.num, th.num { text-align: right; }
+  .verdict-pill {
+    display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 11.5px;
+    border: 1px solid transparent;
+  }
+  .v-PASS { color: var(--pass); border-color: #3a4a3d; background: #212722; }
+  .v-FAIL { color: var(--fail); border-color: #4a3230; background: #271f1e; }
+  .v-INSUFFICIENT { color: var(--insuff); border-color: #3a3b3d; background: #202122; }
+  .v-FINANCIALS { color: var(--finpartial); border-color: #4a3f2a; background: #26221a; }
+  .na { color: var(--text-faint); font-style: italic; }
+  .stale { color: var(--text-faint); font-size: 10.5px; margin-left: 5px; }
+
+  #panel {
+    width: 0; overflow: hidden; border-left: 1px solid var(--border);
+    background: var(--panel); transition: width 0.12s ease; flex-shrink: 0;
+  }
+  #panel.open { width: 46vw; min-width: 480px; overflow-y: auto; }
+  #panelInner { padding: 14px 18px 60px; }
+  #panelClose {
+    position: sticky; top: 0; float: right; background: none; border: none;
+    color: var(--text-dim); font-size: 18px; cursor: pointer; padding: 2px 8px;
+  }
+  #panelClose:hover { color: var(--text); }
+  .p-title { font-size: 15px; color: var(--accent); margin-bottom: 2px; }
+  .p-sub { color: var(--text-dim); font-size: 11.5px; margin-bottom: 14px; }
+  .section { margin-bottom: 18px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .section h3 {
+    font-size: 11.5px; letter-spacing: 0.06em; color: var(--text-dim);
+    margin: 0 0 8px; font-weight: normal; text-transform: uppercase;
+  }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 12.5px; }
+  .kv .k { color: var(--text-dim); }
+  .kv .v { text-align: left; }
+  table.mini { width: 100%; margin-top: 6px; font-size: 12px; }
+  table.mini th { position: static; padding: 3px 8px; color: var(--text-faint); border-bottom: 1px solid var(--border); font-weight: normal; }
+  table.mini td { padding: 3px 8px; border-bottom: 1px solid #262729; }
+  .checklist { margin-top: 4px; }
+  .checkline { padding: 3px 0; font-size: 12px; border-bottom: 1px solid #262729; }
+  .checkline .status { display: inline-block; width: 46px; }
+  .st-PASS { color: var(--pass); }
+  .st-FAIL { color: var(--fail); }
+  .st-NA { color: var(--text-faint); }
+  .st-SKIPPED { color: var(--finpartial); }
+  svg.spark { display: block; margin-top: 6px; }
+  .spark-caption { color: var(--text-faint); font-size: 10.5px; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<div id="banner">
+  Momentum selection is tested (holdout passed). The fundamental filter is an untested modification.
+  This is a reading list, not a validated strategy.
+</div>
+<div id="meta"></div>
+<div id="controls">
+  <span><label for="fVerdict">verdict</label><select id="fVerdict"><option value="">(all)</option></select></span>
+  <span><label for="fSector">sector</label><select id="fSector"><option value="">(all)</option></select></span>
+  <span id="count"></span>
+</div>
+
+<div id="main">
+  <div id="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-key="symbol">symbol</th>
+          <th data-key="name">name</th>
+          <th data-key="verdict">verdict</th>
+          <th class="num" data-key="momentum_rank">mom rank</th>
+          <th class="num" data-key="momentum_value">momentum_12_1</th>
+          <th data-key="sector">sector</th>
+          <th data-key="liquidity_tercile">liquidity</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div id="panel"><div id="panelInner"></div></div>
+</div>
+
+<script>
+const NA = "NOT AVAILABLE";
+let companies = [];
+let detailCache = {};
+let sortKey = "momentum_rank", sortDir = 1;
+let filters = { verdict: "", sector: "" };
+let selectedSymbol = null;
+
+const VERDICT_CLASS = {
+  "PASS": "v-PASS", "FAIL": "v-FAIL",
+  "INSUFFICIENT DATA": "v-INSUFFICIENT", "FINANCIALS-PARTIAL": "v-FINANCIALS",
+};
+
+function naSpan(reason) {
+  return `<span class="na" ${reason ? `title="${escapeAttr(reason)}"` : ""}>${NA}${reason ? " -- " + escapeHtml(reason) : ""}</span>`;
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function escapeAttr(s) { return escapeHtml(s); }
+
+function fmtMoney(x) {
+  if (x === null || x === undefined || Number.isNaN(x)) return null;
+  const abs = Math.abs(x);
+  if (abs >= 1e7) return (x / 1e7).toFixed(2) + " Cr";
+  if (abs >= 1e5) return (x / 1e5).toFixed(2) + " L";
+  return x.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+}
+function fmtPct(x, dp) {
+  if (x === null || x === undefined || Number.isNaN(x)) return null;
+  dp = dp === undefined ? 1 : dp;
+  const sign = x > 0 ? "+" : "";
+  return sign + (x * 100).toFixed(dp) + "%";
+}
+function fmtRatio(x, dp) {
+  if (x === null || x === undefined || Number.isNaN(x)) return null;
+  dp = dp === undefined ? 2 : dp;
+  return x.toFixed(dp) + "x";
+}
+function fmtNum(x, dp) {
+  if (x === null || x === undefined || Number.isNaN(x)) return null;
+  dp = dp === undefined ? 2 : dp;
+  return x.toFixed(dp);
+}
+function fmtDate(iso) { return iso ? iso.slice(0, 10) : null; }
+
+function staleTag(staleDays, knownDateIso) {
+  if (staleDays === null || staleDays === undefined) return "";
+  const kd = fmtDate(knownDateIso);
+  return `<span class="stale" title="known_date ${kd || "?"}">${staleDays}d</span>`;
+}
+
+// value renderer: given a raw value, a formatter fn, an optional reason for
+// NA, and optional known_date/staleness -- returns markup, NEVER blank.
+function field(value, fmt, reason, staleDays, knownDateIso) {
+  if (value === null || value === undefined) return naSpan(reason);
+  const formatted = fmt(value);
+  if (formatted === null) return naSpan(reason);
+  return `<span class="tabular">${formatted}</span>${staleTag(staleDays, knownDateIso)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Load + render main table
+// ---------------------------------------------------------------------------
+
+async function loadMeta() {
+  const meta = await (await fetch("/api/meta")).json();
+  const el = document.getElementById("meta");
+  el.innerHTML = `
+    <span>as of ${meta.as_of_date}</span>
+    <span>generated ${meta.generated_at}</span>
+    <span>source log: ${meta.log_file ? escapeHtml(meta.log_file) : "(none found)"}</span>
+    <span>momentum universe: ${meta.n_universe}</span>
+    <span>top decile evaluated: ${meta.n_companies}</span>
+  `;
+}
+
+async function loadCompanies() {
+  companies = await (await fetch("/api/companies")).json();
+  populateFilterOptions();
+  renderTable();
+}
+
+function populateFilterOptions() {
+  const verdicts = [...new Set(companies.map(c => c.verdict))].sort();
+  const sectors = [...new Set(companies.map(c => c.sector || NA))].sort();
+  const vSel = document.getElementById("fVerdict");
+  const sSel = document.getElementById("fSector");
+  for (const v of verdicts) vSel.insertAdjacentHTML("beforeend", `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`);
+  for (const s of sectors) sSel.insertAdjacentHTML("beforeend", `<option value="${escapeAttr(s)}">${escapeHtml(s)}</option>`);
+}
+
+function sortedFiltered() {
+  let rows = companies.filter(c =>
+    (!filters.verdict || c.verdict === filters.verdict) &&
+    (!filters.sector || (c.sector || NA) === filters.sector)
+  );
+  rows = rows.slice().sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (av === null || av === undefined) av = sortKey === "momentum_rank" ? Infinity : "";
+    if (bv === null || bv === undefined) bv = sortKey === "momentum_rank" ? Infinity : "";
+    if (typeof av === "string") av = av.toLowerCase();
+    if (typeof bv === "string") bv = bv.toLowerCase();
+    if (av < bv) return -1 * sortDir;
+    if (av > bv) return 1 * sortDir;
+    return 0;
+  });
+  return rows;
+}
+
+function renderTable() {
+  const rows = sortedFiltered();
+  document.getElementById("count").textContent = `${rows.length} / ${companies.length} shown`;
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = rows.map(c => {
+    const vclass = VERDICT_CLASS[c.verdict] || "";
+    return `<tr data-symbol="${escapeAttr(c.symbol)}" class="${c.symbol === selectedSymbol ? "selected" : ""}">
+      <td>${escapeHtml(c.symbol)}</td>
+      <td>${c.name ? escapeHtml(c.name) : `<span class="na">${NA}</span>`}</td>
+      <td><span class="verdict-pill ${vclass}">${escapeHtml(c.verdict)}</span></td>
+      <td class="num tabular">${c.momentum_rank ?? ""}</td>
+      <td class="num tabular">${c.momentum_value !== null ? (c.momentum_value >= 0 ? "+" : "") + c.momentum_value.toFixed(4) : ""}</td>
+      <td>${c.sector ? escapeHtml(c.sector) : `<span class="na">${NA}</span>`}</td>
+      <td>${c.liquidity_tercile ? escapeHtml(c.liquidity_tercile) : `<span class="na">${NA}</span>`}</td>
+    </tr>`;
+  }).join("");
+
+  for (const tr of tbody.querySelectorAll("tr")) {
+    tr.addEventListener("click", () => openDetail(tr.dataset.symbol));
+  }
+
+  for (const th of document.querySelectorAll("thead th")) {
+    th.classList.toggle("sorted", th.dataset.key === sortKey);
+    const existing = th.querySelector(".arrow");
+    if (existing) existing.remove();
+    if (th.dataset.key === sortKey) {
+      th.insertAdjacentHTML("beforeend", `<span class="arrow">${sortDir === 1 ? "▲" : "▼"}</span>`);
+    }
+  }
+}
+
+document.querySelectorAll("thead th").forEach(th => {
+  th.addEventListener("click", () => {
+    const key = th.dataset.key;
+    if (sortKey === key) sortDir *= -1;
+    else { sortKey = key; sortDir = 1; }
+    renderTable();
+  });
+});
+document.getElementById("fVerdict").addEventListener("change", e => { filters.verdict = e.target.value; renderTable(); });
+document.getElementById("fSector").addEventListener("change", e => { filters.sector = e.target.value; renderTable(); });
+
+// ---------------------------------------------------------------------------
+// Detail panel
+// ---------------------------------------------------------------------------
+
+async function openDetail(symbol) {
+  selectedSymbol = symbol;
+  renderTable();
+  const panel = document.getElementById("panel");
+  panel.classList.add("open");
+  document.getElementById("panelInner").innerHTML = `<div style="color:var(--text-dim)">loading ${escapeHtml(symbol)}...</div>`;
+
+  if (!detailCache[symbol]) {
+    const resp = await fetch(`/api/company/${encodeURIComponent(symbol)}`);
+    detailCache[symbol] = resp.ok ? await resp.json() : { error: `HTTP ${resp.status}` };
+  }
+  renderDetail(detailCache[symbol]);
+}
+
+function closeDetail() {
+  selectedSymbol = null;
+  document.getElementById("panel").classList.remove("open");
+  renderTable();
+}
+
+function sectionGrowth(g) {
+  if (!g.available) return `<div class="section"><h3>Growth</h3>${naSpan(g.reason)}</div>`;
+  const q8 = g.last_8_quarters || [];
+  return `<div class="section"><h3>Growth</h3>
+    <div class="kv">
+      <div class="k">revenue CAGR 3y</div><div class="v">${field(g.revenue_cagr_3y, x => fmtPct(x))}</div>
+      <div class="k">revenue CAGR 5y</div><div class="v">${field(g.revenue_cagr_5y, x => fmtPct(x))}</div>
+      <div class="k">revenue YoY (latest)</div><div class="v">${field(g.revenue_yoy, x => fmtPct(x))}</div>
+      <div class="k">EPS CAGR 3y</div><div class="v">${field(g.eps_cagr_3y, x => fmtPct(x))}</div>
+      <div class="k">EPS CAGR 5y</div><div class="v">${field(g.eps_cagr_5y, x => fmtPct(x))}</div>
+      <div class="k">EPS YoY (latest)</div><div class="v">${field(g.eps_yoy, x => fmtPct(x))} ${staleTag(g.latest_staleness_days, g.latest_known_date)}</div>
+    </div>
+    ${sparkline(q8)}
+  </div>`;
+}
+
+function sparkline(q8) {
+  if (!q8.length) return "";
+  const w = 420, h = 46, gap = 4;
+  const bw = (w - gap * (q8.length - 1)) / q8.length;
+  const revMax = Math.max(...q8.map(r => Math.abs(r.revenue || 0)), 1);
+  const patMax = Math.max(...q8.map(r => Math.abs(r.ni || 0)), 1);
+  const revBars = q8.map((r, i) => {
+    const x = i * (bw + gap);
+    const bh = r.revenue !== null ? Math.abs(r.revenue) / revMax * (h - 2) : 0;
+    return `<rect x="${x}" y="${h - bh}" width="${bw}" height="${bh}" fill="#5a7a8c" opacity="0.85"><title>${fmtDate(r.period_end)} revenue=${fmtMoney(r.revenue) ?? NA} known_date=${fmtDate(r.known_date) ?? NA} staleness=${r.staleness_days ?? NA}d</title></rect>`;
+  }).join("");
+  const patBars = q8.map((r, i) => {
+    const x = i * (bw + gap);
+    const mid = h / 2;
+    const bh = r.ni !== null ? Math.abs(r.ni) / patMax * (mid - 2) : 0;
+    const y = r.ni >= 0 ? mid - bh : mid;
+    const color = r.ni !== null && r.ni < 0 ? "#a85c5c" : "#6f9c78";
+    return `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" fill="${color}" opacity="0.85"><title>${fmtDate(r.period_end)} PAT=${fmtMoney(r.ni) ?? NA} known_date=${fmtDate(r.known_date) ?? NA} staleness=${r.staleness_days ?? NA}d</title></rect>`;
+  }).join("");
+  return `
+    <div class="spark-caption">last ${q8.length} quarters -- revenue (blue, bar height only, no shared axis with PAT)</div>
+    <svg class="spark" width="${w}" height="${h}">${revBars}</svg>
+    <div class="spark-caption">last ${q8.length} quarters -- PAT (green=positive, red=negative, zero-line at mid)</div>
+    <svg class="spark" width="${w}" height="${h}">${patBars}</svg>
+  `;
+}
+
+function sectionProfitability(p) {
+  if (!p.available) return `<div class="section"><h3>Profitability</h3>${naSpan()}</div>`;
+  const trend = (p.trend_12q || []).slice().reverse();
+  return `<div class="section"><h3>Profitability</h3>
+    <div class="kv">
+      <div class="k">EBITDA margin (latest)</div><div class="v">${field(p.ebitda_margin, x => fmtPct(x))} ${staleTag(p.latest_staleness_days, p.latest_known_date)}</div>
+      <div class="k">EBIT margin (latest)</div><div class="v">${field(p.ebit_margin, x => fmtPct(x))}</div>
+      <div class="k">net margin (latest)</div><div class="v">${field(p.net_margin, x => fmtPct(x))}</div>
+    </div>
+    <table class="mini"><thead><tr><th>quarter</th><th>EBITDA</th><th>EBIT</th><th>net</th></tr></thead>
+    <tbody>${trend.map(r => `<tr><td>${fmtDate(r.period_end)}</td><td class="tabular">${fmtPct(r.ebitda_margin) ?? NA}</td><td class="tabular">${fmtPct(r.ebit_margin) ?? NA}</td><td class="tabular">${fmtPct(r.net_margin) ?? NA}</td></tr>`).join("")}</tbody></table>
+  </div>`;
+}
+
+function sectionReturns(ret) {
+  if (!ret.available) return `<div class="section"><h3>Returns</h3>${naSpan("balance sheet data starts FY2023")}</div>`;
+  const by = ret.by_year || [];
+  return `<div class="section"><h3>Returns</h3>
+    <div class="p-sub">years available: ${by.map(r => fmtDate(r.period_end)).join(", ")}</div>
+    <table class="mini"><thead><tr><th>FY end</th><th>ROE</th><th>ROCE</th><th>known_date</th></tr></thead>
+    <tbody>${by.map(r => `<tr>
+      <td>${fmtDate(r.period_end)}</td>
+      <td class="tabular">${r.roe_negative_equity ? naSpan("negative equity, ratio sign not meaningful") : (fmtPct(r.roe) ?? NA)}</td>
+      <td class="tabular">${r.roce_negative_capital_employed ? naSpan("negative capital employed, ratio sign not meaningful") : (fmtPct(r.roce) ?? NA)}</td>
+      <td>${fmtDate(r.known_date)} ${staleTag(r.staleness_days, r.known_date)}</td>
+    </tr>`).join("")}</tbody></table>
+  </div>`;
+}
+
+function sectionBalanceSheet(bs) {
+  if (!bs.available) return `<div class="section"><h3>Balance Sheet</h3>${naSpan("balance sheet data starts FY2023")}</div>`;
+  const by = bs.by_year || [];
+  return `<div class="section"><h3>Balance Sheet</h3>
+    <table class="mini"><thead><tr><th>FY end</th><th>D/E</th><th>net debt/EBITDA</th><th>current ratio</th><th>interest cover</th></tr></thead>
+    <tbody>${by.map(r => `<tr>
+      <td>${fmtDate(r.period_end)} ${staleTag(r.staleness_days, r.known_date)}</td>
+      <td class="tabular">${fmtRatio(r.debt_equity) ?? NA}</td>
+      <td class="tabular">${fmtRatio(r.net_debt_ebitda) ?? NA}</td>
+      <td class="tabular">${fmtRatio(r.current_ratio) ?? NA}</td>
+      <td class="tabular">${fmtRatio(r.interest_coverage) ?? NA}</td>
+    </tr>`).join("")}</tbody></table>
+  </div>`;
+}
+
+function sectionCashFlow(cf) {
+  if (!cf.by_year) return `<div class="section"><h3>Cash Flow</h3>${naSpan("cash flow statement data starts FY2023 (annual filings only)")}</div>`;
+  const by = cf.by_year;
+  return `<div class="section"><h3>Cash Flow</h3>
+    <table class="mini"><thead><tr><th>FY end</th><th>CFO</th><th>FCF</th><th>CFO/PAT</th></tr></thead>
+    <tbody>${by.map(r => `<tr>
+      <td>${fmtDate(r.period_end)} ${staleTag(r.staleness_days, r.known_date)}</td>
+      <td class="tabular">${fmtMoney(r.cfo) ?? NA}</td>
+      <td class="tabular">${fmtMoney(r.fcf) ?? NA}</td>
+      <td class="tabular">${fmtRatio(r.cfo_pat_ratio) ?? NA}</td>
+    </tr>`).join("")}</tbody></table>
+  </div>`;
+}
+
+function pctileNote(pctiles, key) {
+  const p = pctiles && pctiles[key];
+  return p !== null && p !== undefined ? `<span class="stale">sector pctile ${p.toFixed(0)}</span>` : `<span class="stale">sector pctile unknown</span>`;
+}
+
+function sectionValuation(v) {
+  if (!v.available) return `<div class="section"><h3>Valuation</h3>${naSpan("insufficient price, shares, or TTM earnings/revenue data")}</div>`;
+  const pct = v.percentiles || {};
+  const peLine = v.pe !== null
+    ? `${fmtRatio(v.pe)} ${staleTag(v.pl_staleness_days, v.pl_known_date)} ${pctileNote(pct, "pe")}`
+    : naSpan(v.pe_na_reason);
+  return `<div class="section"><h3>Valuation</h3>
+    <div class="kv">
+      <div class="k">market cap</div><div class="v">${field(v.market_cap, x => fmtMoney(x))} ${staleTag(v.shares_staleness_days, v.shares_known_date)}</div>
+      <div class="k">P/E</div><div class="v">${peLine}</div>
+      <div class="k">P/S</div><div class="v">${field(v.ps, x => fmtRatio(x))} ${staleTag(v.pl_staleness_days, v.pl_known_date)} ${pctileNote(pct, "ps")}</div>
+      <div class="k">EV/EBITDA</div><div class="v">${field(v.ev_ebitda, x => fmtRatio(x), "needs FY2023+ debt/cash data")} ${v.ev_ebitda !== null ? staleTag(v.bs_staleness_days, v.bs_known_date) : ""} ${pctileNote(pct, "ev_ebitda")}</div>
+      <div class="k">P/B</div><div class="v">${field(v.pb, x => fmtRatio(x), "needs FY2023+ equity data")} ${v.pb !== null ? staleTag(v.pb_staleness_days, v.pb_known_date) : ""} ${pctileNote(pct, "pb")}</div>
+      <div class="k">FCF yield</div><div class="v">${field(v.fcf_yield, x => fmtPct(x), "needs FY2023+ CFO/capex data")} ${v.fcf_yield !== null ? staleTag(v.fcf_staleness_days, v.fcf_known_date) : ""} ${pctileNote(pct, "fcf_yield")}</div>
+      <div class="k">earnings yield (EBIT/mktcap)</div><div class="v">${field(v.earnings_yield, x => fmtPct(x))} ${staleTag(v.pl_staleness_days, v.pl_known_date)} ${pctileNote(pct, "earnings_yield")}</div>
+    </div>
+  </div>`;
+}
+
+function sectionScreener(scr) {
+  const cls = VERDICT_CLASS[scr.verdict] || "";
+  const checks = scr.checks || [];
+  return `<div class="section"><h3>Screener Result</h3>
+    <span class="verdict-pill ${cls}">${escapeHtml(scr.verdict)}</span>
+    ${!scr.sector_known ? '<span class="stale">sector unknown -- leverage checks applied without financials exemption</span>' : ""}
+    <div class="checklist">
+      ${checks.map(c => {
+        const stcls = c.status.startsWith("SKIPPED") ? "st-SKIPPED" : `st-${c.status}`;
+        const detail = c.status === "FAIL" || c.status === "PASS"
+          ? escapeHtml(String(c.value ?? ""))
+          : escapeHtml(c.reason || c.status);
+        return `<div class="checkline"><span class="status ${stcls}">${c.status.startsWith("SKIPPED") ? "SKIP" : c.status}</span>
+          tier${c.tier}.${escapeHtml(c.check)} -- ${detail}
+          ${c.known_date ? staleTag(c.staleness_days, c.known_date) : ""}</div>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+
+function renderDetail(r) {
+  const inner = document.getElementById("panelInner");
+  if (r.error) {
+    inner.innerHTML = `<button id="panelClose">&times;</button><div class="p-title">${escapeHtml(selectedSymbol)}</div><div class="section">${naSpan(r.error)}</div>`;
+    document.getElementById("panelClose").addEventListener("click", closeDetail);
+    return;
+  }
+  inner.innerHTML = `
+    <button id="panelClose">&times;</button>
+    <div class="p-title">${escapeHtml(r.symbol)} <span class="stale">${escapeHtml(r.identifier)}</span></div>
+    <div class="p-sub">sector: ${r.sector ? escapeHtml(r.sector) : NA} &nbsp;&middot;&nbsp; as of ${fmtDate(r.as_of)} &nbsp;&middot;&nbsp; latest price: ${fmtNum(r.latest_price, 2) ?? NA}</div>
+    ${sectionGrowth(r.growth)}
+    ${sectionProfitability(r.profitability)}
+    ${sectionReturns(r.returns)}
+    ${sectionBalanceSheet(r.balance_sheet)}
+    ${sectionCashFlow(r.cash_flow)}
+    ${sectionValuation(r.valuation)}
+    ${sectionScreener(r.screener)}
+  `;
+  document.getElementById("panelClose").addEventListener("click", closeDetail);
+}
+
+loadMeta();
+loadCompanies();
+</script>
+</body>
+</html>
