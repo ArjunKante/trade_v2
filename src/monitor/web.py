@@ -23,6 +23,7 @@ from data_layer.lineage_jump_guard import unexplained_jump_boundaries
 from monitor.persistence import (
     compute_daily_persistence, annual_mean_sign, mechanical_regimes,
     nonoverlapping_periods, rolling_mean_se, current_readout,
+    same_isin_jump_excluded_entities,
 )
 
 
@@ -33,10 +34,9 @@ def _log_holdout_access(root) -> None:
         f.write(
             f"{dt.datetime.now().isoformat()} | src/monitor/web.py (screener web app startup) | "
             f"authorize_holdout=True | DESCRIPTIVE, NON-EVALUATIVE regime-indicator audit "
-            f"(momentum-persistence monitor panel) -- same reasoning as "
-            f"scripts/run_momentum_persistence_monitor.py's own docstring, does NOT charge a "
-            f"project-wide holdout slot under that reasoning, flagged as an inference not an "
-            f"established rule\n"
+            f"(momentum-persistence monitor panel) -- read against the HISTORICAL HOLDOUT, now "
+            f"RETIRED per FINDINGS.md Section 7; this log entry is an audit-trail record of when "
+            f"data was read, not a charge against a resource that still exists\n"
         )
 
 
@@ -48,7 +48,9 @@ def build_monitor_payload(con: duckdb.DuckDBPyConnection, root, progress=print) 
     progress("Computing the momentum-persistence monitor (descriptive only, ~1 minute)...")
     _log_holdout_access(root)
 
-    panel = read_full_entity_panel_authorized(con, authorize_holdout=True)
+    excluded = same_isin_jump_excluded_entities(con)  # BUGS.md Bug #11
+    panel_all = read_full_entity_panel_authorized(con, authorize_holdout=True)
+    panel = panel_all[~panel_all["entity_id"].isin(excluded)].reset_index(drop=True)
     jump_dates = unexplained_jump_boundaries(con, before=None)
 
     daily = compute_daily_persistence(panel, jump_dates)

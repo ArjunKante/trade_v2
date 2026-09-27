@@ -32,19 +32,34 @@ years, cited in NEW_RESEARCH_DIRECTION.md) -- that script now imports its
 computation from this module instead of duplicating it, so the two
 cannot drift apart.
 
-**Known discrepancy, flagged rather than silently resolved**: the
-regime-count script (and this module, matching it exactly, per
-instruction) applies factors.momentum/factors.target's own lineage-jump
-guard (Bug #1's fix, ISIN-lineage-transition jumps) but does NOT exclude
-the 78 same-ISIN-jump entities BUGS.md Bug #11 found (the MAJESCO-shape
-defect) the way every OTHER rigorous computation in this project (the
-swing decomposition, the swing V1 checks, the swing V1 holdout read)
-does. This was true of the original regime-count script already and is
-preserved here unchanged, because the instruction to build this module
-was explicit and repeated: reuse that script's definition exactly, do
-not redefine it. Whether the published 3-regime figure would change
-under the same Bug #11 exclusion used elsewhere is an open question this
-module does not resolve -- recorded here so it is visible, not buried.
+**Known discrepancy, now resolved**: the original instruction to build
+this module was self-contradictory -- "use exactly the reference script's
+definition" AND "same-ISIN jump exclusions," when the reference script
+did not actually apply that exclusion. Resolved by applying the exclusion
+in both places: `same_isin_jump_excluded_entities()` below (BUGS.md Bug
+#11, the MAJESCO-shape same-ISIN, no-gap price collapse) is now the
+single source of truth, used identically by the regime-count script, the
+CLI monitor, and the web payload -- matching every OTHER rigorous
+computation in this project (the swing decomposition, the swing V1
+checks, the swing V1 holdout read), which already excluded these 78
+entities. Rerun after the fix: still exactly **3 mechanical regimes**
+(2017-2019 +, 2020 -, 2021-2024 +) -- the count the A-actionable
+rejection in `NEW_RESEARCH_DIRECTION.md` rested on ("under ~5 regimes")
+is unchanged by this correction.
+
+**Grep-for-siblings, per instruction**: checked whether any OTHER script
+in this project computing cross-sectional persistence or rank IC lacks
+this same exclusion. Seven do (`scripts/run_phase_e_factors.py`,
+`run_factor_ic_report.py`, `run_phase2_diagnostics.py`,
+`run_ey_momentum_diagnostic.py`, `run_combination_ic_power_analysis.py`,
+`run_concentration_diagnostic.py`, `run_lineage_jump_fix_impact.py`) --
+all predate Bug #11's discovery (found later, via the swing project) and
+feed already-published, already-decided results in `FINDINGS.md`/
+`FUNDAMENTALS.md`. Not retroactively recomputed here -- BUGS.md Bug #11
+already flagged this exact gap for the main momentum project's
+computations generically ("not checked there"); this confirms which
+specific scripts that applies to, for whoever decides whether re-running
+any of them is worth it, a decision not made in this module.
 
 ======================================================================
 THE LAG (must be visible everywhere this statistic is shown)
@@ -97,33 +112,30 @@ task's own instruction ("if it covers only model inference, record that
 reasoning... and proceed"): recorded here, and this module proceeds.
 
 ======================================================================
-TRADE-NEW'S OWN HOLDOUT -- the closer, more directly relevant question
+TRADE-NEW'S OWN HOLDOUT -- RETIRED, not merely "not charged" (superseded)
 ======================================================================
-Not asked directly by the instruction, but surfaced here because it is
-the more operative risk for THIS module's actual implementation: getting
-a "measured through" date anywhere near the true latest available price
-(rather than being permanently stuck at trade-new's own pre-holdout
-boundary) requires reading through `SEALED_HOLDOUT_START` via
-`data_layer.entity_panel.read_full_entity_panel_authorized(con,
-authorize_holdout=True)` -- the SAME bypass mechanism already used twice
-in this project (Study 1's momentum holdout evaluation, swing V1's
-holdout evaluation; `FINDINGS.md` Section 7 records the ledger at 2 of 3
-project-wide slots spent). This would be a THIRD use of that bypass.
+An earlier version of this docstring reasoned, by analogy to
+`trade-info`'s own fresh-data contract, that this module's read was a
+descriptive audit that did not charge the project-wide holdout ledger's
+third and final slot. **That reasoning is superseded.** The decision,
+recorded in `FINDINGS.md` Section 7: a one-time descriptive read might
+not spend a sealed window, but this monitor reads it on EVERY run,
+permanently -- a window continuously displayed is not sealed in any
+meaningful sense. It had also already been read twice by actual
+strategies (Study 1's momentum holdout evaluation, swing V1's holdout
+evaluation) before this monitor ever existed. **The historical holdout
+(`SEALED_HOLDOUT_START = 2025-03-19` onward) is therefore CLOSED.** The
+ledger is not "2 of 3 spent" but **retired -- no historical holdout
+remains for this dataset, for any hypothesis, from any project sharing
+this warehouse.** All future validation, for anything, is FORWARD-ONLY:
+on data arriving after the date of that decision.
 
-Applying the SAME principle `trade-info`'s own contract states explicitly
-(a descriptive, non-pass/fail statistic is not "an evaluation" and does
-not increment a study-cap counter -- `FRESH_DATA_CONTRACT.md` Section
-C/D, reasoned above by direct analogy since trade-new's own `FINDINGS.md`
-has no equivalent written carve-out of its own): this module's read is a
-descriptive regime-indicator audit, not an evaluation of any
-pre-registered rule against a pass/fail threshold, so it is read here as
-NOT charging the third and final project-wide holdout slot. **This is an
-inference by analogy, not a rule this project has written down for
-itself, flagged here exactly so a human can override it** -- every use
-of `authorize_holdout=True` for this module's live/actionable reading is
-logged to `data/holdout_access_log.txt` with a description distinguishing
-it from the two real evaluative spends, so the distinction is auditable
-later regardless of whether this reasoning is ultimately accepted.
+This module still calls `data_layer.entity_panel.
+read_full_entity_panel_authorized(con, authorize_holdout=True)` to read
+through the (now-retired, not sealed) window, and every such read is
+still logged to `data/holdout_access_log.txt` for the audit trail -- but
+those log entries no longer represent a resource being preserved. There
+is nothing left to spend; the log just records when data was read.
 """
 from __future__ import annotations
 
@@ -139,6 +151,23 @@ from factors.target import compute_forward_return, HORIZON_DAYS
 MIN_CROSS_SECTION_N = 20   # dates with fewer names than this are dropped -- matches the reference script exactly
 ROLLING_PERIODS = 12       # trailing non-overlapping 63-day periods (~3 years) for the rolling mean/SE
 REGIME_CI_Z = 1.96         # ~95% two-sided normal critical value for the "indistinguishable from zero" check
+JUMP_GAP_DAYS_CUTOFF = 5   # matches STALE_GAP_DAYS -- same convention as the swing project's own Bug #11 exclusion
+
+
+def same_isin_jump_excluded_entities(con) -> set[str]:
+    """entity_id set to exclude (BUGS.md Bug #11: same-ISIN, no-gap price
+    collapses unguarded anywhere else in this codebase -- MAJESCO-shape).
+    Single source of truth for this exclusion within the monitor package,
+    so the regime-count script, the CLI monitor, and the web payload all
+    apply the identical set -- previously an inconsistency (this exclusion
+    was applied everywhere else in the swing project but NOT in the
+    original regime-count script this module was ported from; corrected
+    here, see the module docstring's "Known discrepancy, now resolved"
+    note)."""
+    from data_layer.same_isin_jump_guard import unexplained_same_isin_jump_entities
+    flagged = unexplained_same_isin_jump_entities(con)  # full warehouse, no `before` cutoff
+    flagged_tight = flagged[flagged["gap_days"] <= JUMP_GAP_DAYS_CUTOFF]
+    return set(flagged_tight["entity_id"].unique())
 
 
 def compute_daily_persistence(panel: pd.DataFrame, jump_dates: dict | None = None,

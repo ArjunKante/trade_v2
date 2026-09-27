@@ -750,6 +750,30 @@ consume `unexplained_jump_dates`, but there is no unaddressed gap of the
 kind assumed when this bug was first found. No entry was added to
 `trade-info`'s `DESIGN.md`; reported to the user instead of guessing.
 
+**UPDATE, 2026-09-27: grep-for-siblings, prompted by building the
+momentum-persistence monitor (`src/monitor/persistence.py`).** The
+monitor's own reference script (`scripts/run_momentum_persistence_regime_
+count.py`) was found NOT applying this exclusion despite being asked to
+apply it -- fixed there and in the monitor's other two entry points
+(`scripts/run_momentum_persistence_monitor.py`, `src/monitor/web.py`),
+now sharing one `same_isin_jump_excluded_entities()` helper. Checked
+further, per instruction: **seven other scripts in this project compute
+cross-sectional persistence or rank IC without this exclusion** --
+`scripts/run_phase_e_factors.py`, `run_factor_ic_report.py`,
+`run_phase2_diagnostics.py`, `run_ey_momentum_diagnostic.py`,
+`run_combination_ic_power_analysis.py`, `run_concentration_diagnostic.py`,
+`run_lineage_jump_fix_impact.py`. All predate this bug's discovery (found
+later, via the swing project) and feed already-published results in
+`FINDINGS.md`/`FUNDAMENTALS.md` -- **not retroactively recomputed here**,
+consistent with this entry's own original "not fixed" scope (excluding
+78 entities moved the one number checked, the swing backtest's headline
+percentile, by 0.9 points; whether it would move any of these seven
+scripts' own published numbers, and whether any of them are worth
+re-running, is not decided by this update). Recorded so the blast radius
+already anticipated in this entry's own text ("would affect the MAIN
+momentum project's own... computations... not checked there") is now a
+concrete, named list instead of a general worry.
+
 ## Bug #12: the pre-registered fundamentals-screener risk filter was never applied in any swing candidate-count or backtest run -- the same class as Bug #7 (a spec assumed a capability the actual join/computation did not have)
 
 **Found while specifying the Phase 3 decomposition diagnostic**, checking

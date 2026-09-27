@@ -9,6 +9,20 @@ follow the structure given in the authorizing instructions exactly.
 
 ## Validation constraint -- stated up front, because it bounds every hypothesis below
 
+**UPDATE, 2026-09-27, after this document was first written**:
+`FINDINGS.md` Section 7 now records the historical holdout as
+**RETIRED**, not "2 of 3 spent, 1 remaining" -- the momentum-persistence
+monitor built from this document's own Hypothesis A reads the window on
+every run, permanently, which makes it not sealed in any meaningful
+sense regardless of how any individual read was charged. There is no
+remaining slot at all now, for any hypothesis, short-horizon or
+otherwise. This does not change any conclusion below -- the section
+already stated forward-only validation as the only clean path for
+anything new; it is now true of everything in this repository, not only
+new short-horizon variants, and formally, not provisionally. Left as
+originally written below, with this update noted rather than the
+original text silently rewritten.
+
 There is **no untouched historical validation window** left for a new
 short-horizon hypothesis. `FINDINGS.md` Section 7 (this project) records
 the shared project-wide holdout ledger at **2 of 3 spent**, and the
@@ -642,7 +656,13 @@ momentum-modification hypotheses this document proposes -- structural
   timeframe shorter than the decades `FINDINGS.md` Section 12 already
   measured as necessary for a comparable incremental claim.
 - Spend the one remaining project-wide holdout slot on another
-  short-horizon variant.
+  short-horizon variant. **(Superseded 2026-09-27: there is no remaining
+  slot at all now -- `FINDINGS.md` Section 7 records the historical
+  holdout as retired. Restated: do not treat any future forward-collected
+  data as a substitute sealed holdout either -- forward validation is the
+  only validation path left, for anything, and it is not a replacement
+  sealed window with the same properties, just the only option
+  remaining.)**
 
 ### 4. Candidate hypotheses
 
@@ -664,10 +684,12 @@ persistence measurement itself rather than at either universe choice, and
 matching Project 1's own placebo-validated sign-reversal finding
 independently). A-descriptive **produces understanding, not returns** --
 it asserts nothing about the future, so it needs no validation and cannot
-fail one. It does not compete with Value/Quality/Size or the
-`trailing_vol_252`/`beta_252` retest for the one remaining project-wide
-holdout slot (it needs none, ever), and it can begin immediately on
-already-available data with no new infrastructure.
+fail one. It never needed any holdout slot (it needs none, ever, by
+design) -- and per the 2026-09-27 retirement decision (`FINDINGS.md`
+Section 7), there is no slot left to compete for regardless: Value/
+Quality/Size and the `trailing_vol_252`/`beta_252` retest are now
+forward-only prospects too, same as everything else. It can begin
+immediately on already-available data with no new infrastructure.
 
 **A-actionable is explicitly NOT recommended at this time.** Measured
 directly for this document: only 3 mechanical persistence regimes exist

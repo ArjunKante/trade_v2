@@ -125,8 +125,12 @@ def real_pre_holdout_daily():
     from data_layer.lineage_jump_guard import unexplained_jump_boundaries
     from data_layer.holdout import SEALED_HOLDOUT_START
 
+    from monitor.persistence import same_isin_jump_excluded_entities
+
     con = get_read_connection(WAREHOUSE)
-    panel = read_entity_panel(con)  # pre-holdout by default, no authorize_holdout
+    excluded = same_isin_jump_excluded_entities(con)  # BUGS.md Bug #11
+    panel_all = read_entity_panel(con)  # pre-holdout by default, no authorize_holdout
+    panel = panel_all[~panel_all["entity_id"].isin(excluded)].reset_index(drop=True)
     jump_dates = unexplained_jump_boundaries(con, before=SEALED_HOLDOUT_START)
     con.close()
     return compute_daily_persistence(panel, jump_dates)

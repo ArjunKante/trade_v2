@@ -9,9 +9,16 @@ REFACTORED: the statistic and regime-rule computation now live in
 src/monitor/persistence.py (built after this script, per instruction, to
 be the module's single source of truth) -- this script imports from
 there instead of duplicating the logic, so the two cannot drift apart.
-Output is unchanged from the original run (3 regimes, 8 pre-holdout
-years) -- this refactor changes where the code lives, not what it
-computes.
+
+CORRECTED (second pass): now excludes the 78 same-ISIN-jump entities
+(BUGS.md Bug #11), matching every other rigorous computation in this
+project. The original instruction to build the monitor was
+self-contradictory (reuse this script's definition exactly, AND apply
+same-ISIN exclusions -- this script did not originally apply them);
+resolved by adding the exclusion HERE, so "the script's definition" and
+"the same-ISIN-excluded definition" are the same thing going forward.
+Regime count re-verified after the fix: still exactly 3 (2017-2019 +,
+2020 -, 2021-2024 +) -- unchanged from the pre-fix run.
 
 Pre-holdout only (`read_entity_panel`'s default; `authorize_holdout` never
 passed). No new holdout touch.
@@ -32,17 +39,23 @@ from data_layer.db import get_read_connection
 from data_layer.entity_panel import read_entity_panel
 from data_layer.lineage_jump_guard import unexplained_jump_boundaries
 from data_layer.holdout import SEALED_HOLDOUT_START
-from monitor.persistence import compute_daily_persistence, annual_mean_sign, mechanical_regimes
+from monitor.persistence import (
+    compute_daily_persistence, annual_mean_sign, mechanical_regimes,
+    same_isin_jump_excluded_entities,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> int:
     con = get_read_connection(ROOT / "data" / "warehouse.duckdb")
-    panel = read_entity_panel(con)  # pre-holdout by default, no authorize_holdout
+    excluded = same_isin_jump_excluded_entities(con)  # BUGS.md Bug #11
+    panel_all = read_entity_panel(con)  # pre-holdout by default, no authorize_holdout
+    panel = panel_all[~panel_all["entity_id"].isin(excluded)].reset_index(drop=True)
     jump_dates = unexplained_jump_boundaries(con, before=SEALED_HOLDOUT_START)
     con.close()
 
+    print(f"Excluded {len(excluded)} same-ISIN-jump entities (BUGS.md Bug #11)", file=sys.stderr)
     daily = compute_daily_persistence(panel, jump_dates)
     print(f"Merged momentum+forward-return rows -> {len(daily)} distinct qualifying dates", file=sys.stderr)
 

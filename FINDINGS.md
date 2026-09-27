@@ -211,12 +211,13 @@ what makes the fix credible rather than a convenient adjustment.
   carries the diagnostic history in Section 5 and has not earned a holdout
   spend of its own.
 
-## 7. Holdout status: spent (2 of 3 reads used, 1 remaining)
+## 7. Holdout status: RETIRED -- no historical holdout remains
 
-Study 1 of 3 complete. The sealed 18-month holdout for this dataset has
-been read once, per `PREREGISTRATION.md`, and is now **spent**. Per this
-project's own standing rule, it cannot be re-read, re-run on a modified
-configuration, or appealed.
+**Historical record, before the retirement decision below**: Study 1 of 3
+complete. The sealed 18-month holdout for this dataset was read once, per
+`PREREGISTRATION.md`, and was **spent**. Per this project's own standing
+rule, it could not be re-read, re-run on a modified configuration, or
+appealed.
 
 **Second read, 2026-09-27**: the sibling swing project's own
 `PREREGISTRATION_SWING_V1.md` (V1, dip-in-momentum-winners, Top-10
@@ -230,14 +231,41 @@ null drawn from POOL_ML restricted to the same holdout window). This is
 an unrelated rule (a 5-day-horizon dip-reversal signal within momentum
 winners) on an overlapping but not identical universe (POOL_ML requires a
 liquidity-tercile screen this Study did not apply) -- reported here only
-so the shared resource's ledger stays accurate, not as a finding about
+so the shared resource's ledger stayed accurate, not as a finding about
 `momentum_12_1` itself.
 
-**One further pre-registered study remains available against this
-dataset** (Value/Quality/Size construction, or a retest of
-`trailing_vol_252`/`beta_252` under its own pre-registration, were the
-two candidates named after Study 1 -- not decided here, and now only one
-of the two remains fundable, not both).
+**Third read, 2026-09-27, the one that changes the ledger's own status**:
+`src/monitor/persistence.py` (Hypothesis A-descriptive,
+`NEW_RESEARCH_DIRECTION.md`) was built to compute a descriptive,
+non-evaluative statistic on data through the latest available price,
+requiring the same `authorize_holdout=True` bypass a third time. Read at
+first, by analogy to the sibling `trade-info` project's own
+`FRESH_DATA_CONTRACT.md` (which exempts "regime-indicator audits" from
+its pass/fail-verdict firewall), as NOT charging this third slot.
+
+**That reasoning is now superseded, per explicit decision, and the
+ledger's status changes as a result -- not the count, the STATUS.** A
+one-time descriptive read might plausibly not spend a sealed window, but
+`src/monitor/persistence.py` reads it on EVERY run, permanently going
+forward: a window continuously displayed is not sealed in any meaningful
+sense, regardless of how the individual read is characterized. It had
+also already been read twice by actual pre-registered strategies (this
+Study 1, swing V1) before the monitor ever existed. **Therefore: the
+historical holdout (`SEALED_HOLDOUT_START = 2025-03-19` onward) is
+CLOSED.** The ledger is not "2 of 3 spent, 1 remaining" but **RETIRED --
+no historical holdout remains, for any hypothesis, from any project
+sharing this warehouse.** The third pre-registered study slot named after
+Study 1 (Value/Quality/Size construction, or a `trailing_vol_252`/
+`beta_252` retest) is not fundable against a historical holdout any
+longer, because there is no historical holdout left to evaluate it
+against.
+
+**All future validation, for any hypothesis in this repository, is
+FORWARD-ONLY: on data arriving after 2026-09-27**, the date of this
+decision. `data/holdout_access_log.txt` continues to log every read
+through the now-retired window, for the audit trail -- those entries no
+longer represent a resource being preserved, only a record of when data
+was read.
 
 ## 8. What this is not
 

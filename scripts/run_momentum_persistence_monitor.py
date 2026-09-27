@@ -6,16 +6,14 @@ trade-new-holdout firewall reasoning -- not repeated in full here.
 
 THIS SCRIPT, LIKE `scripts/run_holdout_study1.py` and
 `scripts/run_swing_v1_holdout.py` before it, PASSES `authorize_holdout=
-True` -- a THIRD use of that bypass in this project. Per
-`src/monitor/persistence.py`'s own docstring: this is read here as a
-descriptive, non-evaluative regime-indicator audit, not a pass/fail
-evaluation of any pre-registered rule, and per that reasoning does not
-charge the third and final project-wide holdout slot recorded in
-`FINDINGS.md` Section 7 -- an inference by analogy to the sibling
-trade-info project's own explicit contract language, not a rule this
-project has written down for itself, flagged so it can be overridden.
-Every run of this script is logged to `data/holdout_access_log.txt`
-with that distinction stated explicitly, regardless.
+True`. Per `FINDINGS.md` Section 7 (updated) and
+`src/monitor/persistence.py`'s own docstring: the historical holdout
+(`SEALED_HOLDOUT_START` onward) is now RETIRED, not merely "not charged"
+-- a window this monitor reads on every run is not sealed in any
+meaningful sense, and it had already been read twice by actual strategies
+before this monitor existed. Every run is still logged to
+`data/holdout_access_log.txt` for the audit trail, but that log no longer
+represents a resource being preserved -- there is nothing left to spend.
 
 Appends exactly ONE row to `monitor_logs/momentum_persistence_log.csv`
 per run -- never rewrites a past row. That file is committed with the
@@ -42,6 +40,7 @@ from data_layer.lineage_jump_guard import unexplained_jump_boundaries
 from monitor.persistence import (
     compute_daily_persistence, annual_mean_sign, mechanical_regimes,
     nonoverlapping_periods, rolling_mean_se, current_readout,
+    same_isin_jump_excluded_entities,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,11 +58,11 @@ def _append_holdout_access_log() -> None:
         f.write(
             f"{dt.datetime.now().isoformat()} | scripts/run_momentum_persistence_monitor.py | "
             f"authorize_holdout=True | DESCRIPTIVE, NON-EVALUATIVE regime-indicator audit "
-            f"(momentum-persistence monitor, src/monitor/persistence.py) -- read by analogy to "
-            f"trade-info/FRESH_DATA_CONTRACT.md Section C/D's own "
-            f"'regime-indicator audit != pass/fail evaluation' carve-out; does NOT charge a "
-            f"project-wide holdout slot under that reasoning, flagged as an inference, not an "
-            f"established rule\n"
+            f"(momentum-persistence monitor, src/monitor/persistence.py) -- read against the "
+            f"HISTORICAL HOLDOUT, now RETIRED per FINDINGS.md Section 7 (a window this monitor "
+            f"reads on every run is not sealed in any meaningful sense; already read twice by "
+            f"actual strategies before this monitor existed). This log entry is an audit-trail "
+            f"record of when data was read, not a charge against a resource that still exists\n"
         )
 
 
@@ -83,9 +82,12 @@ def main() -> int:
           file=sys.stderr, flush=True)
 
     con = get_read_connection(ROOT / "data" / "warehouse.duckdb")
-    panel = read_full_entity_panel_authorized(con, authorize_holdout=True)
+    excluded = same_isin_jump_excluded_entities(con)  # BUGS.md Bug #11
+    panel_all = read_full_entity_panel_authorized(con, authorize_holdout=True)
+    panel = panel_all[~panel_all["entity_id"].isin(excluded)].reset_index(drop=True)
     jump_dates = unexplained_jump_boundaries(con, before=None)  # full-range gap guard
     con.close()
+    print(f"Excluded {len(excluded)} same-ISIN-jump entities (BUGS.md Bug #11)", file=sys.stderr)
 
     daily = compute_daily_persistence(panel, jump_dates)
     if daily.empty:

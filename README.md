@@ -11,8 +11,8 @@ study designs and decision rules.
 | `momentum_12_1` | **Established.** Replicated in two differently-constructed Indian universes (microcap whole-market, large-cap top-200). Sealed holdout evaluated once and passed. |
 | `earnings_yield` | **Suggestive, not established.** Independent of momentum (near-zero cross-sectional correlation), but fails multiple-comparisons correction on its own. |
 | momentum + earnings_yield combination | **Untestable on this data, at any reachable horizon.** A power analysis (portfolio margin, then the more efficient paired rank-IC difference) found the measurement too noisy relative to any economically plausible effect size — not evidence the effect is absent, evidence it can't be distinguished from noise here. |
-| sealed price holdout | **Spent** (one pre-registered study, passed). Cannot be re-read, re-run, or appealed. |
-| final pre-registered study slot | **Held, unspent** — deliberately not spent on a test that couldn't have passed. |
+| sealed price holdout | **RETIRED** (`FINDINGS.md` Section 7, 2026-09-27) — read three times (this Study, swing V1, the momentum-persistence monitor), the last of which reads it on every run going forward; a window continuously displayed is not sealed in any meaningful sense, so the window is closed rather than left "spent but ambiguous." No historical holdout remains for any hypothesis in this repository. |
+| final pre-registered study slot | **Not fundable against a historical holdout.** There is no sealed window left to evaluate it against; any future study is forward-only, per `FINDINGS.md` Section 7. |
 
 Full detail, in reading order: `FINDINGS.md` (the momentum studies and the
 combination power-analysis finding), `FUNDAMENTALS.md` (the fundamentals

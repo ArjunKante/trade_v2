@@ -235,6 +235,15 @@ the project's own ledger stays accurate and nobody double-spends the
 remaining slot later. Not done in this document, since nothing has been
 read yet.
 
+**UPDATE, 2026-09-27, after both the V1 holdout read (Section 5's result:
+FAIL) and the momentum-persistence monitor were built**: the "2 of 3
+spent, 1 remaining" framing above is superseded. `FINDINGS.md` Section 7
+now records the historical holdout as **RETIRED** -- a monitor that reads
+the window on every run makes it not sealed in any meaningful sense,
+regardless of how any single read (including this V1 read) was
+individually charged. There is no remaining slot to charge anything
+against; any future study against this dataset is forward-only.
+
 **What is, and is not, contaminated by Study 1 having already read this
 window**:
 

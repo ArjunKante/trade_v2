@@ -29,13 +29,17 @@ gap-guarded (`STALE_GAP_DAYS`, `factors.momentum`/`factors.target`'s own
 lineage-jump-guard convention). Dates with fewer than
 `MIN_CROSS_SECTION_N` (20) names in the merged cross-section are dropped.
 
-**Known discrepancy, not silently resolved**: this reuses
-`scripts/run_momentum_persistence_regime_count.py`'s original definition
-exactly, per explicit instruction. That script does not exclude the 78
-same-ISIN-jump entities BUGS.md Bug #11 found, unlike every other
-rigorous computation in this project (the swing decomposition, the swing
-V1 checks, the swing V1 holdout read). Whether the 3-regime figure below
-would change under that exclusion is open and not answered here.
+**Known discrepancy, now resolved**: the original instruction to reuse
+the regime-count script's definition exactly, AND apply same-ISIN
+exclusions, was self-contradictory -- that script did not originally
+apply them. Fixed by adding the exclusion in one place
+(`monitor.persistence.same_isin_jump_excluded_entities`), used
+identically by the regime-count script, the CLI monitor, and the web
+payload. Rerun after the fix: still exactly 3 regimes -- the count below
+is unchanged. **Grep-for-siblings**: 7 other scripts in this project
+compute cross-sectional persistence/IC without this exclusion (BUGS.md
+Bug #11's update, 2026-09-27, names them) -- all predate Bug #11 and feed
+already-published results, not retroactively recomputed here.
 
 ## The lag
 
@@ -83,17 +87,22 @@ Section C explicitly names "regime-indicator audits" as the category
 distinguished FROM evidence of a tradeable edge -- exactly what this
 module is.
 
-**trade-new's own holdout**: the closer, more directly relevant question.
-Getting a "measured through" date near the true latest price requires
+**trade-new's own holdout -- RETIRED, not merely "not charged."** Getting
+a "measured through" date near the true latest price requires
 `data_layer.entity_panel.read_full_entity_panel_authorized(con,
-authorize_holdout=True)` -- a THIRD use of that bypass in this project
-(`FINDINGS.md` Section 7: 2 of 3 slots already spent). Applying the same
-principle `trade-info`'s own contract states explicitly (a descriptive,
-non-pass/fail statistic is not "an evaluation"), this read is treated as
-NOT charging the third slot -- **an inference by analogy, not a rule this
-project has written down for itself**, flagged so it can be overridden.
-Every such read is logged to `data/holdout_access_log.txt` with this
-distinction stated, regardless of whether the reasoning is accepted.
+authorize_holdout=True)`, the same bypass used a third time by this
+module. The original reasoning here (by analogy to `trade-info`'s own
+contract, a descriptive statistic doesn't charge a study-cap slot) is
+**superseded**: `FINDINGS.md` Section 7 now records the historical
+holdout (`SEALED_HOLDOUT_START` onward) as **RETIRED**. A one-time read
+might not spend a sealed window, but this monitor reads it on every run,
+permanently -- a window continuously displayed is not sealed in any
+meaningful sense, and it had already been read twice by actual strategies
+(Study 1, swing V1) before this monitor existed. There is no slot left
+to charge or not charge. `data/holdout_access_log.txt` still logs every
+read, but as an audit trail only -- not a record of a resource being
+preserved. All future validation for anything in this repository is
+forward-only, from 2026-09-27.
 
 ## Usage
 
