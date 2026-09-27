@@ -21,6 +21,7 @@ import uvicorn
 
 from data_layer.db import get_read_connection
 from reports.screener_web import build_cache, create_app
+from monitor.web import build_monitor_payload
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST = "127.0.0.1"
@@ -30,6 +31,7 @@ PORT = 8765
 def main():
     con = get_read_connection(ROOT / "data" / "warehouse.duckdb")
     cache = build_cache(con, progress=lambda msg: print(msg, file=sys.stderr))
+    cache["monitor"] = build_monitor_payload(con, ROOT, progress=lambda msg: print(msg, file=sys.stderr))
     con.close()
 
     app = create_app(cache)

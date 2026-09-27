@@ -110,6 +110,29 @@
   .st-SKIPPED { color: var(--finpartial); }
   svg.spark { display: block; margin-top: 6px; }
   .spark-caption { color: var(--text-faint); font-size: 10.5px; margin-top: 2px; }
+
+  #tabs {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  #tabs button {
+    background: none; border: none; color: var(--text-dim); font-family: inherit;
+    font-size: 12.5px; padding: 8px 16px; cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  #tabs button:hover { color: var(--text); }
+  #tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  #monitorBanner {
+    background: #24282e; color: #b9c2cc; border-bottom: 1px solid #3a4048;
+    padding: 8px 16px; font-size: 12.5px; line-height: 1.5;
+  }
+  #monitorView { padding: 18px 20px 60px; max-width: 980px; }
+  #monitorReadout { margin-bottom: 20px; }
+  #monitorReadout .lag-sentence { font-size: 13px; color: var(--text); margin-bottom: 8px; }
+  #monitorReadout .label-line { font-size: 12.5px; color: var(--text-dim); }
+  #monitorReadout .label-value { color: var(--accent); }
+  #monitorChartWrap { margin-top: 10px; }
+  .regime-tag { color: var(--text-faint); font-size: 10.5px; }
+  #monitorMeta { color: var(--text-faint); font-size: 11px; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -118,31 +141,49 @@
   Momentum selection is tested (holdout passed). The fundamental filter is an untested modification.
   This is a reading list, not a validated strategy.
 </div>
-<div id="meta"></div>
-<div id="controls">
-  <span><label for="fVerdict">verdict</label><select id="fVerdict"><option value="">(all)</option></select></span>
-  <span><label for="fSector">sector</label><select id="fSector"><option value="">(all)</option></select></span>
-  <span id="count"></span>
+
+<div id="tabs">
+  <button id="tabScreener" class="active">Screener</button>
+  <button id="tabMonitor">Momentum Persistence Monitor</button>
 </div>
 
-<div id="main">
-  <div id="tablewrap">
-    <table>
-      <thead>
-        <tr>
-          <th data-key="symbol">symbol</th>
-          <th data-key="name">name</th>
-          <th data-key="verdict">verdict</th>
-          <th class="num" data-key="momentum_rank">mom rank</th>
-          <th class="num" data-key="momentum_value">momentum_12_1</th>
-          <th data-key="sector">sector</th>
-          <th data-key="liquidity_tercile">liquidity</th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
+<div id="screenerView">
+  <div id="meta"></div>
+  <div id="controls">
+    <span><label for="fVerdict">verdict</label><select id="fVerdict"><option value="">(all)</option></select></span>
+    <span><label for="fSector">sector</label><select id="fSector"><option value="">(all)</option></select></span>
+    <span id="count"></span>
   </div>
-  <div id="panel"><div id="panelInner"></div></div>
+
+  <div id="main">
+    <div id="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-key="symbol">symbol</th>
+            <th data-key="name">name</th>
+            <th data-key="verdict">verdict</th>
+            <th class="num" data-key="momentum_rank">mom rank</th>
+            <th class="num" data-key="momentum_value">momentum_12_1</th>
+            <th data-key="sector">sector</th>
+            <th data-key="liquidity_tercile">liquidity</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div id="panel"><div id="panelInner"></div></div>
+  </div>
+</div>
+
+<div id="monitorView" style="display:none">
+  <div id="monitorBanner">
+    Descriptive only. Measures how momentum ranked stocks one quarter ago versus how they then
+    performed. Does not predict returns and does not change any position.
+  </div>
+  <div id="monitorReadout"><em class="label-line">Loading...</em></div>
+  <div id="monitorChartWrap"></div>
+  <div id="monitorMeta"></div>
 </div>
 
 <script>
@@ -488,6 +529,134 @@ function renderDetail(r) {
 
 loadMeta();
 loadCompanies();
+
+// ---------------------------------------------------------------------------
+// Momentum Persistence Monitor -- descriptive only, its own tab, no wiring
+// into the screener's filtering/ranking/table above in either direction.
+// ---------------------------------------------------------------------------
+
+let monitorLoaded = false;
+
+function switchTab(which) {
+  const screenerBtn = document.getElementById("tabScreener");
+  const monitorBtn = document.getElementById("tabMonitor");
+  const screenerView = document.getElementById("screenerView");
+  const monitorView = document.getElementById("monitorView");
+  if (which === "monitor") {
+    screenerBtn.classList.remove("active"); monitorBtn.classList.add("active");
+    screenerView.style.display = "none"; monitorView.style.display = "block";
+    if (!monitorLoaded) { monitorLoaded = true; loadMonitor(); }
+  } else {
+    monitorBtn.classList.remove("active"); screenerBtn.classList.add("active");
+    monitorView.style.display = "none"; screenerView.style.display = "block";
+  }
+}
+document.getElementById("tabScreener").addEventListener("click", () => switchTab("screener"));
+document.getElementById("tabMonitor").addEventListener("click", () => switchTab("monitor"));
+
+async function loadMonitor() {
+  const data = await (await fetch("/api/monitor")).json();
+  if (!data.available) {
+    document.getElementById("monitorReadout").innerHTML =
+      `<span class="na">Not available -- insufficient history to compute a reading yet.</span>`;
+    return;
+  }
+  renderMonitorReadout(data.readout);
+  renderMonitorChart(data.periods, data.regimes);
+  document.getElementById("monitorMeta").textContent = `computed ${data.generated_at}`;
+}
+
+function renderMonitorReadout(r) {
+  const el = document.getElementById("monitorReadout");
+  if (!r.available) {
+    el.innerHTML = `<span class="na">${escapeHtml(r.reason || "not available")}</span>`;
+    return;
+  }
+  const rollingLine = (r.rolling_mean === null || r.rolling_mean === undefined)
+    ? `<div class="label-line">${escapeHtml(r.label)}</div>`
+    : `<div class="label-line">Trailing ~3-year rolling mean: <span class="label-value">${fmtNum(r.rolling_mean, 4)}</span>
+         (SE ${fmtNum(r.se, 4)}, 95% interval [${fmtNum(r.ci_lo, 4)}, ${fmtNum(r.ci_hi, 4)}]) --
+         <span class="label-value">${escapeHtml(r.label)}</span></div>`;
+  el.innerHTML = `
+    <div class="lag-sentence">${escapeHtml(r.lag_sentence)}</div>
+    <div class="label-line">Latest single-period value: <span class="label-value">${fmtNum(r.latest_value, 4)}</span></div>
+    ${rollingLine}
+  `;
+}
+
+// Plain inline SVG line chart -- no external library, matching this app's
+// existing spark-line convention. Neutral styling throughout: one line
+// color, one band color, alternating NEUTRAL gray regime bands (not
+// colour-coded by sign) -- no red/green, no arrows.
+function renderMonitorChart(periods, regimes) {
+  const wrap = document.getElementById("monitorChartWrap");
+  if (!periods || !periods.length) { wrap.innerHTML = ""; return; }
+
+  const W = 900, H = 260, padL = 46, padR = 12, padT = 12, padB = 24;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const dates = periods.map(p => new Date(p.period_end).getTime());
+  const x0 = dates[0], x1 = dates[dates.length - 1];
+  const xScale = t => padL + (x1 === x0 ? 0 : (t - x0) / (x1 - x0) * plotW);
+
+  const allVals = [];
+  periods.forEach(p => {
+    allVals.push(p.mean_persistence);
+    if (p.ci_lo !== null) allVals.push(p.ci_lo);
+    if (p.ci_hi !== null) allVals.push(p.ci_hi);
+  });
+  let yMin = Math.min(...allVals, 0), yMax = Math.max(...allVals, 0);
+  const yPad = (yMax - yMin) * 0.1 || 0.05;
+  yMin -= yPad; yMax += yPad;
+  const yScale = v => padT + (yMax - v) / (yMax - yMin) * plotH;
+
+  // regime bands -- alternating neutral shades, no color-by-sign
+  const regimeBands = (regimes || []).map((reg, i) => {
+    const startT = new Date(`${reg.start_year}-01-01`).getTime();
+    const endT = new Date(`${reg.end_year}-12-31`).getTime();
+    const bx0 = Math.max(padL, xScale(Math.max(startT, x0)));
+    const bx1 = Math.min(padL + plotW, xScale(Math.min(endT, x1)));
+    if (bx1 <= bx0) return "";
+    const fill = i % 2 === 0 ? "#28292b" : "#232426";
+    const label = reg.start_year === reg.end_year ? `${reg.start_year}` : `${reg.start_year}-${reg.end_year}`;
+    return `<rect x="${bx0.toFixed(1)}" y="${padT}" width="${(bx1 - bx0).toFixed(1)}" height="${plotH}" fill="${fill}" />
+            <text x="${((bx0 + bx1) / 2).toFixed(1)}" y="${padT + 12}" text-anchor="middle" class="regime-tag" fill="#5c5e62" font-size="10">${label}</text>`;
+  }).join("");
+
+  const zeroY = yScale(0).toFixed(1);
+
+  // 95% CI band around the rolling mean (only where it exists)
+  const bandPts = periods.filter(p => p.ci_lo !== null && p.ci_hi !== null);
+  let bandPath = "";
+  if (bandPts.length > 1) {
+    const top = bandPts.map(p => `${xScale(new Date(p.period_end).getTime()).toFixed(1)},${yScale(p.ci_hi).toFixed(1)}`);
+    const bot = bandPts.slice().reverse().map(p => `${xScale(new Date(p.period_end).getTime()).toFixed(1)},${yScale(p.ci_lo).toFixed(1)}`);
+    bandPath = `<polygon points="${top.concat(bot).join(" ")}" fill="#4a5560" fill-opacity="0.25" stroke="none" />`;
+  }
+
+  const linePts = periods.map(p => `${xScale(new Date(p.period_end).getTime()).toFixed(1)},${yScale(p.mean_persistence).toFixed(1)}`).join(" ");
+  const rollingPts = periods.filter(p => p.rolling_mean !== null)
+    .map(p => `${xScale(new Date(p.period_end).getTime()).toFixed(1)},${yScale(p.rolling_mean).toFixed(1)}`).join(" ");
+
+  wrap.innerHTML = `
+    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+      ${regimeBands}
+      <line x1="${padL}" y1="${zeroY}" x2="${padL + plotW}" y2="${zeroY}" stroke="#4a4c50" stroke-dasharray="3,3" />
+      ${bandPath}
+      <polyline points="${linePts}" fill="none" stroke="#7a7c80" stroke-width="1.2" />
+      <polyline points="${rollingPts}" fill="none" stroke="#c9cbcf" stroke-width="1.8" />
+      <text x="${padL}" y="${H - 4}" font-size="10" fill="#5c5e62">${periods[0].period_end}</text>
+      <text x="${padL + plotW}" y="${H - 4}" font-size="10" fill="#5c5e62" text-anchor="end">${periods[periods.length - 1].period_end}</text>
+      <text x="${padL - 6}" y="${zeroY}" font-size="10" fill="#5c5e62" text-anchor="end" dominant-baseline="middle">0</text>
+    </svg>
+    <div class="spark-caption">
+      thin line: per-period (63-trading-day) mean &nbsp;&middot;&nbsp;
+      thick line: trailing ~3-year rolling mean &nbsp;&middot;&nbsp;
+      shaded band: its 95% interval &nbsp;&middot;&nbsp;
+      gray columns: the mechanical regime segmentation (labelled by year range, not by sign)
+    </div>
+  `;
+}
 </script>
 </body>
 </html>

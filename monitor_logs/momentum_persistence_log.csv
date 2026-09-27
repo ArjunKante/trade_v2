@@ -1,0 +1,2 @@
+run_timestamp,latest_signal_date,measured_through_date,latest_value,rolling_mean,se,regime_label
+2026-09-27T19:25:06,2026-06-19,2026-09-18,0.165952,0.067696,0.018459,positive

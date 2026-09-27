@@ -200,4 +200,10 @@ def create_app(cache: dict) -> FastAPI:
             raise HTTPException(status_code=404, detail=f"{symbol} is not in the current top-decile cache.")
         return JSONResponse(detail)
 
+    @app.get("/api/monitor")
+    def monitor():
+        # Descriptive only -- see src/monitor/persistence.py's module docstring.
+        # Never touched by, and never touches, any screener route above.
+        return JSONResponse(cache.get("monitor", {"available": False}))
+
     return app
