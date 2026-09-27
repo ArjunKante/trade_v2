@@ -77,9 +77,13 @@ against these entities uniformly flattering the result, not for it.
 24, 25, 25, 13, 13, 19 -- no single-period concentration), and 14 of 78
 entered during the 5-rebalance holdout window (29 hits, spread across all
 5 dates, 4-7 names per date). 0 of 78 ever entered Study 2's large-cap
-(top-200-by-turnover) top decile at any point -- unsurprising, since the
-78 are mostly illiquid/thin names by the same mechanism that produced
-Bug #11 in the first place.
+top decile, but **29 of 78 were in the large-cap UNIVERSE (the
+top-200-by-turnover benchmark) at some point** -- present in every year
+2018-2026, 15-20 names each year -- including large, liquid names
+(JSWSTEEL, GRASIM, TRENT among them, confirmed by symbol lookup, not just
+thin illiquid ones); the large-cap margin moved because excluding these
+29 changed the BENCHMARK's own composition, not because any of the 78
+were ever a top-decile pick.
 
 **Closed, per this check's own pre-committed rule**: all three condition
 sets passed, on all three comparisons, with modest bidirectional margin
