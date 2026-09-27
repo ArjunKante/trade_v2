@@ -211,15 +211,33 @@ what makes the fix credible rather than a convenient adjustment.
   carries the diagnostic history in Section 5 and has not earned a holdout
   spend of its own.
 
-## 7. Holdout status: spent
+## 7. Holdout status: spent (2 of 3 reads used, 1 remaining)
 
 Study 1 of 3 complete. The sealed 18-month holdout for this dataset has
 been read once, per `PREREGISTRATION.md`, and is now **spent**. Per this
 project's own standing rule, it cannot be re-read, re-run on a modified
-configuration, or appealed. Two further pre-registered studies remain
-available against this dataset (Value/Quality/Size construction, or a
-retest of `trailing_vol_252`/`beta_252` under their own pre-registration,
-are both candidates -- not decided here).
+configuration, or appealed.
+
+**Second read, 2026-09-27**: the sibling swing project's own
+`PREREGISTRATION_SWING_V1.md` (V1, dip-in-momentum-winners, Top-10
+concentrated by dip magnitude) charged its holdout evaluation against
+this same resource, per the user's explicit decision recorded there --
+`scripts/run_swing_v1_holdout.py`, logged to
+`data/holdout_access_log.txt`, result in
+`data/swing_logs/swing_v1_holdout_20260927T162530.txt`. **Primary gate:
+FAIL** (percentile 61.4 vs. the required >=95, against a matched-random
+null drawn from POOL_ML restricted to the same holdout window). This is
+an unrelated rule (a 5-day-horizon dip-reversal signal within momentum
+winners) on an overlapping but not identical universe (POOL_ML requires a
+liquidity-tercile screen this Study did not apply) -- reported here only
+so the shared resource's ledger stays accurate, not as a finding about
+`momentum_12_1` itself.
+
+**One further pre-registered study remains available against this
+dataset** (Value/Quality/Size construction, or a retest of
+`trailing_vol_252`/`beta_252` under its own pre-registration, were the
+two candidates named after Study 1 -- not decided here, and now only one
+of the two remains fundable, not both).
 
 ## 8. What this is not
 

@@ -749,3 +749,72 @@ actually excludes flagged rows the way `trade-new`'s factor modules
 consume `unexplained_jump_dates`, but there is no unaddressed gap of the
 kind assumed when this bug was first found. No entry was added to
 `trade-info`'s `DESIGN.md`; reported to the user instead of guessing.
+
+## Bug #12: the pre-registered fundamentals-screener risk filter was never applied in any swing candidate-count or backtest run -- the same class as Bug #7 (a spec assumed a capability the actual join/computation did not have)
+
+**Found while specifying the Phase 3 decomposition diagnostic**, checking
+`PREREGISTRATION_SWING.md`'s Universe section against what the code that
+actually produced every reported swing number does -- not by a test or a
+proactive audit.
+
+**Confirmed directly, not assumed**: `PREREGISTRATION_SWING.md`'s
+"Universe" section, condition 5, freezes `fundamental_screener.py`'s
+verdict != FAIL as a risk filter, applied to every candidate before
+conditions (a)-(c). Neither `scripts/run_swing_phase2_candidate_counts.py`
+(the candidate-count funnel) nor `scripts/run_swing_phase3_backtest.py` /
+`run_swing_phase3_clean_rerun.py` (the frozen-rule backtest, including the
+headline 9.0th/9.8th-percentile finding) reference
+`fundamental_screener` at all -- both funnels are built from exactly
+`momentum ∩ liquidity → bottom-tercile-5d → volume + regime`, four
+conditions, not the five the pre-registration document freezes. This is
+not a silent omission at the code level: `src/swing/universe.py`'s module
+docstring and the Phase 2 script's own header both state the condition is
+"OMITTED" and explain why (see mechanism below) -- but that flag never
+made it back into `PREREGISTRATION_SWING.md` itself or into `SWING.md`'s
+Phase 2/Phase 3 narrative sections, so a reader of either of those two
+documents' headline claims (the candidate-count table, the 9.8th-
+percentile finding) would not know condition 5 never ran. Every
+"the frozen rule" / "the full three-condition rule" claim in this
+project's swing work to date is actually a four-condition rule.
+
+**Mechanism, and why it is the same class as Bug #7**: Bug #7 was a spec
+(the fetch-scope join) built on a field that was reliable in one context
+and silently wrong in another. Here, the pre-registration named a
+screener that exists and runs correctly for its own stated purpose (a
+CURRENT, as-of-today shortlist tool -- see `fundamental_screener.py`'s own
+docstring) but was never built to answer the question the swing rule
+actually needs: a verdict AT EVERY HISTORICAL CANDIDATE DATE across nine
+years. `compute_liquidity_tercile`/`load_current_price_panel`
+(`fundamental_screener.py`) and the P&L/balance-sheet checks it calls are
+all "as of the latest available date" by construction, not point-in-time
+historical. The pre-registration document assumed a capability (a
+historical, point-in-time screener series) that the named module does not
+provide, the same shape of gap as Bug #7's join assuming a field was
+point-in-time-reliable when it was not.
+
+**Impact, scoped honestly**: this is an omitted RISK filter (per the
+pre-registration, "never as ranking input, never as a substitute for
+conditions (a)-(c)"), not a ranking or signal computation -- so it does
+not by itself explain the headline worse-than-random finding (Phase 3's
+9.8th percentile is measured on the four-condition rule against a
+matched-random null drawn from the SAME four-condition candidate pool,
+so the missing fifth condition is common to both the strategy and its
+own benchmark and does not bias that specific comparison). Its actual
+effect is unmeasured: adding it back would shrink the candidate pool by
+however much the screener's cash-flow-quality checks remove (measured at
+one point in time, `fundamental_screener.py`'s own diagnostics: funnel
+147->119->81->43 on the 2026-09-23 run), and that could move the
+backtest's result in either direction, not necessarily toward viability --
+per that module's own docstring, the screen is untested in either
+direction and is known to remove some historically-strong momentum
+turnaround names along with the genuinely weak ones.
+
+**Not fixed here.** Building a point-in-time historical version of
+`fundamental_screener.py`'s checks (quarterly-lagged fiscal points,
+known-date-gated, evaluated as of each of nine years of candidate dates
+rather than once as-of-today) is a separate undertaking -- flagged as an
+open item in `src/swing/universe.py`'s docstring before this bug was
+logged, not attempted as a shortcut inside this diagnostic. This entry
+exists so the gap is recorded in the same place every other spec-vs-
+implementation gap in this project is recorded, rather than left as a
+comment only the module's own docstring reader would find.

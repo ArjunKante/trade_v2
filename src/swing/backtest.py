@@ -28,21 +28,40 @@ rupee P&L directly -- reported in both units at report time.
 """
 from __future__ import annotations
 
+import datetime as dt
+
 import numpy as np
 import pandas as pd
 
+from data_layer.holdout import guard_date_range
 from factors.target import compute_forward_return
 
 HOLD_DAYS = 5
 
 
-def build_open_close_panel(con, before) -> pd.DataFrame:
+def build_open_close_panel(con, before, authorize_holdout: bool = False) -> pd.DataFrame:
     """[entity_id, trade_date, isin, adjusted_open, adjusted_close, volume,
     turnover], strictly before `before` -- same JOIN pattern as
     data_layer.entity_panel.materialize_entity_panel (prices_eod +
     isin_lineage + adjustment_factors), extended with the open column
     (read_entity_panel/entity_prices_daily does not carry it). Read-only
-    against the existing data layer; no schema or table change."""
+    against the existing data layer; no schema or table change.
+
+    GUARD, added when this function was first used for the swing project's
+    real holdout read (previously this function had no guard at all --
+    every prior swing script happened to only ever pass `before=
+    SEALED_HOLDOUT_START`, so the gap was latent, not exercised; flagged as
+    its own finding, not silently patched over). `before` is the query's
+    EXCLUSIVE upper bound (`trade_date < before`), so the guard checks
+    `before - 1 day` -- the actual latest date this query could return --
+    against the sealed window, matching `data_layer.holdout.guard_date_range`'s
+    own convention (`data_layer.entity_panel.read_full_entity_panel_authorized`
+    uses the same pattern). Every existing pre-holdout call
+    (`before=SEALED_HOLDOUT_START` exactly) is unaffected: `before - 1 day`
+    is strictly before the sealed start, so the guard passes with no
+    authorization needed, exactly as before this change."""
+    before_date = before if isinstance(before, dt.date) else pd.Timestamp(before).date()
+    guard_date_range(dt.date(2016, 1, 1), before_date - dt.timedelta(days=1), authorize_holdout=authorize_holdout)
     sql = """
         SELECT l.entity_id, p.trade_date, p.isin, p.open * af.factor AS adjusted_open,
                p.close * af.factor AS adjusted_close, p.volume, p.turnover
