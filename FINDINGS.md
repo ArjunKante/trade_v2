@@ -35,6 +35,58 @@ an unusually strong run for Indian small/mid caps specifically, not with
 the strategy degrading. The margin, not the absolute level, is the number
 this study was designed to test, and the margin held.
 
+**Amendment, 2026-09-27: Bug #11 materiality check, closed.** This is the
+only positive result across all three projects in this repository -- the
+one number that must not rest on contamination. Some of the 78 same-ISIN-
+jump entities BUGS.md Bug #11 found are plausible missed splits
+(JSWSTEEL, GRASIM, TRENT -- zero `corporate_actions` coverage, ratios
+close to common split factors); an uncorrected split fabricates an
+artificial price jump that, if upward, inflates a trailing-12-month
+return and could place a name in momentum's top decile on artifact alone.
+The swing project checked this same contamination and found it immaterial
+there, but swing selects on a 5-day dip, a different exposure to a
+single-day jump than momentum's 12-month-return top-decile selection --
+not assumed to generalize, checked directly instead
+(`scripts/run_momentum_backtest_bug11_check.py`,
+`scripts/run_holdout_study1_bug11_check.py`,
+`scripts/run_study2_largecap_bug11_check.py`; the holdout reread is
+permitted and logged to `data/holdout_access_log.txt` as a materiality
+check on the now-retired window, Section 7, not a new spend).
+
+| | pre-holdout backtest, ORIGINAL | pre-holdout, 78 EXCLUDED | holdout, ORIGINAL | holdout, 78 EXCLUDED | large-cap (Study 2), ORIGINAL | large-cap, 78 EXCLUDED |
+|---|---|---|---|---|---|---|
+| Momentum CAGR | 30.43% | 29.83% (-0.60pp) | 14.72% | 14.76% (+0.04pp) | 17.95% | 20.14% (+2.19pp) |
+| Benchmark CAGR | 18.11% | 18.14% (+0.03pp) | 10.85% | 11.12% (+0.27pp) | 11.39% | 12.84% (+1.45pp) |
+| Margin | +12.32pts | +11.70pts (-0.62) | +3.87pts | +3.64pts (-0.23) | +6.56pts | +7.30pts (+0.74) |
+| Momentum MaxDD | -35.95% | -36.12% (-0.17pp) | -6.48% | -7.85% (-1.37pp) | -36.52% | -33.60% (+2.92pp) |
+| Benchmark MaxDD | -49.82% | -50.01% (-0.19pp) | -10.45% | -10.45% (+0.00pp) | -44.51% | -39.80% (+4.71pp) |
+| Decision rule | -- | all 3 PASS, no flip | -- | all 3 PASS, no flip | -- | all 3 PASS, no flip |
+
+**No condition flipped anywhere. Margins moved modestly, in both
+directions** (down 0.62pts and 0.23pts on the pre-holdout and holdout
+comparisons, up 0.74pts on the large-cap one) -- not a one-directional
+inflation. The holdout margin (3.64 vs. the 3.0-point threshold) is the
+closest to its bar of the three, but still clears it with room, and
+momentum's own holdout MaxDD actually got slightly WORSE excluding these
+entities (-6.48% -> -7.85%) while its CAGR barely moved -- evidence
+against these entities uniformly flattering the result, not for it.
+
+**How many of the 78 ever entered the top decile, and clustering**: 44 of
+78 entered Study 1's (whole-market) top decile at some point pre-holdout
+(138 entity-rebalance hits, spread across every year 2017-2024 -- 9, 10,
+24, 25, 25, 13, 13, 19 -- no single-period concentration), and 14 of 78
+entered during the 5-rebalance holdout window (29 hits, spread across all
+5 dates, 4-7 names per date). 0 of 78 ever entered Study 2's large-cap
+(top-200-by-turnover) top decile at any point -- unsurprising, since the
+78 are mostly illiquid/thin names by the same mechanism that produced
+Bug #11 in the first place.
+
+**Closed, per this check's own pre-committed rule**: all three condition
+sets passed, on all three comparisons, with modest bidirectional margin
+movement -- the momentum holdout pass does not rest on this
+contamination. Not re-run further; the six other scripts sharing this
+same gap (BUGS.md Bug #11's update) remain recorded, not fixed.
+
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 
 This is the finding that matters more than the headline pass, and it is the
