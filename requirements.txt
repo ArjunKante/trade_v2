@@ -10,3 +10,7 @@ purgedcv
 anthropic
 fastapi
 uvicorn
+smartapi-python
+pyotp
+logzero
+python-dotenv

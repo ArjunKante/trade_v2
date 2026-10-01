@@ -5,3 +5,19 @@ __pycache__/
 .claude/
 *.log
 .DS_Store
+
+# Angel One SmartAPI credentials and cached session/tokens (src/fibo/) --
+# never commit real keys, TOTP secrets, JWTs, or feed tokens.
+.env
+*.token
+*.session
+angel_token_cache*
+
+# smartapi-python's own default log location (SmartApi/smartConnect.py
+# creates logs/<date>/app.log relative to CWD, and logs raw request params
+# -- including MPIN/TOTP on a failed login -- at ERROR level; see
+# src/fibo/auth.py's module docstring for the neutralization this project
+# applies before any credential-bearing call). *.log already covers the
+# file itself; this also covers the dated directory it lives in.
+/logs/
+
