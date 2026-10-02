@@ -76,7 +76,7 @@ in names too thin to trade at this rule's fixed position size (floor(Rs
 verdict on this fully mechanical, fixed-risk, liquidity-blind version of
 it, trading names it had to include to reach a usable sample size.
 
-## 5. Three things to record honestly
+## 5. Four things to record honestly
 
 **(a) The 4x multiplier was an estimate, not a measurement, and the
 result sits near the boundary it creates.** Recomputing criterion 2 at
@@ -131,6 +131,47 @@ separately pre-registered study** (e.g. testing entry at a random or fixed
 time within the golden-zone-overlap window instead of an ORB breakout),
 not as a fix applied retroactively to this rule. Per Section 5a/5b, no
 rule was changed to act on it.
+
+**(d) The 4x multiplier's stated justification is refuted by this
+project's own data (checked 2026-10-02, before any live spread
+measurement).** The multiplier was an estimate, not a measurement (per
+(a) above) -- supplied by the user, resting on two stated grounds: that
+band 101-200 is a thin population, and that the flat high-bound
+spread/impact assumption understates true cost there. Both grounds fail
+against data already sitting in this project's own warehouse:
+
+- **"Thin population"**: measured median daily turnover for band
+  101-200, 2023-01-01 to 2026-09-18, is **Rs 108 crore** (p10 Rs 35
+  crore, p90 Rs 336 crore). Not thin by any ordinary standard. The 67
+  entities that actually produced the 109 band-101-200 sealed-test
+  trades have an almost identical turnover distribution to the band as a
+  whole (same Rs 108 crore median) -- the trades are not concentrated in
+  some unusually thin tail that a band-wide median could be hiding.
+- **"Impact understated"**: this rule's Rs 500 fixed risk produces
+  position sizes that are a median **0.0027%** of that stock's own daily
+  turnover in band 101-200 (max **0.054%**, across all 188 sealed-test
+  trades, every band). At that size, market impact should be negligible
+  under any standard liquidity model -- the position is not large enough,
+  relative to the day's traded value, to move the price.
+
+Neither of the two stated reasons for a 4x stress multiplier survives
+contact with data this project already had. **The only cost question
+this leaves open is the QUOTED SPREAD itself** -- not impact, not a
+thin-market discount -- which a live measurement, not a turnover-ratio-
+derived guess, can actually settle.
+
+**This is a finding about the TEST DESIGN, not a re-reading of the
+sealed-test result.** The sealed test ran on rules frozen in advance,
+including the 4x multiplier as one input to the pass/fail bar, and
+produced the recorded verdict in Sections 2 and 4 above -- that verdict
+stands, unchanged, as recorded. What changes is confidence in ONE INPUT
+to that bar: the 4x multiplier, already flagged in (a) as an estimate
+rather than a measurement, now has its stated reasoning checked against
+data and found wanting. Whether this justifies a corrected-cost
+re-evaluation of the sealed window, or whether that would amount to
+re-reading a spent window, is a decision explicitly deferred -- pending
+a live bid-ask spread measurement on a sample of band 101-200 names, the
+one open input left.
 
 ## 6. Engineering note: computing the sealed-test nulls under repeated external kills
 
