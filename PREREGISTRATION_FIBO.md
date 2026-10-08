@@ -939,3 +939,109 @@ this was the one read, and it stands as reported.
 - Any order placement, modification, or cancellation -- this study only
   ever produces a backtested trade list from historical/forward market
   data.
+
+## 8. Post-sealed-test cost-model correction -- frozen 2026-10-08, BEFORE any re-run
+
+**This section freezes a corrected spread/impact cost model from live
+measurement. It does NOT, by itself, re-open or change Section 6b's
+verdict.** Section 6b's sealed test was read ONCE, per Section 5a
+commitment 2 and Section 5b's explicit "one read, no tuning, no second
+pass" -- that verdict (NO EDGE under the pessimistic banded scenario)
+stands, unchanged, as recorded. Whether this corrected model justifies a
+separately-authorized re-evaluation of the sealed trade list is a decision
+left to the user, made AFTER this freeze, not as part of it (same
+discipline already flagged in `FIBO_FINDINGS.md` Section 5's "decision
+explicitly deferred" note). **No backtest has been re-run using this
+model. This document records measurement and a frozen assumption only.**
+
+### 8a. Measurement
+
+Live bid-ask quotes, `src/spread_monitor/` (`scripts/snapshot_spreads.py`,
+Angel One SmartAPI `getMarketData("FULL", ...)`, the same data-only login
+path as `src/fibo/auth.py`, no order endpoint touched). **5 valid
+snapshots across 3 trading days (2026-10-05, 2026-10-07, 2026-10-08), 20
+symbols** (5 each from band 1-50 and band 51-100, 10 from band 101-200 --
+`config/spread_monitor_symbols.txt`, chosen per-band from the sealed
+test's own trade-producing entities, see that file's comments), **one
+genuinely volatile session included** (2026-10-08 13:53, Nifty -1.57%
+open-to-now -- confirmed a clean, uncrossed, trading-day-verified
+snapshot, not the known-bad reading below).
+
+One snapshot (2026-10-07 15:27:41, inside the last-15-minutes pre-close
+guard window `market_hours.py` now refuses by default) returned a crossed
+book (best_bid > best_ask) on 18 of 20 symbols and is excluded from every
+figure below -- `spread_monitor/summary.py` drops a NaN spread_bps rather
+than averaging a crossed reading in. Confirmed: no other snapshot
+contributed an invalid reading.
+
+**Measured median spread, round trip, by band** (median of each symbol's
+own median bps, across symbols in the band; n=3 snapshots/symbol for bands
+1-50 and 51-100, n=5-6 for band 101-200):
+
+| band | n symbols | median of symbol medians | range across symbols |
+|---|---|---|---|
+| 1-50 | 5 | 0.85 bps | 0.54 - 1.99 |
+| 51-100 | 5 | 1.93 bps | 1.28 - 3.07 |
+| 101-200 | 10 | 3.20 bps | 1.70 - 4.78 |
+
+### 8b. Findings
+
+**(1) The flat 19bps high-bound (Section 4) was an overstatement in EVERY
+band, not only where it happened to cause Section 6b's scenario (iii) to
+fail.** Measured-vs-assumed ratio: band 1-50 ~22x too high, band 51-100
+~10x too high, band 101-200 ~6x too high. Bands 1-50 and 51-100 PASSED
+Section 6b's criteria while being overcharged by roughly the same order of
+magnitude as the band that failed -- correcting the cost model uniformly
+improves those bands' results too, not only band 101-200's. This directly
+addresses the asymmetry already flagged in `FIBO_FINDINGS.md` Section 5d:
+the correction is not being applied only where it is convenient for the
+result.
+
+**(2) Spread rises monotonically with band** (0.85 -> 1.93 -> 3.20 bps),
+**confirming the BANDED STRUCTURE Section 5b guessed was correct in
+principle.** Measured implied multipliers relative to band 1-50: ~1x /
+2.3x / 3.8x -- close to the 1x/2x/4x guessed there. **The error in Section
+5b's pessimistic scenario was the BASE assumption (19bps), not the banded
+SHAPE.** A thinner band genuinely costs more, roughly in the proportion
+guessed; it just does not cost as much, in absolute terms, as the flat
+high-bound assumed for any band.
+
+### 8c. Frozen model
+
+**Base spread/impact cost, round trip, by band** (replaces, for any FUTURE
+re-evaluation only -- not retroactively, per the note opening this
+section -- the flat 6.0-19.0bps range in Section 4 and the 2x/4x
+pessimistic multipliers in Section 5b):
+
+| band | frozen base spread (round trip) | measured median | margin |
+|---|---|---|---|
+| 1-50 | **2.0 bps** | 0.85 bps | ~2.4x |
+| 51-100 | **4.0 bps** | 1.93 bps | ~2.1x |
+| 101-200 | **7.0 bps** | 3.20 bps | ~2.2x |
+
+Each figure is roughly **2x the measured median**, an explicit
+conservatism margin -- **stated here as a judgment call, not a
+measurement** -- covering: the small sample (3 trading days, one
+calendar week); October 2026 conditions standing in as a proxy for the
+2023-2026 sealed test window, which cannot be directly observed; and the
+possibility that volatile sessions in 2023-2026 were worse than the single
+volatile session (Nifty -1.57%) captured here, in which spreads in fact
+held up (Section 8a) rather than widening. **Statutory costs (STT, stamp
+duty) and Groww's fixed brokerage/DP charges (Section 4) are UNCHANGED** --
+only the spread/impact component is affected by this section.
+
+### 8d. Limitations, recorded alongside the frozen model, not separately
+
+- 3 trading days, one calendar week (2026-10-05/07/08) -- not a seasonally
+  or regime-diverse sample.
+- n=3 snapshots/symbol for bands 1-50 and 51-100 (added to the monitored
+  set on 2026-10-05, after the first two snapshots); n=5-6 for band
+  101-200.
+- 2023-2024 spreads are **not observable** -- October 2026 is a proxy, and
+  spreads were plausibly wider in the earlier period (lower retail
+  participation, wider tick-equivalent behavior); this margin does not
+  attempt to size that gap quantitatively, only to cover it directionally.
+- Only one genuinely volatile session was captured (Nifty -1.57%
+  open-to-now); spreads held up in it, but one session cannot characterize
+  tail behavior across a 44.5-month sealed window that will have
+  contained sharper single-day moves than this.

@@ -1,0 +1,51 @@
+# One NSE trading symbol per line (no -EQ suffix; that is added at lookup
+# time). Blank lines and lines starting with # are ignored. Edit this file
+# to change the measured set -- no code change required.
+#
+# Seeded 2026-10-05 with the 10 band-101-200 names from the Fibo cost-model
+# spread question (FIBO_FINDINGS.md Section 5d): the original six measured
+# manually, plus four more spread across the band's rank width.
+HAVELLS
+LENSKART
+IGL
+JSWSTEEL
+GODREJPROP
+PERSISTENT
+IRFC
+VOLTAS
+MARICO
+MANAPPURAM
+#
+# Added 2026-10-05: 5 names each from bands 1-50 and 51-100, so the
+# flat-high 19bps cost assumption can be checked where it was applied
+# but never yet measured, not only in band 101-200 where it happened to
+# bind. Chosen the same way as the band-101-200 set: spread across the
+# band's rank width, varied sectors, and (checked against
+# data/fibo_test_results.pkl) all five sealed-test trade-producing
+# entities per band, not names that merely sat in the universe.
+#
+# Band 1-50 (rank in the sealed-test year the entity actually traded):
+RELIANCE
+#   rank 3 -- energy/conglomerate
+INFY
+#   rank 7 -- IT services
+BANKBARODA
+#   rank 26 -- PSU bank
+SUNPHARMA
+#   rank 39 -- pharma
+HINDUNILVR
+#   rank 47 -- FMCG
+#
+# Band 51-100:
+NHPC
+#   rank 52 -- PSU power generation
+APOLLOHOSP
+#   rank 64 -- healthcare
+HEROMOTOCO
+#   rank 73 -- two-wheeler auto
+GAIL
+#   rank 89 -- PSU gas utility (upstream/marketing, vs. IGL's city-gas
+#              distribution in band 101-200 -- a useful same-sector,
+#              different-band comparison)
+MPHASIS
+#   rank 94 -- IT services
