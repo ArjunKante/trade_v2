@@ -1045,3 +1045,179 @@ only the spread/impact component is affected by this section.
   open-to-now); spreads held up in it, but one session cannot characterize
   tail behavior across a 44.5-month sealed window that will have
   contained sharper single-day moves than this.
+
+## 9. AMENDED RE-TEST UNDER CORRECTED INPUTS -- run 2026-10-08
+
+**Section 6b's original sealed verdict (NO EDGE, 2026-10-02 read) stands
+above, unchanged, in full. This section does not replace it or re-read any
+new test-window data -- it re-costs the SAME sealed trade list and the
+SAME null draws under Section 8c's live-measured cost model, and reports
+the result as its own, separate, annotated outcome.** The original is
+annotated, never edited.
+
+**Authorization and scope, per the three conditions set before this ran:**
+1. The Section 8c model is applied UNIFORMLY -- to what were scenarios (i)
+   flat-low and (ii) flat-high as well as (iii) pessimistic-banded, not
+   only to the scenario that failed.
+2. Reported in this new section, with Section 6b visible and intact above.
+3. Nothing else changed: same frozen rules (Section 3), same sealed trade
+   list (`data/fibo_test_results.pkl`, untouched), same universe, same
+   null draws. Only the spread/impact component of the cost model changes.
+
+### 9a. Why three scenarios become one
+
+Scenarios (i)/(ii) existed only to bound uncertainty in a single FLAT
+spread figure (6.0 vs 19.0bps); scenario (iii) stress-tested that same
+figure with a banded multiplier. Section 8c replaces the uncertain flat
+input with one directly measured, already-banded figure per rank band
+(2.0/4.0/7.0bps round trip) -- there is no remaining lo/hi range to bound,
+and no remaining multiplier to stress, because the band-specific number is
+no longer a guess. **The three original scenarios collapse into ONE
+amended scenario.** This is reported below alongside where that one
+number lands relative to each of the three original scenarios, exactly as
+Condition 1 requires -- including the two that already passed.
+
+### 9b. Mechanism: identical draws, re-costed, not re-decided
+
+The sealed trade list's 188 trades need no new data access: every field
+`amended_cost_rs()` requires (`position_size_rs`, `band`) is already in
+`data/fibo_test_results.pkl`. The null draws are harder: the saved
+`data/fibo_test_nulls.pkl` kept only each seed's AGGREGATE mean, not the
+per-draw (entity, day, entry-time, qty, band) needed to re-cost after the
+fact. The only way to get an amended null distribution built from the SAME
+draws, not new ones, is to replay the null generation with the identical
+seeds and an identical RNG call sequence (`scripts/fibo_test_amended_cost.py`,
+copied verbatim from `scripts/fibo_test_nulls.py`'s `timing_null`/
+`selection_null` logic, adding one extra cost accumulator and no new,
+removed, or reordered random call). **Verified, not assumed**: each null
+type's replayed `mean_gross` was checked against the ORIGINAL run's saved
+`mean_gross` after replay --
+
+| null type | original mean_gross | replayed mean_gross | diff |
+|---|---|---|---|
+| TIMING | 0.572817 | 0.572817 | 0.00e+00 (exact match) |
+| SELECTION (b) | -0.014264 | -0.014264 | 0.00e+00 (exact match) |
+| SELECTION (b2) | 0.036563 | 0.036563 | 0.00e+00 (exact match) |
+
+Exact agreement on gross R (which depends only on entity/day/entry-time/
+exit, never on cost) confirms this is a bit-for-bit replay of the same
+1000-seed draws Section 6b already used, not a new simulation -- the only
+new number produced is the re-costed net R built on top of them.
+
+### 9c. What the correction does to all three original scenarios
+
+| scenario | original mean net R | original t | amended mean net R | amended t |
+|---|---|---|---|---|
+| (i) flat low (6.0bps flat) | +0.3615 | 5.947 | **+0.3673** (same, single, corrected figure) | **6.033** |
+| (ii) flat high (19.0bps flat) | +0.2745 | 4.569 | **+0.3673** | **6.033** |
+| (iii) pessimistic banded (19bps x 1/2/4) | +0.0392 | 0.645 | **+0.3673** | **6.033** |
+
+The corrected figure is HIGHER than flat-high's result (as expected --
+flat-high was a 6-22x overstatement by band, Section 8b) and sits just
+above flat-low's, with a BETTER t-statistic than either original flat
+scenario (6.033 vs 5.947 and 4.569) -- precisely because a per-band
+measured figure removes cross-band cost-estimation noise that a single
+flat number necessarily carries. **Per Condition 1: flat-low and flat-high
+both improve under the correction, not just the pessimistic scenario that
+failed.** This is the stated, predicted consequence of Section 8b's first
+finding (the input was wrong everywhere, not only where it bound).
+
+### 9d. AMENDED TEST PASS TABLE (one scenario, all four criteria)
+
+| criterion | result | verdict |
+|---|---|---|
+| 1. >=100 trades | 188 | PASS |
+| 2. mean net R > 0, t >= 2 | mean = +0.3673, SE = 0.0609, t = 6.033 | PASS |
+| 3. >=95th percentile vs null (b) | 100.0th | PASS |
+| 4. >=95th percentile vs null (b2) | 100.0th | PASS |
+
+**AMENDED VERDICT: TEST PASS**, all four criteria, under the one corrected
+cost scenario that Section 8c's measurement leaves in place of the three
+original ones.
+
+**TIMING null (descriptive only, not a TEST PASS criterion, unchanged
+reporting convention from Section 6b)**: strategy at the **2.2nd
+percentile** (net, amended cost) -- consistent with the original 2.3rd
+percentile (net, both cost bounds) and development's 8.9th-percentile
+finding. The specific ORB-breakout entry trigger still appears to
+underperform a random entry time on the same good days; this conclusion
+is unaffected by which cost model is used, since it compares the strategy
+against draws on its OWN (entity, day) pairs with the SAME cost applied to
+both sides. Unchanged from Section 6b: descriptive, not acted on.
+
+### 9e. By rank band -- the central result
+
+| band | n | win rate | mean gross R | mean net R, amended |
+|---|---|---|---|---|
+| 1-50 | 45 | 75.6% | 0.5876 | **+0.4524** |
+| 51-100 | 34 | 73.5% | 0.4447 | **+0.3172** |
+| 101-200 | 109 | 70.6% | 0.5070 | **+0.3478** |
+
+**Band 101-200 -- 58% of all test trades (109 of 188), the band whose
+pessimistic-scenario mean R was -0.1021 (a net loser) in Section 6b --
+is solidly profitable (+0.3478) under the corrected, measured cost.** All
+three bands are net-positive under the amended model, none dependent on
+the others. This is the direct resolution of Section 6b's failure
+mechanism: band 101-200 did not fail because thin names are unprofitable
+to trade at this position size -- it failed because the cost assumption
+applied to it (76bps, Section 5b) was 6-24x higher than live measurement
+(Section 8b) supports.
+
+### 9f. By year
+
+| year | n | win rate | mean gross R | mean net R, amended |
+|---|---|---|---|---|
+| 2023 | 48 | 64.6% | 0.4405 | +0.2699 |
+| 2024 | 43 | 76.7% | 0.7373 | +0.5888 |
+| 2025 | 47 | 83.0% | 0.7112 | +0.5770 |
+| 2026 | 50 | 66.0% | 0.2109 | +0.0731 |
+
+Same pattern as Section 6b's gross-R breakdown (no single year drives the
+result; all four years individually net-positive under the amended cost
+too), scaled down uniformly by the now-smaller, band-correct cost.
+
+### 9g. Exit-reason breakdown (unchanged -- cost does not affect exit mechanics)
+
+| reason | count | % |
+|---|---|---|
+| TIME_EXIT | 147 | 78.2% |
+| TARGET | 29 | 15.4% |
+| STOP | 12 | 6.4% |
+
+Identical to Section 6b -- exit reason is decided entirely by price action
+against stop/target/15:15, never by the cost model. Reproduced here for
+completeness, per the requested report format, not because it could have
+changed.
+
+### 9h. The pre-registration-quality finding this episode produced
+
+**Recorded in the user's own words, because this is the finding that
+matters independent of whether the amended re-test above passes or
+fails:**
+
+> The original pre-registration was rigorous in structure -- frozen
+> rules, sealed window, pre-committed criteria -- and still carried an
+> unvalidated number at its core. The 19bps base and the 4x multiplier
+> were never checked against turnover or position-size data that was
+> already in the warehouse. Nobody looked until the number decided a
+> verdict. That is the real lesson of this episode, independent of
+> whether the amended re-test passes or fails.
+
+Concretely, in this project's own terms: Section 4's 6.0-19.0bps range was
+ported from a DIFFERENT project's DIFFERENT universe (`src/swing/costs.py`'s
+own module docstring already flagged this, in writing, before the sealed
+test ran) and Section 5b's 2x/4x pessimistic multipliers were, by their
+own stated text, "ROUND NUMBERS... not a precise re-measurement" and "no
+fresh spread data was collected for this test." Both flags were written
+down, correctly, at the time -- and neither triggered an actual
+measurement before the number was used to decide a 188-trade, 44.5-month
+verdict. The turnover data that eventually refuted the multiplier's stated
+grounds (`FIBO_FINDINGS.md` Section 5d) and the live spread data that
+quantified the actual error (Section 8 above) both existed, or were both
+cheap to obtain, BEFORE Section 6b's read, not after. The structural
+disciplines this project enforces (frozen rules, sealed windows,
+pre-committed pass criteria, one authorized read) protect against
+p-hacking and lookahead -- they do not, by themselves, validate every
+number fed into the criteria those disciplines are built to protect. A
+flagged-but-unmeasured input can sit at the center of a frozen, sealed,
+disciplined test and still be wrong by an order of magnitude.
