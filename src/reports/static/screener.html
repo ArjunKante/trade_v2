@@ -133,6 +133,28 @@
   #monitorChartWrap { margin-top: 10px; }
   .regime-tag { color: var(--text-faint); font-size: 10.5px; }
   #monitorMeta { color: var(--text-faint); font-size: 11px; margin-top: 10px; }
+
+  #fiboBanner {
+    background: #3a1f20; color: #e0a8a0; border-bottom: 1px solid #5a3330;
+    padding: 8px 16px; font-size: 12.5px; line-height: 1.5; font-weight: bold;
+  }
+  #fiboLiveView { padding: 0 0 60px; }
+  #fiboMeta { padding: 8px 16px; color: var(--text-dim); font-size: 11.5px; border-bottom: 1px solid var(--border); }
+  #fiboEval { padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  #fiboEval .gate-waiting { color: var(--text-dim); }
+  #fiboEval .gate-open { color: var(--text); }
+  #fiboEval .label-value { color: var(--accent); }
+  table.fibo { border-collapse: collapse; width: 100%; }
+  table.fibo th {
+    position: sticky; top: 0; background: var(--panel); color: var(--text-dim);
+    text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); font-weight: normal; white-space: nowrap;
+  }
+  table.fibo td { padding: 5px 10px; border-bottom: 1px solid #262729; white-space: nowrap; }
+  table.fibo td.num, table.fibo th.num { text-align: right; }
+  .setup-on { color: var(--pass); }
+  .setup-off { color: var(--text-faint); }
+  .in-zone { color: var(--pass); }
+  .ts-note { color: var(--text-faint); font-size: 10px; display: block; }
 </style>
 </head>
 <body>
@@ -145,6 +167,7 @@
 <div id="tabs">
   <button id="tabScreener" class="active">Screener</button>
   <button id="tabMonitor">Momentum Persistence Monitor</button>
+  <button id="tabFiboLive">Fibo Live (Paper)</button>
 </div>
 
 <div id="screenerView">
@@ -184,6 +207,29 @@
   <div id="monitorReadout"><em class="label-line">Loading...</em></div>
   <div id="monitorChartWrap"></div>
   <div id="monitorMeta"></div>
+</div>
+
+<div id="fiboLiveView" style="display:none">
+  <div id="fiboBanner">
+    PAPER TRADING ONLY. The Fibo strategy passed a CORRECTED re-test of an already-read window, not a
+    clean sealed test. See FIBO_FINDINGS.md Section 9i.
+  </div>
+  <div id="fiboMeta"></div>
+  <div id="fiboEval"><em class="label-line">Loading...</em></div>
+  <div id="fiboTableWrap" style="overflow:auto">
+    <table class="fibo">
+      <thead>
+        <tr>
+          <th>symbol</th><th class="num">rank</th>
+          <th class="num">golden zone</th><th class="num">ORB</th>
+          <th>current price</th><th>in zone</th><th>setup</th>
+          <th class="num">entry trigger</th><th class="num">stop</th><th class="num">target</th><th class="num">qty</th>
+          <th>outcome</th>
+        </tr>
+      </thead>
+      <tbody id="fiboTbody"></tbody>
+    </table>
+  </div>
 </div>
 
 <script>
@@ -536,23 +582,26 @@ loadCompanies();
 // ---------------------------------------------------------------------------
 
 let monitorLoaded = false;
+let fiboLiveLoaded = false;
+
+const TABS = {
+  screener: { btn: "tabScreener", view: "screenerView" },
+  monitor: { btn: "tabMonitor", view: "monitorView" },
+  fiboLive: { btn: "tabFiboLive", view: "fiboLiveView" },
+};
 
 function switchTab(which) {
-  const screenerBtn = document.getElementById("tabScreener");
-  const monitorBtn = document.getElementById("tabMonitor");
-  const screenerView = document.getElementById("screenerView");
-  const monitorView = document.getElementById("monitorView");
-  if (which === "monitor") {
-    screenerBtn.classList.remove("active"); monitorBtn.classList.add("active");
-    screenerView.style.display = "none"; monitorView.style.display = "block";
-    if (!monitorLoaded) { monitorLoaded = true; loadMonitor(); }
-  } else {
-    monitorBtn.classList.remove("active"); screenerBtn.classList.add("active");
-    monitorView.style.display = "none"; screenerView.style.display = "block";
+  for (const key of Object.keys(TABS)) {
+    const t = TABS[key];
+    document.getElementById(t.btn).classList.toggle("active", key === which);
+    document.getElementById(t.view).style.display = (key === which) ? "block" : "none";
   }
+  if (which === "monitor" && !monitorLoaded) { monitorLoaded = true; loadMonitor(); }
+  if (which === "fiboLive" && !fiboLiveLoaded) { fiboLiveLoaded = true; loadFiboLive(); }
 }
 document.getElementById("tabScreener").addEventListener("click", () => switchTab("screener"));
 document.getElementById("tabMonitor").addEventListener("click", () => switchTab("monitor"));
+document.getElementById("tabFiboLive").addEventListener("click", () => switchTab("fiboLive"));
 
 async function loadMonitor() {
   const data = await (await fetch("/api/monitor")).json();
@@ -656,6 +705,74 @@ function renderMonitorChart(periods, regimes) {
       gray columns: the mechanical regime segmentation (labelled by year range, not by sign)
     </div>
   `;
+}
+
+// ---------------------------------------------------------------------------
+// Fibo Live (Paper) -- its own tab, no wiring into the screener or monitor
+// above. Re-fetched fresh every time the tab is opened (not cached across
+// visits), since scripts/fibo_evening.py and scripts/fibo_morning.py are
+// separate processes appending to the log all day.
+// ---------------------------------------------------------------------------
+
+async function loadFiboLive() {
+  const data = await (await fetch("/api/fibo_live")).json();
+  if (!data.available) {
+    document.getElementById("fiboMeta").textContent = "No watchlist logged yet -- run scripts/fibo_evening.py.";
+    document.getElementById("fiboEval").innerHTML = "";
+    document.getElementById("fiboTbody").innerHTML = "";
+    return;
+  }
+  document.getElementById("fiboMeta").textContent =
+    `${data.trade_date} -- watchlist computed ${data.watchlist_run_ts} -- ` +
+    `${data.n_qualify} of ${data.n_universe} universe stocks qualify -- payload generated ${data.generated_at}`;
+  renderFiboEval(data.evaluation);
+  renderFiboRows(data.rows);
+}
+
+function renderFiboEval(ev) {
+  const el = document.getElementById("fiboEval");
+  if (!ev.evaluated) {
+    el.innerHTML = `<span class="gate-waiting">Completed trades so far: ` +
+      `<span class="label-value">${ev.n_completed}</span> / ${ev.min_trades}. ` +
+      `No win rate, P&amp;L, or R is shown before ${ev.min_trades} completed trades -- early numbers are noise ` +
+      `and showing them invites rule changes.</span>`;
+    return;
+  }
+  el.innerHTML = `<span class="gate-open">${ev.n_completed} completed trades. ` +
+    `Mean net R <span class="label-value">${fmtNum(ev.mean_net_r, 4)}</span>, ` +
+    `t = <span class="label-value">${fmtNum(ev.t_stat, 3)}</span> -- ` +
+    `vs. sealed amended re-test's <span class="label-value">${fmtNum(ev.sealed_amended_mean_net_r, 4)}</span> ` +
+    `(diff ${fmtNum(ev.diff_vs_sealed, 4)}).</span>`;
+}
+
+function fmtPrice(x) { return (x === null || x === undefined) ? "--" : Number(x).toFixed(2); }
+
+function renderFiboRows(rows) {
+  const tbody = document.getElementById("fiboTbody");
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="12" class="na">no qualifying stocks tonight</td></tr>`; return; }
+  tbody.innerHTML = rows.map(r => {
+    const zone = `${fmtPrice(r.golden_zone_low)}-${fmtPrice(r.golden_zone_high)}` +
+      `<span class="ts-note">as of ${escapeHtml(r.golden_zone_computed_ts || "")}</span>`;
+    const orb = (r.orb_high === null) ? "<span class=\"na\">not yet known</span>" :
+      `${fmtPrice(r.orb_low)}-${fmtPrice(r.orb_high)}<span class="ts-note">${escapeHtml(r.setup_computed_ts || "")}</span>`;
+    const current = (r.current_price === null) ? "<span class=\"na\">--</span>" :
+      `${fmtPrice(r.current_price)}<span class="ts-note">${escapeHtml(r.current_price_label || "")} @ ${escapeHtml(r.current_price_ts || "")}</span>`;
+    const inZone = (r.inside_zone === null) ? "<span class=\"na\">--</span>" :
+      (r.inside_zone ? `<span class="in-zone">YES</span>` : "no");
+    const setup = (r.setup_on === null) ? "<span class=\"na\">not yet known</span>" :
+      (r.setup_on ? `<span class="setup-on">ON</span>` : `<span class="setup-off">OFF</span>`);
+    const outcome = r.outcome_logged_ts
+      ? `${escapeHtml(r.outcome_exit_reason || "")}<span class="ts-note">${escapeHtml(r.outcome_logged_ts)}</span>`
+      : (r.triggered ? `<span class="setup-on">triggered</span><span class="ts-note">${escapeHtml(r.trigger_logged_ts || "")}</span>` : "--");
+    return `<tr>
+      <td>${escapeHtml(r.symbol || "")}</td><td class="num">${r.rank}</td>
+      <td class="num">${zone}</td><td class="num">${orb}</td>
+      <td>${current}</td><td>${inZone}</td><td>${setup}</td>
+      <td class="num">${fmtPrice(r.entry_trigger_price)}</td><td class="num">${fmtPrice(r.stop)}</td>
+      <td class="num">${fmtPrice(r.target)}</td><td class="num">${r.qty ?? "--"}</td>
+      <td>${outcome}</td>
+    </tr>`;
+  }).join("");
 }
 </script>
 </body>

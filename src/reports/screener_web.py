@@ -26,6 +26,7 @@ from reports.fundamental_screener import run_screener
 from reports.fundamental_snapshot import (
     build_company_report, compute_momentum_universe, compute_sector_valuation_snapshot, NOT_AVAILABLE,
 )
+from reports.fibo_live_web import build_fibo_live_payload
 
 ROOT = Path(__file__).resolve().parents[2]
 SCREENER_LOG_DIR = ROOT / "data" / "screener_logs"
@@ -205,5 +206,13 @@ def create_app(cache: dict) -> FastAPI:
         # Descriptive only -- see src/monitor/persistence.py's module docstring.
         # Never touched by, and never touches, any screener route above.
         return JSONResponse(cache.get("monitor", {"available": False}))
+
+    @app.get("/api/fibo_live")
+    def fibo_live():
+        # PAPER TRADING ONLY -- read fresh every request, never cached (see
+        # reports.fibo_live_web's module docstring): the evening/morning jobs
+        # are separate processes writing to the log all day. Never touches,
+        # and is never touched by, any screener route above.
+        return JSONResponse(to_jsonable(build_fibo_live_payload()))
 
     return app

@@ -7,12 +7,13 @@ two checks and no others, and fiscal_year_points' quarter-spacing.
 import sys
 from pathlib import Path
 
+import duckdb
 import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from reports.fundamental_screener import fiscal_year_points, check_tier1, check_tier2
+from reports.fundamental_screener import fiscal_year_points, check_tier1, check_tier2, resolve_isin_entities
 
 
 def _pl(n_quarters, revenue, ni, ebit):
@@ -97,3 +98,32 @@ def test_tier2_na_when_no_balance_sheet_at_all():
     checks = {c["check"]: c for c in check_tier2(pd.DataFrame(), pd.DataFrame(), is_financials=False)}
     assert all(c["status"] in ("NA", "SKIPPED (financials)") for c in checks.values())
     assert checks["cfo_pat_avg_min"]["status"] == "NA"
+
+
+# ---------------------------------------------------------------------------
+# resolve_isin_entities -- regression test for a live crash: run_screener
+# built a raw `WHERE isin IN ({','.join('?' for _ in all_isins)})` with no
+# guard for all_isins being empty (e.g. a top-decile universe that resolves
+# to zero ISINs), which DuckDB rejects as a ParserException on the empty
+# `IN ()` it produces. resolve_isin_entities is the guarded helper
+# run_screener now calls instead.
+# ---------------------------------------------------------------------------
+
+def _isin_lineage_con():
+    con = duckdb.connect(":memory:")
+    con.execute("CREATE TABLE isin_lineage (isin VARCHAR, entity_id VARCHAR)")
+    con.execute("INSERT INTO isin_lineage VALUES ('INE000A01001', 'E1'), ('INE000B01002', 'E2')")
+    return con
+
+
+def test_resolve_isin_entities_empty_input_does_not_raise():
+    con = _isin_lineage_con()
+    df = resolve_isin_entities(con, [])
+    assert list(df.columns) == ["isin", "entity_id"]
+    assert len(df) == 0
+
+
+def test_resolve_isin_entities_nonempty_input_resolves():
+    con = _isin_lineage_con()
+    df = resolve_isin_entities(con, ["INE000A01001"])
+    assert list(df["entity_id"]) == ["E1"]

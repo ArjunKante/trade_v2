@@ -69,6 +69,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 
+from data_layer.staleness import assert_data_current
 from reports.fundamental_snapshot import (
     resolve_identifier, load_current_price_panel, compute_momentum_universe,
     build_quarterly_pl, build_annual_frame, _shares_series, staleness_days,
@@ -321,6 +322,19 @@ def evaluate_company(con: duckdb.DuckDBPyConnection, mom_row: pd.Series, sector_
     }
 
 
+def resolve_isin_entities(con: duckdb.DuckDBPyConnection, isins: list[str]) -> pd.DataFrame:
+    """[isin, entity_id] for a list of ISINs, via isin_lineage. Empty input
+    returns an empty frame with the right columns rather than building
+    `... WHERE isin IN ()` -- DuckDB raises a ParserException on an empty IN
+    list, which crashed run_screener live when a top-decile universe
+    resolved to zero ISINs (see tests/test_fundamental_screener.py::
+    test_resolve_isin_entities_empty_input_does_not_raise)."""
+    if not isins:
+        return pd.DataFrame(columns=["isin", "entity_id"])
+    placeholders = ",".join("?" for _ in isins)
+    return con.execute(f"SELECT isin, entity_id FROM isin_lineage WHERE isin IN ({placeholders})", isins).fetchdf()
+
+
 def load_company_names(con: duckdb.DuckDBPyConnection, isins: list[str]) -> dict:
     """isin -> most-recent company_name, then reduced to entity_id via the
     caller's own isin->entity_id map (kept separate to avoid re-querying
@@ -346,6 +360,7 @@ def run_screener(con: duckdb.DuckDBPyConnection, universe: pd.DataFrame | None =
     for build_company_report per company (screener_web.py does this; the
     momentum computation alone costs tens of seconds and must not be paid
     once per company)."""
+    assert_data_current(con)  # BUGS.md Bug #13 -- refuse rather than compute on a stale/gapped panel
     if universe is None:
         universe = compute_momentum_universe(con)
     top_decile = universe[universe["in_top_decile"]].sort_values("rank").reset_index(drop=True)
@@ -358,9 +373,7 @@ def run_screener(con: duckdb.DuckDBPyConnection, universe: pd.DataFrame | None =
     for eid in top_decile["entity_id"]:
         all_isins.extend(r[0] for r in con.execute("SELECT isin FROM isin_lineage WHERE entity_id = ?", [eid]).fetchall())
     name_by_isin = load_company_names(con, all_isins)
-    isin_entity = con.execute(
-        f"SELECT isin, entity_id FROM isin_lineage WHERE isin IN ({','.join('?' for _ in all_isins)})", all_isins
-    ).fetchdf()
+    isin_entity = resolve_isin_entities(con, all_isins)
     isin_entity["company_name"] = isin_entity["isin"].map(name_by_isin)
     company_names = isin_entity.dropna(subset=["company_name"]).drop_duplicates("entity_id").set_index("entity_id")["company_name"].to_dict()
 

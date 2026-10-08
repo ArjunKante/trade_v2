@@ -842,3 +842,61 @@ logged, not attempted as a shortcut inside this diagnostic. This entry
 exists so the gap is recorded in the same place every other spec-vs-
 implementation gap in this project is recorded, rather than left as a
 comment only the module's own docstring reader would find.
+
+## Bug #13: daily ingestion silently stopped for 13 trading days -- a process failure, not a code defect
+
+**This is NOT a code bug.** Every function involved -- the bhavcopy
+fetcher, `factors.momentum`'s own internal gap guard, the Fibo evening
+job's indicator computation -- behaved exactly as designed, on the inputs
+it was actually given. The failure was that nobody, and nothing, was
+watching whether those inputs were current.
+
+**Mechanism**: `prices_eod` has zero rows, and `fetch_log` has zero
+entries of ANY status, for 2026-09-19 through 2026-10-07 -- 13 NSE trading
+days. Not "no_data" (a logged holiday check), not "error" -- simply never
+attempted. This project has no scheduled ingestion runner of any kind
+(checked: no cron entry, no Windows Task Scheduler entry, no CI workflow
+anywhere in this repo) -- `RUNBOOK.md` documents ingestion/backfill as a
+manual step, and it always has been. For three weeks, nobody ran it.
+
+**How it surfaced**: a Fibo live paper-trading evening job run on
+2026-10-08 fetched that one day's bhavcopy (the next day the pipeline
+happened to be run again) and computed that night's watchlist from the
+full daily panel, including the 13-day hole immediately before it. Separately,
+`scripts/serve_screener.py` crashed starting the screener web app:
+`compute_momentum_universe` returned zero rows, because
+`factors.momentum`'s own `STALE_GAP_DAYS` guard correctly NaN's any
+momentum value whose lookback window contains a >5-day gap -- and the
+13-day hole sat inside *every* currently-active entity's window. The crash
+was in a UI route several layers away from the actual problem; the gap
+guard that caught it was never designed as a freshness alarm, it just
+happened to trip one by coincidence.
+
+**Effect measured, not assumed**: re-running the Fibo evening job after
+backfilling the gap produced a DIFFERENT 6-stock watchlist than the one
+computed on the gapped panel -- only 2 of the original 6 names
+(MEESHO, LAURUSLABS) survived, and MEESHO's own golden zone moved from
+[180.43, 186.59] to [200.71, 209.12], roughly an **11% shift**. Had the
+Fibo evening job been the only thing run that night -- no screener, no
+momentum, nothing to trip the coincidental NaN guard -- it would have
+produced this same wrong, plausible-looking watchlist with no error
+anywhere, and it would have been traded on the next morning.
+
+**Status: fixed with a guard, not a scheduled job.** A scheduler can fail
+silently too -- this one had no scheduler to fail, and still went
+undetected for three weeks. `src/data_layer/staleness.py::
+assert_data_current` is a single shared check (latest `prices_eod` trade
+date within `max_staleness_days` (default 3, one trading day plus a long
+weekend) of today) that every entry point reading the price panel now
+calls before computing anything: the Fibo evening job
+(`scripts/fibo_evening.py`, checked before its own fetch, and again inside
+`src/fibo_live/watchlist.py::build_watchlist`), the momentum universe
+(`src/reports/fundamental_snapshot.py::compute_momentum_universe`), the
+screener (`src/reports/fundamental_screener.py::run_screener`), and the
+persistence monitor (`src/monitor/web.py::build_monitor_payload`). A stale
+panel now raises `StaleDataError` with the gap size stated in the message,
+at the point where it would otherwise turn directly into a wrong result --
+not fixed by remembering to run ingestion on time, which is exactly the
+thing that already failed once. Regression test fixes this incident's own
+13-day gap as the test fixture: `tests/test_staleness.py::
+test_the_actual_13_day_gap_incident_is_refused`.

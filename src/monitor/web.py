@@ -20,6 +20,7 @@ import pandas as pd
 
 from data_layer.entity_panel import read_full_entity_panel_authorized
 from data_layer.lineage_jump_guard import unexplained_jump_boundaries
+from data_layer.staleness import assert_data_current
 from monitor.persistence import (
     compute_daily_persistence, annual_mean_sign, mechanical_regimes,
     nonoverlapping_periods, rolling_mean_se, current_readout,
@@ -46,6 +47,7 @@ def build_monitor_payload(con: duckdb.DuckDBPyConnection, root, progress=print) 
     history, and the current plain-language readout. No threshold, no
     action, no ranking -- read-only description."""
     progress("Computing the momentum-persistence monitor (descriptive only, ~1 minute)...")
+    assert_data_current(con)  # BUGS.md Bug #13 -- refuse rather than compute on a stale/gapped panel
     _log_holdout_access(root)
 
     excluded = same_isin_jump_excluded_entities(con)  # BUGS.md Bug #11

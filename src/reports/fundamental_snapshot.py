@@ -47,6 +47,7 @@ import pandas as pd
 from factors.fundamentals_factors import _pick_pit_series, compute_ttm, pit_latest_value_asof
 from factors.momentum import compute_momentum_12_1
 from data_layer.lineage_jump_guard import unexplained_jump_boundaries
+from data_layer.staleness import assert_data_current
 
 ROOT = Path(__file__).resolve().parents[2]
 SECTOR_MAP_CSV = ROOT / "data" / "raw" / "sector" / "symbol_industry_map.csv"
@@ -130,6 +131,7 @@ def compute_momentum_universe(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     structural jump guard (lineage_jump_guard) -- both apply exactly the
     same way to current data as to historical data, since neither depends
     on the sealed-holdout boundary."""
+    assert_data_current(con)  # BUGS.md Bug #13 -- refuse rather than compute on a stale/gapped panel
     panel, as_of = load_current_price_panel(con)
     jump_dates = unexplained_jump_boundaries(con)  # full history, no `before` cutoff -- this is not a pre-holdout-only read
     mom = compute_momentum_12_1(panel, unexplained_jump_dates=jump_dates)
