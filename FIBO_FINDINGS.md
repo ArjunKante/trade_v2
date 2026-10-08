@@ -13,7 +13,44 @@ Does a fully mechanical, code-verified version of a discretionary
 Fibonacci-retracement/opening-range-breakout intraday method have a
 demonstrated edge, net of realistic transaction costs, on NSE equities?
 
-## 2. The answer
+## 2. The lesson that matters, independent of the verdict
+
+This is placed here, ahead of the verdict below, deliberately -- it is
+the finding that should survive in memory regardless of which way Section
+3's verdict (or Section 9's later amended re-test) comes out.
+
+> The original pre-registration was rigorous in structure -- frozen
+> rules, sealed window, pre-committed criteria -- and still carried an
+> unvalidated number at its core. The 19bps base and the 4x multiplier
+> were never checked against turnover or position-size data that was
+> already in the warehouse. Nobody looked until the number decided a
+> verdict. That is the real lesson of this episode, independent of
+> whether the amended re-test passes or fails.
+
+Concretely: Section 4's 6.0-19.0bps flat spread range was ported from a
+DIFFERENT project's DIFFERENT universe, and the pessimistic scenario's
+2x/4x multipliers were, by their own stated text at the time, "ROUND
+NUMBERS... not a precise re-measurement," with "no fresh spread data
+collected for this test." Both caveats were written down correctly when
+the test was frozen -- and neither one triggered an actual measurement
+before the number was used to decide a 188-trade, 44.5-month verdict. The
+turnover data that eventually refuted the multiplier's stated grounds
+(Section 6d below) and the live spread data that quantified the actual
+error both existed, or were cheap to obtain, BEFORE the sealed test's one
+authorized read, not after.
+
+**The structural disciplines this project enforces -- frozen rules,
+sealed windows, pre-committed pass criteria, one authorized read --
+protect against p-hacking and lookahead. They do not, by themselves,
+validate every number fed into the criteria those disciplines are built
+to protect.** A flagged-but-unmeasured input can sit at the center of a
+frozen, sealed, disciplined test and still be wrong by an order of
+magnitude. Section 9 below reports what happened once that specific input
+was finally measured and the same sealed trade list was re-costed under
+it -- read it alongside Section 9i's citation requirements, not as a
+clean second test.
+
+## 3. The answer
 
 **NO EDGE for these rules** -- against a pre-registered bar requiring four
 criteria to hold under three cost scenarios simultaneously, one criterion
@@ -22,7 +59,7 @@ failed under one scenario. The failure is narrow, specific, and not what
 Its EXECUTION, at the position size this rule risks, in the names it had
 to trade to reach a usable sample size, is.
 
-## 3. The sequence
+## 4. The sequence
 
 **Development (top-50 universe, 2016-10-04 to 2022-12-31, descriptive
 only, per `PREREGISTRATION_FIBO.md` Section 5a)**: 67 trades, 71.6% win
@@ -54,7 +91,7 @@ require all four original criteria under all three scenarios.
 **The sealed test (top-200 universe, 2023-01-01 to 2026-09-18, read
 once)**: 188 trades.
 
-## 4. The shape of the result, precisely
+## 5. The shape of the result, precisely
 
 **WHAT HELD**: both selection nulls (b) and (b2) at the **100th
 percentile, in every one of the three cost scenarios including the
@@ -76,7 +113,7 @@ in names too thin to trade at this rule's fixed position size (floor(Rs
 verdict on this fully mechanical, fixed-risk, liquidity-blind version of
 it, trading names it had to include to reach a usable sample size.
 
-## 5. Four things to record honestly
+## 6. Four things to record honestly
 
 **(a) The 4x multiplier was an estimate, not a measurement, and the
 result sits near the boundary it creates.** Recomputing criterion 2 at
@@ -163,7 +200,7 @@ derived guess, can actually settle.
 **This is a finding about the TEST DESIGN, not a re-reading of the
 sealed-test result.** The sealed test ran on rules frozen in advance,
 including the 4x multiplier as one input to the pass/fail bar, and
-produced the recorded verdict in Sections 2 and 4 above -- that verdict
+produced the recorded verdict in Sections 3 and 5 above -- that verdict
 stands, unchanged, as recorded. What changes is confidence in ONE INPUT
 to that bar: the 4x multiplier, already flagged in (a) as an estimate
 rather than a measurement, now has its stated reasoning checked against
@@ -188,7 +225,7 @@ Whether this measurement justifies a corrected-cost re-evaluation of the
 sealed window remains the decision deferred above -- not resolved by
 recording this number.
 
-## 6. Engineering note: computing the sealed-test nulls under repeated external kills
+## 7. Engineering note: computing the sealed-test nulls under repeated external kills
 
 The 1000-seed TIMING/SELECTION(b)/SELECTION(b2) null computation on the
 sealed test window was interrupted by this environment's own external
@@ -208,7 +245,7 @@ already-computed seed's result was ever redone** -- this was infrastructure
 resilience against an environment fault, not a second analytical pass
 over the sealed data.
 
-## 7. What this does and does not conclude
+## 8. What this does and does not conclude
 
 **Concludes**: this specific, fully mechanical, fixed-risk version of the
 Fibonacci/ORB confluence does not clear a pre-registered, four-criteria,
@@ -225,6 +262,66 @@ confluence with an opening-range breakout -- has no edge under any
 position-sizing, universe, or entry-timing variant. A liquidity-aware
 position size, a universe restricted to names where the cost assumption
 is not the binding constraint, or a different entry mechanism (Section
-5.c) are all untested, separately pre-registerable directions this
+6.c) are all untested, separately pre-registerable directions this
 document does not rule out. What it does rule out, cleanly, is this exact
 rule set as specified and frozen in `PREREGISTRATION_FIBO.md` Section 3.
+
+## 9. Amended re-test under corrected cost inputs (2026-10-08)
+
+Section 3's verdict above (NO EDGE, sealed test, 2026-10-02 read) stands,
+unchanged. This section records a LATER event: a live bid-ask spread
+measurement (Section 6d below; full detail in `PREREGISTRATION_FIBO.md`
+Section 8) refuted the sealed test's 19bps/4x cost assumption, and the
+SAME sealed 188-trade list and the SAME 1000-seed null draws were
+re-costed under the corrected figure -- not re-read, not re-decided. Full
+mechanism, replay verification, and tables: `PREREGISTRATION_FIBO.md`
+Section 9.
+
+**AMENDED VERDICT: TEST PASS.** Mean net R +0.3673 (t=6.033), vs both
+selection nulls at the 100.0th percentile, on all 188 trades, all four
+pre-registered criteria. Band 101-200 -- 58% of trades, the band whose
+pessimistic-scenario mean R was -0.1021 under the original (unmeasured)
+cost assumption -- is solidly profitable (+0.3478) under the measured
+one.
+
+**How this must be cited -- it is weaker evidence than a clean sealed-test
+pass, for three reasons that must travel with the +0.3673 / t=6.033
+figure wherever it is quoted:**
+
+1. **The window was already read.** This is a re-costing of a trade list
+   the sealed test already read once and returned NO EDGE on -- not an
+   independent test on new or held-out data.
+2. **The correction was made after seeing the failure.** The 19bps/4x
+   inputs were refuted by data already in the warehouse, and the error
+   applied uniformly to all three bands including the two that already
+   passed -- but nobody looked until the number decided a verdict
+   (Section 2 above). The sequence was: see the failure, then measure the
+   input that caused it.
+3. **The cost model rests on a thin measurement.** 5 snapshots across 3
+   trading days in one calendar week of October 2026, standing in for the
+   entire 2023-2026 sealed window, with only one genuinely volatile
+   session represented.
+
+Report this result as *"the sealed trade list is profitable under a
+directly measured, rather than assumed, cost model"* -- not as *"the
+strategy passed the sealed test."* The second framing drops all three
+qualifications above.
+
+**What the three-scenario collapse demonstrates**: under the corrected
+model, the original flat-low, flat-high, and pessimistic-banded scenarios
+all land on the identical figure. They were never three different costs
+-- they were three guesses bracketing one small, now-measured quantity,
+and the 0.32R spread between the lowest and highest original scenario was
+driven entirely by how wrong those guesses were, not by real uncertainty
+in the trade economics. **The sealed test's entire cost-scenario
+structure was built on a quantity that, once measured, barely affects the
+outcome.**
+
+**By year, stated plainly, not smoothed over**: 2026 is the weakest year
+by a wide margin -- +0.0731R on 50 trades, against +0.5888 (2024) and
++0.5770 (2025). The strongest years are the two MIDDLE years of the
+window, not the most recent one; 2026 sits closer to 2023 (+0.2699) than
+to either 2024 or 2025. At n=50, against 47-48 trades in each other year,
+this could be ordinary single-year noise -- or it could be decay in the
+most recent period. This document does not have enough information to
+tell those apart, and does not adjust the headline figure for it.

@@ -1122,6 +1122,18 @@ both improve under the correction, not just the pessimistic scenario that
 failed.** This is the stated, predicted consequence of Section 8b's first
 finding (the input was wrong everywhere, not only where it bound).
 
+**What the collapse to a single number actually demonstrates**: under the
+measured, band-correct cost, flat-low, flat-high, and pessimistic-banded
+all land on the SAME figure (+0.3673) because they were never three
+different costs to begin with -- they were three guesses bracketing one
+small, now-measured quantity. The spread between the lowest and highest
+original scenario (+0.0392 to +0.3615, a 0.32R range) was driven entirely
+by how wrong the flat/multiplier assumptions were, not by any real
+uncertainty in the trade-level economics. **Section 6b's entire
+three-scenario structure was built to stress-test a quantity that, once
+measured, barely affects the outcome at all** -- the scenario machinery
+was doing work that a single correct number makes unnecessary.
+
 ### 9d. AMENDED TEST PASS TABLE (one scenario, all four criteria)
 
 | criterion | result | verdict |
@@ -1176,6 +1188,16 @@ Same pattern as Section 6b's gross-R breakdown (no single year drives the
 result; all four years individually net-positive under the amended cost
 too), scaled down uniformly by the now-smaller, band-correct cost.
 
+**Stated plainly, not smoothed over**: 2026 is the weakest year by a wide
+margin -- +0.0731R on 50 trades, against +0.5888 (2024) and +0.5770
+(2025). The strongest years are the two MIDDLE years, not the most recent
+one; 2026's result is closer to 2023's (+0.2699) than to either 2024 or
+2025. At n=50 this could be ordinary single-year noise -- the other three
+years range from 47 to 48 trades each, not a materially larger sample --
+but it is equally consistent with decay in the most recent period, and
+this document does not have enough information to rule either reading
+out. No adjustment is made for it here; it is recorded as-is.
+
 ### 9g. Exit-reason breakdown (unchanged -- cost does not affect exit mechanics)
 
 | reason | count | % |
@@ -1221,3 +1243,31 @@ p-hacking and lookahead -- they do not, by themselves, validate every
 number fed into the criteria those disciplines are built to protect. A
 flagged-but-unmeasured input can sit at the center of a frozen, sealed,
 disciplined test and still be wrong by an order of magnitude.
+
+### 9i. HOW THIS RESULT MUST BE CITED
+
+**The amended verdict is a PASS. It is weaker evidence than a clean
+sealed-test pass would have been. Wherever the +0.3673 / t=6.033 figure
+is cited, all three of the following must be cited alongside it:**
+
+| # | reason | why it weakens the result |
+|---|---|---|
+| 1 | **The window was already read.** | The original sealed test ran once, per Section 5b, and returned NO EDGE. Section 9 re-costs that SAME trade list and the SAME null draws (Section 9b) -- it is a re-costing of an already-read window, not an independent test on new or held-out data. |
+| 2 | **The correction was made AFTER seeing the failure.** | The 19bps/4x inputs were refuted by turnover data already in the warehouse (Section 5d) and quantified by live measurement (Section 8) only after Section 6b's pessimistic scenario had already failed and been read. The correction is applied uniformly, to all three bands including the two that already passed (Section 8b/9c Condition 1) -- but the sequence is still: see the failure, then go measure the input that caused it. Nobody looked until the number decided a verdict (Section 9h). |
+| 3 | **The cost model rests on a thin measurement.** | 5 valid snapshots across 3 trading days in one calendar week (2026-10-05/07/08), standing in as a proxy for the entire 2023-2026 sealed-test window. Only one genuinely volatile session is represented. Section 8d's limitations are not resolved by Section 9 -- they are inherited by it in full. |
+
+**This verdict should be reported as: "the sealed trade list is
+profitable under a directly measured, rather than assumed, cost model" --
+not as "the strategy passed the sealed test."** The second framing drops
+all three qualifications above and should not be used.
+
+**What 9c actually demonstrates, stated plainly**: under the corrected
+model, scenarios (i), (ii), and (iii) collapse to the identical figure.
+The three-scenario structure that Section 5b built, and that Section 6b's
+verdict turned on, was stress-testing a quantity that -- once measured --
+turns out small enough that the differences between the three assumed
+cost levels were noise, not signal. The original test's entire cost-
+scenario machinery was built on an input that barely moves the outcome.
+That the pessimistic scenario happened to fail criterion 2 says more
+about how far the 4x guess sat from the true figure than about any real
+fragility in the underlying result.
