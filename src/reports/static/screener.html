@@ -738,11 +738,27 @@ function renderFiboEval(ev) {
       `and showing them invites rule changes.</span>`;
     return;
   }
-  el.innerHTML = `<span class="gate-open">${ev.n_completed} completed trades. ` +
-    `Mean net R <span class="label-value">${fmtNum(ev.mean_net_r, 4)}</span>, ` +
-    `t = <span class="label-value">${fmtNum(ev.t_stat, 3)}</span> -- ` +
+  const row = (label, s) => `<div class="label-line">${label}: n=${s.n}` +
+    (s.mean_net_r === null ? ` <span class="na">--</span>` :
+      ` mean net R <span class="label-value">${fmtNum(s.mean_net_r, 4)}</span>` +
+      (s.t_stat === null ? "" : `, t = <span class="label-value">${fmtNum(s.t_stat, 3)}</span>`)) +
+    `</div>`;
+
+  let html = `<span class="gate-open">${ev.n_completed} completed trades -- ` +
     `vs. sealed amended re-test's <span class="label-value">${fmtNum(ev.sealed_amended_mean_net_r, 4)}</span> ` +
-    `(diff ${fmtNum(ev.diff_vs_sealed, 4)}).</span>`;
+    `(combined diff ${fmtNum(ev.diff_vs_sealed, 4)})</span>` +
+    row("Combined", ev.combined) + row("LIVE (outcome unknown at logging time)", ev.live) +
+    row("REPLAY (outcome knowable at logging time)", ev.replay);
+
+  if (ev.material_difference === true) {
+    html += `<div class="setup-off" style="margin-top:4px">LIVE and REPLAY differ by ` +
+      `${fmtNum(ev.live_vs_replay_diff, 4)} -- more than half the sealed baseline's own mean. ` +
+      `Flagged as a finding, not averaged away.</div>`;
+  } else if (ev.live_vs_replay_diff !== null) {
+    html += `<div class="ts-note" style="margin-top:4px">LIVE vs REPLAY diff: ${fmtNum(ev.live_vs_replay_diff, 4)} ` +
+      `(not flagged as material).</div>`;
+  }
+  el.innerHTML = html;
 }
 
 function fmtPrice(x) { return (x === null || x === undefined) ? "--" : Number(x).toFixed(2); }

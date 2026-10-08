@@ -35,6 +35,13 @@ Reads the MOST RECENT watchlist_run logged by scripts/fibo_evening.py
      logs a final "outcome" event (src/fibo_live/outcomes.py) for every
      SETUP ON stock, triggered or not.
 
+RUN MODE: detected once per invocation from the wall clock
+(src/fibo_live/clock.detect_run_mode) and stamped on every event this run
+logs -- LIVE if this run started on `trade_date` itself before 15:15 (the
+day's outcome was genuinely not yet known), REPLAY otherwise (a catch-up
+run after close, or on a later day, against data that already fully
+existed). Not a flag passed on the command line; nothing here sets it.
+
 IDEMPOTENT / RESUMABLE: before acting on any stock, checks whether today's
 event of that kind already exists for it and skips -- safe to stop and
 re-run this script at any point in the day (e.g. if it crashes at 10:15,
@@ -65,6 +72,7 @@ from fibo.download import resolve_entity_tokens
 from fibo.price_scale import to_raw_scale
 from fibo.resolution import compute_r, compute_target, position_size_shares, resolve_trade
 
+from fibo_live.clock import detect_run_mode
 from fibo_live.config import WAREHOUSE_DB
 from fibo_live.eventlog import append_event, read_events
 from fibo_live.outcomes import record_outcome
@@ -119,7 +127,7 @@ def candle_to_bar(c) -> dict:
     return {"ts": ts, "open": float(c[1]), "high": float(c[2]), "low": float(c[3]), "close": float(c[4]), "volume": c[5]}
 
 
-def phase1_setups(client, con, watchlist: pd.DataFrame, trade_date: dt.date) -> pd.DataFrame:
+def phase1_setups(client, con, watchlist: pd.DataFrame, trade_date: dt.date, run_mode: str) -> pd.DataFrame:
     if watchlist.empty:
         log("No qualifying watchlist rows for today -- nothing to do.")
         return watchlist
@@ -159,6 +167,7 @@ def phase1_setups(client, con, watchlist: pd.DataFrame, trade_date: dt.date) -> 
 
         payload = {
             "entity_id": entity_id, "symbol": r["symbol"], "trade_date": trade_date, "rank": r["rank"],
+            "run_mode": run_mode,
             "orb_high": orb_high, "orb_low": orb_low, "zone_low_raw": zone_low_raw, "zone_high_raw": zone_high_raw,
             "swing_high_raw": swing_high_raw, "setup_on": setup_on,
         }
@@ -178,7 +187,7 @@ def phase1_setups(client, con, watchlist: pd.DataFrame, trade_date: dt.date) -> 
     return pd.DataFrame(setups)
 
 
-def watch_for_triggers(client, con, setups: pd.DataFrame, trade_date: dt.date) -> None:
+def watch_for_triggers(client, con, setups: pd.DataFrame, trade_date: dt.date, run_mode: str) -> None:
     active = setups[setups.get("setup_on") == True].copy() if not setups.empty else setups  # noqa: E712
     if active.empty:
         log("No SETUP ON stocks -- nothing to watch.")
@@ -216,7 +225,7 @@ def watch_for_triggers(client, con, setups: pd.DataFrame, trade_date: dt.date) -
                 target = compute_target(entry_price, stop, r["swing_high_raw"])
                 qty = position_size_shares(entry_price, stop)
                 append_event("trigger", {
-                    "entity_id": entity_id, "symbol": r["symbol"], "trade_date": trade_date,
+                    "entity_id": entity_id, "symbol": r["symbol"], "trade_date": trade_date, "run_mode": run_mode,
                     "entry_ts": entry_ts, "entry_price": entry_price, "stop": stop, "target": target, "qty": qty,
                 })
                 log(f"  TRIGGER {r['symbol']} @ {entry_price:.2f} ({entry_ts})")
@@ -226,7 +235,7 @@ def watch_for_triggers(client, con, setups: pd.DataFrame, trade_date: dt.date) -
         log(f"  no trigger by 11:30: {pending[entity_id]['symbol']}")
 
 
-def resolve_outcomes(client, con, setups: pd.DataFrame, trade_date: dt.date) -> None:
+def resolve_outcomes(client, con, setups: pd.DataFrame, trade_date: dt.date, run_mode: str) -> None:
     if setups.empty:
         return
     now = dt.datetime.now()
@@ -251,7 +260,7 @@ def resolve_outcomes(client, con, setups: pd.DataFrame, trade_date: dt.date) -> 
         trig = triggers.get(entity_id)
         if trig is None:
             record_outcome(entity_id=entity_id, symbol=s["symbol"], trade_date=trade_date,
-                            rank=s["rank"], triggered=False)
+                            rank=s["rank"], triggered=False, run_mode=run_mode)
             log(f"  {s['symbol']}: outcome logged -- no trigger")
             continue
 
@@ -271,6 +280,7 @@ def resolve_outcomes(client, con, setups: pd.DataFrame, trade_date: dt.date) -> 
 
         record_outcome(
             entity_id=entity_id, symbol=s["symbol"], trade_date=trade_date, rank=s["rank"], triggered=True,
+            run_mode=run_mode,
             entry_ts=trig["entry_ts"], entry_price=trig["entry_price"], stop=trig["stop"], target=trig["target"],
             qty=trig["qty"], exit_ts=resolution["exit_ts"], exit_price=resolution["exit_price"],
             exit_reason=resolution["outcome"],
@@ -284,7 +294,11 @@ def main() -> None:
     args = parser.parse_args()
     trade_date = dt.date.fromisoformat(args.date) if args.date else dt.date.today()
 
-    log(f"=== FIBO MORNING JOB -- {trade_date} ===")
+    # Detected ONCE, from the clock, for this whole run -- never re-detected
+    # per event (see src/fibo_live/clock.py for why that would be wrong).
+    run_mode = detect_run_mode(trade_date)
+
+    log(f"=== FIBO MORNING JOB -- {trade_date} (run_mode={run_mode}) ===")
     con = get_read_connection(WAREHOUSE_DB)
 
     watchlist = latest_watchlist(trade_date)
@@ -296,9 +310,9 @@ def main() -> None:
         return
     log("Angel One login OK (data-only session).")
 
-    setups = phase1_setups(result.client, con, watchlist, trade_date)
-    watch_for_triggers(result.client, con, setups, trade_date)
-    resolve_outcomes(result.client, con, setups, trade_date)
+    setups = phase1_setups(result.client, con, watchlist, trade_date, run_mode)
+    watch_for_triggers(result.client, con, setups, trade_date, run_mode)
+    resolve_outcomes(result.client, con, setups, trade_date, run_mode)
     con.close()
     log("=== Morning job complete. ===")
 

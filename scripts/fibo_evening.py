@@ -39,6 +39,7 @@ from data_layer.db import get_connection
 from data_layer.prices_nse import load_bhavcopy_to_duckdb
 from data_layer.staleness import assert_data_current, StaleDataError
 
+from fibo_live.clock import detect_run_mode
 from fibo_live.config import RAW_PRICES_DIR, TOP_N, WAREHOUSE_DB
 from fibo_live.eventlog import append_event
 from fibo_live.watchlist import build_watchlist
@@ -56,7 +57,13 @@ def main() -> None:
     args = parser.parse_args()
     trade_date = dt.date.fromisoformat(args.date) if args.date else dt.date.today()
 
-    log(f"=== FIBO EVENING JOB -- {trade_date} ===")
+    # Detected once, from the clock (src/fibo_live/clock.py) -- this job
+    # runs after close by design, so it is expected to read REPLAY almost
+    # always; stamped for consistency with the morning job's events, and
+    # because "almost always" is not "always" (e.g. a late --date catch-up).
+    run_mode = detect_run_mode(trade_date)
+
+    log(f"=== FIBO EVENING JOB -- {trade_date} (run_mode={run_mode}) ===")
     con = get_connection(WAREHOUSE_DB)
 
     # Checked BEFORE today's own fetch, against whatever the warehouse's
@@ -97,12 +104,13 @@ def main() -> None:
 
     run_id = str(uuid.uuid4())
     for _, r in watchlist.iterrows():
-        append_event("watchlist", {"run_id": run_id, "as_of_date": trade_date, **r.to_dict()})
+        append_event("watchlist", {"run_id": run_id, "as_of_date": trade_date, "run_mode": run_mode, **r.to_dict()})
 
     n_universe = len(watchlist)
     n_qualify = int(watchlist["qualifies"].sum()) if n_universe else 0
     append_event("watchlist_run", {
-        "run_id": run_id, "as_of_date": trade_date, "n_universe": n_universe, "n_qualify": n_qualify,
+        "run_id": run_id, "as_of_date": trade_date, "run_mode": run_mode,
+        "n_universe": n_universe, "n_qualify": n_qualify,
     })
 
     log(f"\n=== {n_universe} universe members logged, run_id={run_id} ===")
