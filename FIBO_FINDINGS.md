@@ -173,6 +173,21 @@ re-reading a spent window, is a decision explicitly deferred -- pending
 a live bid-ask spread measurement on a sample of band 101-200 names, the
 one open input left.
 
+**Live measurement, 2026-10-05 ~11:31 IST, Groww market depth, six
+band-101-200 names** (HAVELLS, LENSKART, IGL, JSWSTEEL, GODREJPROP,
+PERSISTENT): quoted spreads 3.1-5.7 bps, mean 4.3 bps. Depth at best bid
+is tens of thousands of shares against this rule's ~26-share position --
+impact is zero, consistent with the turnover-ratio argument in (d) above.
+Versus the two frozen assumptions: flat-high (19 bps) is **~4x too
+high**; the pessimistic banded scenario's 4x-stressed figure (76 bps) is
+**~17x too high**. Same caveat as the swing project's September reading:
+this is a single session, six names -- it cannot capture spread variation
+across the trading day, across volatile sessions, or during 2023-2024,
+part of the actual sealed-test window, when conditions may have differed.
+Whether this measurement justifies a corrected-cost re-evaluation of the
+sealed window remains the decision deferred above -- not resolved by
+recording this number.
+
 ## 6. Engineering note: computing the sealed-test nulls under repeated external kills
 
 The 1000-seed TIMING/SELECTION(b)/SELECTION(b2) null computation on the
