@@ -63,6 +63,102 @@ def test_atr_wilder_matches_hand_recursion():
         result["atr"].reset_index(drop=True), hand.reset_index(drop=True), check_names=False)
 
 
+def _ohlc_with_dates(entity_id, dates, highs, lows, closes):
+    """Same shape as `_ohlc` above, but with explicit (possibly
+    non-consecutive) dates -- needed to construct a deliberate stale gap,
+    which `_ohlc`'s freq='B' date_range cannot represent."""
+    return pd.DataFrame({
+        "entity_id": entity_id, "trade_date": pd.to_datetime(dates),
+        "adjusted_open": closes, "adjusted_high": highs, "adjusted_low": lows, "adjusted_close": closes,
+        "volume": [1000] * len(dates), "turnover": [c * 1000 for c in closes],
+    })
+
+
+def test_true_range_nan_across_a_stale_calendar_gap():
+    """Bug #2 shape (BUGS.md), unguarded in src/fibo/ until 2026-10-11: a
+    row-based prev_close = shift(1) treats a multi-month halt as one
+    ordinary trading day. before/after prices are deliberately far apart
+    (100ish -> 300) so an un-guarded true_range would be enormous -- the
+    fix must NaN it out, not shrink it."""
+    before_dates = pd.bdate_range("2022-01-03", periods=20)
+    after_dates = pd.bdate_range(before_dates[-1] + pd.Timedelta(days=200), periods=10)
+    dates = list(before_dates) + list(after_dates)
+    highs = [101 + i for i in range(20)] + [301 + i for i in range(10)]
+    lows = [99 + i for i in range(20)] + [299 + i for i in range(10)]
+    closes = [100 + i for i in range(20)] + [300 + i for i in range(10)]
+    df = _ohlc_with_dates("E1", dates, highs, lows, closes)
+
+    tr = true_range(df)
+    boundary_idx = 20  # first row after the 200-day gap
+    assert pd.isna(tr.iloc[boundary_idx])
+    assert not pd.isna(tr.iloc[boundary_idx - 1])  # the row before the gap is unaffected
+    assert not pd.isna(tr.iloc[boundary_idx + 1])  # rows after the boundary are normal again
+
+
+def test_true_range_not_nan_across_a_short_gap():
+    """A 3-day gap (ordinary weekend/holiday shape) must NOT be flagged --
+    only matches test_true_range_nan_across_a_stale_calendar_gap's >5-day
+    case, same STALE_GAP_DAYS=5 threshold as factors/lowvol.py."""
+    before_dates = pd.bdate_range("2022-01-03", periods=10)
+    after_dates = pd.bdate_range(before_dates[-1] + pd.Timedelta(days=3), periods=10)
+    dates = list(before_dates) + list(after_dates)
+    highs = [101 + i for i in range(20)]
+    lows = [99 + i for i in range(20)]
+    closes = [100 + i for i in range(20)]
+    df = _ohlc_with_dates("E1", dates, highs, lows, closes)
+    tr = true_range(df)
+    assert not pd.isna(tr.iloc[10])
+
+
+def test_true_range_nan_for_unexplained_jump_row_with_no_calendar_gap():
+    """Bug #11 shape: a same-isin jump with gap_days=1 (an otherwise
+    ordinary consecutive trading day) -- the calendar-gap check alone
+    (STALE_GAP_DAYS) cannot see this; only the explicit
+    unexplained_jump_dates flag can."""
+    dates = pd.bdate_range("2022-01-03", periods=5)
+    highs = [101, 102, 13, 104, 105]
+    lows = [99, 100, 11, 102, 103]
+    closes = [100, 101, 12, 103, 104]  # row 2 (index 2) is the MAJESCO-shape collapse
+    df = _ohlc_with_dates("E1", dates, highs, lows, closes)
+
+    tr_unguarded = true_range(df)
+    assert not pd.isna(tr_unguarded.iloc[2])  # no gap, so un-guarded true_range sees nothing wrong
+
+    jump_dates = {"E1": {dates[2]}}
+    tr_guarded = true_range(df, unexplained_jump_dates=jump_dates)
+    assert pd.isna(tr_guarded.iloc[2])
+    assert not pd.isna(tr_guarded.iloc[1])
+    assert not pd.isna(tr_guarded.iloc[3])  # the row AFTER the flagged date is a real true_range again
+
+
+def test_atr_carries_forward_across_a_stale_gap_and_does_not_propagate_nan_forever():
+    """The regression this fix exists to prevent: naively NaN-ing
+    true_range at the gap would otherwise corrupt every later ATR value
+    too, since Wilder's SMMA is recursive (out[i] depends on out[i-1]).
+    Asserts both halves: ATR right after the gap equals ATR right before
+    it (carried forward, not computed from a fabricated true_range), AND
+    ATR resumes real recursive updates afterward rather than staying NaN."""
+    before_dates = pd.bdate_range("2022-01-03", periods=20)
+    after_dates = pd.bdate_range(before_dates[-1] + pd.Timedelta(days=200), periods=10)
+    dates = list(before_dates) + list(after_dates)
+    # before: H-L spread of 2 every day -> true_range (and hence ATR) converges to a constant 2.0.
+    # after: a deliberately WIDER spread of 10 every day, so a resumed, real ATR update is numerically
+    # distinguishable from "stuck at the carried-forward pre-gap value" -- not just non-NaN.
+    highs = [101 + i for i in range(20)] + [305 + i for i in range(10)]
+    lows = [99 + i for i in range(20)] + [295 + i for i in range(10)]
+    closes = [100 + i for i in range(20)] + [300 + i for i in range(10)]
+    df = _ohlc_with_dates("E1", dates, highs, lows, closes)
+
+    result = atr(df, period=ATR_PERIOD)
+    atrs = result["atr"].to_numpy()
+    boundary_idx = 20
+
+    assert not np.isnan(atrs[boundary_idx - 1])
+    assert atrs[boundary_idx] == pytest.approx(atrs[boundary_idx - 1])  # carried forward, not NaN, not fabricated
+    assert not np.isnan(atrs[boundary_idx + 1])  # real recursive updates resume -- no permanent NaN propagation
+    assert atrs[boundary_idx + 1] != pytest.approx(atrs[boundary_idx])  # and it actually DID update, not stuck
+
+
 def test_alligator_uptrend_true_in_sustained_rally_false_in_downtrend():
     n = 60
     up_prices = 100 + np.arange(n) * 1.0

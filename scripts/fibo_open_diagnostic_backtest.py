@@ -41,6 +41,7 @@ from fibo.signals import compute_daily_signals
 from fibo.scale_probe import probe_scale, passes_gap_guard, to_raw_scale as scale_to_raw, ScaleDecision
 from fibo.backtest import evaluate_entity_day
 from fibo.intraday_db import get_read_connection as get_intraday_read_connection
+from fibo.jump_guard import combined_unexplained_jump_dates
 from data_layer.db import get_read_connection
 from fibo_open.backtest_open import evaluate_entity_day_open
 
@@ -172,6 +173,10 @@ def main():
     factors["trade_date"] = pd.to_datetime(factors["trade_date"]).dt.date
     m = m.merge(factors, on=["entity_id", "trade_date"], how="left")
 
+    log("Fetching Bug #1/#11 unexplained-jump exclusions (src/fibo/jump_guard.py, full warehouse history)...")
+    jump_dates = combined_unexplained_jump_dates(warehouse_con)
+    log(f"  {sum(len(d) for d in jump_dates.values())} flagged date(s) across {len(jump_dates)} entities")
+
     log("Computing daily signals (Alligator uptrend + swing + golden zone) per entity...")
     signal_frames = []
     for i, eid in enumerate(entities):
@@ -179,7 +184,7 @@ def main():
         panel = panel[panel["trade_date"] <= pd.Timestamp(RANGE_END)]  # defense in depth
         if panel.empty:
             continue
-        signal_frames.append(compute_daily_signals(panel))
+        signal_frames.append(compute_daily_signals(panel, unexplained_jump_dates=jump_dates))
         if (i + 1) % 50 == 0:
             log(f"  signals: {i + 1}/{len(entities)} entities done")
     signals_all = pd.concat(signal_frames, ignore_index=True)

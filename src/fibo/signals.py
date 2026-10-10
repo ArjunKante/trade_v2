@@ -42,6 +42,7 @@ SIGNAL_COLUMNS = [
 def compute_daily_signals(
     panel: pd.DataFrame, lookback_days: int = SWING_LOOKBACK_DAYS,
     atr_multiple: float = ATR_MULTIPLE_MIN_MOVE, wing: int = FRACTAL_WING,
+    unexplained_jump_dates: dict | None = None,
 ) -> pd.DataFrame:
     """panel: ONE entity's daily OHLC (src/fibo/daily_ohlc.py columns),
     sorted by trade_date, covering at least the full range to be signaled
@@ -54,13 +55,21 @@ def compute_daily_signals(
     whether a golden zone exists at all that day. `zone_low`/`zone_high`
     are populated (in ADJUSTED scale, same as swing_high_price/
     swing_low_price) only when has_swing is True.
+
+    `unexplained_jump_dates`: entity_id -> flagged dates (Bug #1 lineage
+    jumps union Bug #11 same-isin jumps -- src/fibo/jump_guard.py builds
+    this; callers should get it from there, not re-derive it), threaded
+    into the ATR(14) computation below so a stale gap or an unguarded
+    price jump cannot inflate the 2xATR minimum-move gate. Omit only for
+    synthetic/unit-test panels that have no corresponding warehouse
+    connection to query.
     """
     g = panel.sort_values("trade_date").reset_index(drop=True)
     entity_id = g["entity_id"].iloc[0]
     n = len(g)
 
     frac = fractals(g, wing=wing)
-    atr_df = compute_atr(g)
+    atr_df = compute_atr(g, unexplained_jump_dates=unexplained_jump_dates)
     alli = alligator(g)
     trend_df = alligator_uptrend(g, alli)
     trend_map = dict(zip(trend_df["trade_date"], trend_df["uptrend"]))

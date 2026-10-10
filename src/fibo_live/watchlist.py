@@ -14,6 +14,13 @@ not dropped, so the evening log is a complete, auditable record of the
 whole universe each night, not just the names that happened to qualify.
 `qualifies=False` rows are never shown by the morning job.
 
+Bug #1/#11 propagation fix (2026-10-11): `most_recent_confirmed_swing`'s
+ATR(14) is now computed with `src/fibo/jump_guard.py`'s combined
+lineage-jump/same-isin-jump exclusion -- previously unguarded here,
+the same gap this fix closed in the backtest scripts. See BUGS.md and
+FIBO_FINDINGS.md's propagation-fix note for the blast-radius check that
+preceded this change.
+
 TOMORROW'S SCALE FACTOR: adjustment_factors is only piecewise-constant
 across ex-dates, so tomorrow's factor equals today's UNLESS a corporate
 action's ex_date falls in (today, today + EX_DATE_LOOKAHEAD_DAYS] -- in
@@ -32,6 +39,7 @@ import pandas as pd
 from data_layer.staleness import assert_data_current
 from fibo.daily_ohlc import build_daily_ohlc_panel
 from fibo.indicators import alligator, alligator_uptrend, most_recent_confirmed_swing, golden_zone
+from fibo.jump_guard import combined_unexplained_jump_dates
 from fibo.price_scale import get_adjustment_factor
 from fibo.universe import reconstitute_annually
 from fibo_live.config import EX_DATE_LOOKAHEAD_DAYS, TOP_N
@@ -92,7 +100,8 @@ def build_watchlist(con: duckdb.DuckDBPyConnection, as_of_date: dt.date, top_n: 
     uptrend_today = uptrend_df[uptrend_df["trade_date"] == pd.Timestamp(as_of_date)]
     uptrend_lookup = dict(zip(uptrend_today["entity_id"], uptrend_today["uptrend"]))
 
-    swing_df = most_recent_confirmed_swing(panel, as_of_date=as_of_date)
+    jump_dates = combined_unexplained_jump_dates(con)
+    swing_df = most_recent_confirmed_swing(panel, as_of_date=as_of_date, unexplained_jump_dates=jump_dates)
     swing_lookup = {r["entity_id"]: r for _, r in swing_df.iterrows()}
 
     rows = []

@@ -57,12 +57,41 @@ FRACTAL_WING = 5  # 5 bars EACH side of the center bar -> an 11-bar window (corr
 ATR_MULTIPLE_MIN_MOVE = 2.0
 GOLDEN_ZONE_LO, GOLDEN_ZONE_HI = 0.5, 0.618
 
+# Same threshold and reasoning as factors/lowvol.py's STALE_GAP_DAYS and
+# factors/momentum.py's own copy: a row-based shift() (true_range's
+# prev_close = shift(1), below) spans however many CALENDAR days actually
+# elapsed between two trading rows, not one ordinary day, for a name that
+# stopped trading and resumed. Unguarded here until 2026-10-11 -- src/fibo/
+# had no lineage-jump, same-isin-jump, or gap-awareness guard anywhere,
+# the same "fixed where noticed, not everywhere the pattern recurs"
+# failure already hit five times elsewhere in this project (BUGS.md). A
+# blast-radius check against the already-read 188 sealed-test and 67
+# dev trades found zero whose OWN swing-high/ATR computation window
+# intersects a presently-known Bug #1/#11/stale-gap instance (that check
+# only catches jumps outside [0.667, 1.5] and gaps over 5 calendar days --
+# it does not certify the ATR series clean in general), so this fix does
+# not change either trade list; it protects every trade this strategy
+# makes going forward, live paper trading included.
+STALE_GAP_DAYS = 5
 
-def _smma(series: pd.Series, period: int) -> pd.Series:
+
+def _smma(series: pd.Series, period: int, skip_nan: bool = False) -> pd.Series:
     """Wilder/Alligator smoothed moving average: seeded with a plain SMA of
     the first `period` values, then recursively
     smma[i] = (smma[i-1]*(period-1) + x[i]) / period. NaN before the seed
-    point (not backfilled)."""
+    point (not backfilled).
+
+    `skip_nan`: if True, a NaN input at step i CARRIES THE PREVIOUS VALUE
+    FORWARD unchanged (out[i] = out[i-1]) instead of computing the
+    recursive step -- used only by `atr()`, whose true_range input can be
+    NaN'd out at a stale-gap or unexplained-jump row (see true_range's own
+    docstring). Without this, a single NaN true_range would otherwise
+    propagate forward FOREVER through the recursive formula (every later
+    out[i] ultimately depends on out[i-1]), permanently breaking ATR from
+    that row on -- not a transient skip, a silent total failure. Alligator
+    never passes skip_nan=True: its input (median price) is a real price,
+    never NaN, so the recursive formula is correct as originally written
+    there."""
     values = series.to_numpy(dtype=float)
     out = np.full(len(values), np.nan)
     if len(values) < period:
@@ -70,7 +99,10 @@ def _smma(series: pd.Series, period: int) -> pd.Series:
     seed = np.nanmean(values[:period])
     out[period - 1] = seed
     for i in range(period, len(values)):
-        out[i] = (out[i - 1] * (period - 1) + values[i]) / period
+        if skip_nan and np.isnan(values[i]):
+            out[i] = out[i - 1]
+        else:
+            out[i] = (out[i - 1] * (period - 1) + values[i]) / period
     return pd.Series(out, index=series.index)
 
 
@@ -84,21 +116,63 @@ def _per_entity(df: pd.DataFrame, fn) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True) if parts else fn(df.iloc[0:0])
 
 
-def true_range(g: pd.DataFrame) -> pd.Series:
+def _is_unexplained_jump_row(g: pd.DataFrame, unexplained_jump_dates: dict | None) -> pd.Series:
+    """Same Bug #1/#11 guard pattern as factors.momentum/factors.lowvol's
+    own `_is_unexplained_jump_row` -- duplicated rather than imported,
+    matching this project's established convention that each module
+    computing a gap-aware statistic stays self-contained and independently
+    testable (tests/test_gap_awareness.py's own convention; see also
+    factors/lowvol.py's docstring for the same note). The DETECTORS
+    themselves (src/data_layer/lineage_jump_guard.py,
+    same_isin_jump_guard.py) are imported, never reimplemented -- see
+    src/fibo/jump_guard.py, which is the one place a caller should get
+    `unexplained_jump_dates` from."""
+    if not unexplained_jump_dates:
+        return pd.Series(False, index=g.index)
+    flag = pd.Series(False, index=g.index)
+    for eid, dates in unexplained_jump_dates.items():
+        mask = (g["entity_id"] == eid) & (g["trade_date"].isin(dates))
+        flag |= mask
+    return flag
+
+
+def true_range(g: pd.DataFrame, unexplained_jump_dates: dict | None = None) -> pd.Series:
+    """True range, NaN'd out (not silently computed) for any row whose
+    calendar gap to the prior row exceeds STALE_GAP_DAYS, or whose date is
+    a flagged Bug #1/#11 unexplained price jump for that entity -- same
+    gap-awareness convention as factors/lowvol.py's `_log_returns` and
+    factors/momentum.py's `_max_gap_in_window`, applied here instead of a
+    chained return. `unexplained_jump_dates`, if omitted, applies only the
+    calendar-gap check (the STALE_GAP_DAYS threshold alone cannot see a
+    same-isin or lineage jump that lands on an otherwise-consecutive
+    trading day, e.g. a 1-day gap -- that is exactly why Bug #11 is a
+    distinct bug shape, not a Bug #1 recurrence)."""
     prev_close = g["adjusted_close"].shift(1)
-    return pd.concat([
+    tr = pd.concat([
         g["adjusted_high"] - g["adjusted_low"],
         (g["adjusted_high"] - prev_close).abs(),
         (g["adjusted_low"] - prev_close).abs(),
     ], axis=1).max(axis=1)
 
+    prev_date = g["trade_date"].shift(1)
+    gap_days = (g["trade_date"] - prev_date).dt.days
+    is_stale = (gap_days > STALE_GAP_DAYS) | _is_unexplained_jump_row(g, unexplained_jump_dates)
+    tr = tr.where(~is_stale.fillna(False), np.nan)
+    return tr
 
-def atr(panel: pd.DataFrame, period: int = ATR_PERIOD) -> pd.DataFrame:
-    """[entity_id, trade_date, atr] -- Wilder's ATR, one series per entity."""
+
+def atr(panel: pd.DataFrame, period: int = ATR_PERIOD, unexplained_jump_dates: dict | None = None) -> pd.DataFrame:
+    """[entity_id, trade_date, atr] -- Wilder's ATR, one series per entity.
+    A true_range NaN'd out by a stale gap or an unexplained jump (see
+    true_range's own docstring) does not update the SMMA on that row --
+    the previous ATR value carries forward unchanged (`_smma(...,
+    skip_nan=True)`) and normal recursive updates resume on the next
+    trustworthy row, rather than a single bad input corrupting ATR for
+    the rest of the entity's history."""
     def _one(g: pd.DataFrame) -> pd.DataFrame:
-        tr = true_range(g)
+        tr = true_range(g, unexplained_jump_dates)
         g = g.copy()
-        g["atr"] = _smma(tr, period)
+        g["atr"] = _smma(tr, period, skip_nan=True)
         return g[["entity_id", "trade_date", "atr"]]
     return _per_entity(panel, _one)
 
@@ -160,6 +234,7 @@ SWING_LOOKBACK_DAYS = 60  # trading days, per the frozen rule (PREREGISTRATION_F
 def most_recent_confirmed_swing(
     panel: pd.DataFrame, as_of_date, lookback_days: int = SWING_LOOKBACK_DAYS,
     atr_multiple: float = ATR_MULTIPLE_MIN_MOVE, wing: int = FRACTAL_WING,
+    unexplained_jump_dates: dict | None = None,
 ) -> pd.DataFrame:
     """The frozen rule's EXACT swing construction (PREREGISTRATION_FIBO.md
     Section 3b), one row per entity that has one: the swing HIGH is the
@@ -186,10 +261,14 @@ def most_recent_confirmed_swing(
     or an average) keeps the filter anchored to the same date the setup
     itself is evaluated on.
 
+    `unexplained_jump_dates`, if given, is threaded into the ATR(14) call
+    below -- see `atr()`/`true_range()`'s own docstrings (src/fibo/jump_guard.py
+    is where a caller should get this from).
+
     [entity_id, swing_high_date, swing_high_price, swing_low_date,
     swing_low_price, move, atr_at_swing_high, passes_filter]."""
     frac = fractals(panel)
-    atr_df = atr(panel)
+    atr_df = atr(panel, unexplained_jump_dates=unexplained_jump_dates)
     as_of_ts = pd.Timestamp(as_of_date)
 
     rows = []

@@ -325,3 +325,161 @@ to either 2024 or 2025. At n=50, against 47-48 trades in each other year,
 this could be ordinary single-year noise -- or it could be decay in the
 most recent period. This document does not have enough information to
 tell those apart, and does not adjust the headline figure for it.
+
+**Caveat on this result, added 2026-10-10 (diagnostic on the existing
+Section 9 verdict, not a new finding; not a study, no slot spent, no rule
+changed):** is 2026's weakness (+0.0731R, n=50) noise or decay, against
++0.5888 (2024) and +0.5770 (2025)?
+
+**Lead with the caveat this diagnostic raised against itself: a bootstrap
+comparing 2026's 50 trades to the pooled 2023-2025 138 trades treats every
+trade as an independent draw. Trades cluster by stock (the same name can
+appear more than once in a year) and by market-wide day (multiple band-
+101-200 names can trigger off the same broad move) -- the true variance of
+a 50-trade annual MEAN is therefore wider than the 0.1212 this calculation
+used, and the bootstrap's p=0.0006 is too small.** The direction of the
+finding (2026 sits outside the range ordinary per-trade noise would produce
+at this sample size) is probably right; the exact magnitude (how far
+outside) is not established by this calculation and should not be quoted
+as if it were.
+
+Three things ARE established, independent of that caveat:
+
+- **Setups did not change.** move/ATR (4.89 vs 5.10/5.13/4.59), ORB-width/
+  ATR (0.58 vs 0.50/0.52/0.61), trend strength at entry (1.40 vs 1.62/1.22/
+  1.27), and rank-band mix all put 2026 inside the range 2023-2025 already
+  spans. Band 101-200's share in 2026 (52%) is LOWER than in 2023 (60%) or
+  2025 (66%) -- the thin-liquidity band is not more dominant in the weak
+  year. Signal generation looks stable; whatever changed, changed in
+  outcomes, not in which setups qualify.
+- **Both exit mechanisms moved together, not one cleanly.** 2026 has the
+  lowest TARGET rate of all four years (8.0%, vs 12.5%/23.3%/19.1%), the
+  highest STOP rate (10.0%, vs 8.3%/4.7%/2.1%), AND its TIME_EXIT cohort's
+  own mean fell to +0.108 from +0.384 (2024) / +0.361 (2025). Fewer trades
+  reach target, more get stopped, and the ones that just ride to 15:15
+  make less along the way -- simultaneously, not via one isolated cause.
+- **2018 (development) and 2026 (sealed) share a signature.** 2018 is the
+  only losing development year (net R hi-cost -0.579, n=5 -- too small for
+  any statistical weight of its own). Its exit mix: STOP 40%, TARGET 0%,
+  TIME_EXIT mean -0.118 -- stop rate up, target rate down, TIME_EXIT
+  cohort negative, same three things moving together as 2026. Recorded as
+  a qualitative resemblance between this project's only two weak years,
+  not as a replicated statistical finding -- two observations carry no
+  weight on their own.
+
+**Operational consequence, stated plainly, not pre-judged**: the forward
+paper test now has a second question to answer, not just one. Not only
+"does the edge replicate going forward" but "was 2026's weakness ordinary
+noise, or the start of decay." The live log settles that on its own
+timeline, from new trades the sealed window never saw -- not from more
+analysis of the same 188 trades. Nothing here pre-judges which answer the
+live log will give.
+
+**How long that takes, computed, since it bounds the wait**: at this
+population's per-trade SD of 0.8567, distinguishing a true mean of +0.47
+from a true mean of +0.07 (the two candidates this diagnostic is actually
+choosing between) at |t|>=2 needs n >= (2 x 0.8567 / 0.40)^2 = **~19
+forward trades** with that per-trade variance. At the sealed test's own
+historical pace (188 trades / ~44.5 months = ~4.2/month), that is **roughly
+4.5 months** of live paper trading -- not years. This is the number that
+tells the live log when it can actually speak to this question, not a
+reason to wait on it before reading anything else the log produces.
+
+Logged as a diagnostic (not a study, no slot spent, no rule changed) in
+`experiments_fibo.csv`.
+
+## 10. Diagnostic: when does the strategy's return arrive, 09:30 vs 11:30 vs 15:15 (2026-10-10, not a study, nothing built)
+
+Two comparisons, fixed in advance (not a minute-by-minute scan): return
+09:30 close to 11:30 close, and 09:30 close to 15:15 close, on the 188
+sealed-test trades, the 67 development trades (separate), and a control of
+every stock-day in that year's top-200 roster. Plus a decomposition of the
+strategy's own gross R into the portion realized by 11:30 vs after.
+
+**Lead with the caveat, not the headline: the 09:30-anchored comparison is
+largely CIRCULAR and must not be cited as evidence of edge.** Entry
+requires a 15-minute candle to close above the opening-range high, so by
+construction a trade cannot exist unless the stock already moved up between
+09:30 and entry. Measuring a return FROM 09:30 on the traded sample
+therefore partly re-measures the entry condition itself, not a result of
+the trade. The raw contrast (sealed trades +1.21% by 11:30 / +1.79% by
+15:15, vs the top-200 control -0.02% / -0.04% over the same years, both
+t-stats enormous given n) is recorded here for completeness but is not
+evidence of anything beyond the entry rule doing what it was built to do.
+
+**The honest number is entry-anchored, not clock-anchored**: of the
+sealed test's mean gross +0.5150R, computed from each trade's own entry
+price (not 09:30, since entries land anywhere in 09:30-11:30):
+
+| window | mean R | pct of gross |
+|---|---|---|
+| by 11:30 | +0.1830 | 35.5% |
+| 11:30 to exit/15:15 | +0.3320 | 64.5% |
+
+**Two-thirds of the strategy's gross return arrives in the back half of the
+holding window, after 11:30.** (188/188 trades decomposed; for the 9
+already exited by 11:30, realization is 100% "by 11:30" by definition; for
+the remaining 179, price at 11:30 was converted to the trade's own raw
+price scale via the entry bar's own empirical scale factor -- exact by
+construction, since scale is constant within a day -- then expressed in
+R-units via that trade's stop distance. Sum of the two halves matches
+gross R exactly on every trade, to floating-point precision.)
+
+**Practical consequence, recorded as an observation, not a rule change**:
+shortening the exit time would cut away the majority of the edge. The
+15:15 exit is doing real work. No rule changes as a result of this
+diagnostic, per Section 5a/5b's own discipline -- same treatment as the
+TIMING null in Section 6c above.
+
+**Power constraint, n=188**: observed SD 1.130% (09:30 to 11:30) and 1.790%
+(09:30 to 15:15) imply a mean return of only 0.165% / 0.261% would already
+clear |t|>=2 at this sample size -- this particular sample is not
+underpowered for the (circular) clock-anchored contrast above; it is simply
+not the right comparison to draw a conclusion from.
+
+**Added mid-run, descriptive only**: exit-time-of-day for the 29 TARGET and
+12 STOP exits among the 188 (bucketed 09:30-10:30 / 10:30-11:30 /
+11:30-13:00 / 13:00-15:15): TARGET skews late (6.9% / 13.8% / 31.0% /
+48.3%), STOP skews slightly less late (0.0% / 25.0% / 33.3% / 41.7%). n=29
+and n=12 -- a shape, not a tested claim.
+
+**Standing caution, now twice observed**: an earlier diagnostic (09:27 vs
+09:29 entry-time comparison, per the user's own prior read, not re-derived
+here) found the opposite sign to what had been eyeballed, in both
+populations tested, with no stable sign by year. This diagnostic's own
+starting intuition -- that a breakout strategy's gains should show up
+early, by 11:30 -- was also reversed by the data (65% of gross R arrives
+AFTER 11:30, not before). Twice now, in this project, an eyeballed
+intraday pattern has pointed the opposite way from what a decade of
+1-minute bars actually shows. Recorded as a standing caution against
+reasoning about intraday timing from intuition rather than measurement,
+independent of either individual result.
+
+Diagnostic only. Not a study -- no pre-registration, no sealed window read,
+no rule changed. Logged in `experiments_fibo.csv`.
+
+## 11. Propagation fix: Bug #1/#2/#11 guards applied to src/fibo/ (2026-10-11)
+
+Full detail in `BUGS.md`'s Bug #11 entry (UPDATE, 2026-10-11) -- recorded
+here only as a pointer, since it changes no verdict. `src/fibo/` had none
+of this project's lineage-jump, same-isin-jump, or gap-aware-ATR guards
+anywhere; a blast-radius check found 0 of the 188 sealed + 67 dev trades'
+own signal-computation windows touch a presently-known instance (that
+check's own limits -- [0.667, 1.5] ratio band, >5-calendar-day gaps only --
+are stated in BUGS.md, not repeated here). Fixed and re-verified: the
+sealed 188-trade list is byte-identical; the live evening watchlist for
+2026-10-08 reproduces its exact 6 qualifying stocks. **Section 9's amended
+verdict (+0.3673R, t=6.033) stands, unchanged, confirmed not contaminated
+by this fix.**
+
+One separate thing surfaced during verification, unrelated to the fix
+itself: re-running the development-window backtest today returns 278
+trades, not the 67 described in Section 4, because the intraday archive
+underlying that window grew after the original 2026-09-29 run (confirmed
+via a controlled with/without-fix comparison on today's archive: 278
+trades either way, zero difference from the fix). **Section 4's "67
+trades, 71.6% win rate" is not reproducible from today's warehouse state
+for a reason that has nothing to do with this fix** -- flagged, not
+investigated or resolved here. The 67-trade pickle was restored rather
+than left at 278 so this document's own numbers stay matched to what is
+actually saved on disk.

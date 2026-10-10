@@ -774,6 +774,60 @@ already anticipated in this entry's own text ("would affect the MAIN
 momentum project's own... computations... not checked there") is now a
 concrete, named list instead of a general worry.
 
+**UPDATE, 2026-10-11: fixed in src/fibo/ -- the SIXTH instance of "fixed
+where noticed, not everywhere the pattern recurs."** `src/fibo/` (the
+Fibonacci/ORB intraday project, including the 188-trade sealed test) had
+NEITHER this guard NOR Bug #1's (`lineage_jump_guard`) anywhere, and
+`src/fibo/indicators.py:88`'s `true_range` used a raw, row-based
+`prev_close = shift(1)` -- Bug #2's exact shape, also unguarded. All three
+built on `prices_eod`/`adjustment_factors`, the same tables every other
+instance of this meta-pattern touches.
+
+Blast-radius check FIRST, per instruction, before any fix: ran both
+detectors (full warehouse history) plus a new >5-calendar-day stale-gap
+scan against all 130 entities traded across the 188 sealed-test + 67
+dev-window trades. Coarse bound (entity has a flagged defect anywhere in
+its history): 40 of 255 trades. Tight bound (the flagged date falls
+inside THAT trade's own swing-low-to-swing-high computation window):
+**0 of 255** -- checked directly, not estimated. This does not certify
+the ATR series clean in general: the detectors only catch jumps outside
+[0.667, 1.5] with no nearby corporate-action record, and gaps over 5
+calendar days -- a smaller, unflagged distortion would not be caught by
+this same check.
+
+Fixed: `src/fibo/jump_guard.py` (new -- imports both existing detectors,
+reimplements neither, merges their output into one `entity_id -> dates`
+dict), threaded through `true_range`/`atr` (now gap-aware the same way
+`factors/lowvol.py` already is, including a NaN-input carry-forward fix
+to `_smma` so a flagged row pauses Wilder's recursive ATR for one step
+instead of corrupting it forever) and `most_recent_confirmed_swing`, then
+wired into every real caller: `scripts/fibo_test_backtest.py`,
+`scripts/fibo_step5_backtest.py`, `scripts/fibo_open_diagnostic_backtest.py`,
+and `src/fibo_live/watchlist.py` (the live paper-trading system).
+Regression tests added to `tests/test_fibo_indicators.py` (4 new cases,
+including a synthetic gap inside the ATR window asserting the fix does
+not chain a NaN across it).
+
+**Re-run and verified, per instruction, not assumed**: the sealed 188-trade
+list is byte-identical, every column, confirming the blast-radius finding.
+The live evening watchlist for 2026-10-08 (the basis for 2026-10-09's
+morning run) reproduces the identical 6 qualifying stocks with identical
+zone/ATR/swing values to full precision. The 67-trade dev-window list
+could NOT be directly re-verified this way -- re-running it today returns
+278 trades, not 67, because `fibo_intraday.duckdb`'s dev-window (2016-2022)
+intraday coverage grew from 81 to 280 entities between the original
+2026-09-29 run and now (`fetch_log_intraday` shows downloads continuing
+through 2026-10-01, after that run), unrelated to this fix -- confirmed by
+re-running with the fix OFF against today's same, grown archive: also 278
+trades, identical set, zero difference attributable to the fix. The
+sealed window's own intraday archive did not grow over the same period
+(304 entities, unchanged). Flagged as a separate, pre-existing
+reproducibility gap in `scripts/fibo_step5_backtest.py` (it reads
+`bars_1min` live rather than from a frozen, versioned snapshot) --
+not investigated or resolved here, and `data/fibo_step5_dev_results.pkl`
+was restored to its original 67-trade state rather than left at the
+newer, differently-sourced 278.
+
 ## Bug #12: the pre-registered fundamentals-screener risk filter was never applied in any swing candidate-count or backtest run -- the same class as Bug #7 (a spec assumed a capability the actual join/computation did not have)
 
 **Found while specifying the Phase 3 decomposition diagnostic**, checking
