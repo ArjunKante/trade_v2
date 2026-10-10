@@ -90,3 +90,68 @@ bug resolved:
   BUGS.md entry, or an explicit cross-reference), not a coincidentally
   similar new one -- treating it as new hides the fact that the first fix
   should have been searched for siblings and wasn't.
+
+## Angel One rate limiting: the documented limits are not the real constraint
+
+Every module that calls Angel One SmartAPI has independently rediscovered
+throttling settings. This section is the one place to check or update them,
+so the next module doesn't re-derive this from scratch.
+
+**Published limits** (confirmed live against
+`https://smartapi.angelone.in/docs/RateLimit` and `.../docs/Historical`):
+`getCandleData` = 3 req/sec, 150 req/min, 5000 req/hour. No documented daily
+cap exists for this or any other endpoint used here.
+
+**What we have actually hit is tighter than the documented caps, twice:**
+- **2026-10-09**: a rate-limit-shaped error after only ~6 requests in a few
+  seconds -- nowhere near 3/sec, 150/min, or 5000/hour.
+- **2026-09-30** (`scripts/fibo_download_intraday_top200.py`): the download
+  stopped on a rate-limit-shaped error after 502 successful requests in
+  roughly 10 minutes -- again well inside every published ceiling.
+
+Neither incident is explained by the documented per-second/minute/hour
+numbers. Two readings are both consistent with the evidence and neither is
+ruled out: either Angel enforces an undocumented burst limit (tripped by a
+short run of requests closer together than the published per-second cap
+would suggest), or there is an undocumented cumulative/daily quota that
+2026-09-30's ~502-request stop and 2026-10-09's ~6-request stop both sit
+under. **Treat the published numbers as an upper bound on what Angel allows,
+never as a floor on what will actually succeed.**
+
+**The rule, regardless of which reading is correct:** on a rate-limit error,
+back off and retry the *same* request. Never record a failed fetch as a
+result -- a chunk/candle/quote that was never actually fetched must come
+back as a distinct non-terminal failure (e.g. `FETCH_FAILED`), not as "no
+data" or "off," so a later run retries it instead of silently treating a
+gap as a checked-and-empty result.
+
+**Current settings** (the reference values -- update here first, then
+propagate):
+- 0.4s between requests (flat throttle, independent of any rolling-window
+  check).
+- On a rate-limit-shaped error specifically (`fibo.download.looks_rate_limited`
+  -- not on any other error, and not on a token-expiry-shaped error, which
+  needs a re-login instead, not a wait): exponential backoff starting at 2s,
+  doubling, capped at 30s, up to 5 retries before giving up on that request
+  for this run.
+- The Angel One instrument/scrip master (`OpenAPIScripMaster.json`, tens of
+  MB, does not change intraday) is downloaded at most once per IST calendar
+  date and cached to disk; every call that date reuses the cached copy.
+
+**Audit of every module that calls Angel One, against these settings:**
+
+| module | throttle | rate-limit handling | scrip master |
+|---|---|---|---|
+| `scripts/fibo_morning.py` (`fetch_candle_with_retry`) | 0.4s | matches: exponential backoff 2s->30s, 5 retries, `FETCH_FAILED` on exhaustion, never `SETUP_OFF`/checked | does **not** cache -- calls `fibo.download.resolve_entity_tokens`, which re-downloads the full master on every call (up to 3x in one run: once each from `phase1_setups`, `watch_for_triggers`, `resolve_outcomes`, whenever any setup is active) |
+| `scripts/fibo_evening.py` | n/a | n/a | n/a -- never imports or calls Angel One; the daily bar comes from NSE bhavcopy |
+| `scripts/snapshot_spreads.py` (spread monitor) | n/a -- one `getMarketData` call per invocation | **does not retry** on a rate-limit error; fails the run and returns a non-zero exit without writing any row, so it does not violate "never record a failed fetch as a result," but it also doesn't back off and retry within the same run the way the stated rule intends | matches: uses `spread_monitor.tokens.resolve_tokens`, cached per IST date |
+| `scripts/fibo_download_intraday.py`, `scripts/fibo_download_intraday_top200.py` (bulk historical backfill) | 0.4s, plus a rolling-window self-throttle (140/min, 4500/hour) | **deliberately different, not a bug**: STOPS IMMEDIATELY on the first rate-limit-shaped error rather than backing off and retrying -- a one-shot resumable backfill where stopping costs nothing (the next run picks up every chunk not already logged `ok`), so the chosen tradeoff is "never risk hammering a limited key further" over "retry in place." Still correctly never logs a stopped chunk as done. | does **not** cache -- same `resolve_entity_tokens` call as the morning job, once per run |
+
+**Two things to fix to bring every module into line with the stated
+settings:** (1) `fibo.download.resolve_entity_tokens` should cache the
+scrip master to disk per IST date, the same way `spread_monitor.tokens`
+already does, instead of re-downloading the full master file on every call;
+(2) `snapshot_spreads.py`'s single `getMarketData` call has no backoff/retry
+at all on a rate-limit error -- it simply fails the run. Neither has been
+changed yet; recorded here so the fix is deliberate rather than
+rediscovered mid-incident.

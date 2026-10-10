@@ -25,6 +25,15 @@ top-200 universe amendment):
 Prints how many stocks qualify (PREREGISTRATION_FIBO.md's uptrend AND
 valid-swing-passing-2xATR AND known-scale-factor definition, src/fibo_live/
 watchlist.py's module docstring).
+
+UNATTENDED (Windows Task Scheduler): every log() line also goes to
+data/fibo_live/scheduler.log (src/fibo_live/scheduler_support.py) since a
+scheduled run has no terminal. main() is wrapped so an unhandled exception
+-- dead network on the bhavcopy fetch, anything -- is caught, logged with
+its traceback, and swallowed: the process always exits 0. Idempotent
+against an accidental double-fire for the same trade_date (checks for an
+existing watchlist_run event first) on top of the staleness guard below
+and load_bhavcopy_to_duckdb's own existing-row skip.
 """
 import argparse
 import datetime as dt
@@ -41,14 +50,34 @@ from data_layer.staleness import assert_data_current, StaleDataError
 
 from fibo_live.clock import detect_run_mode
 from fibo_live.config import RAW_PRICES_DIR, TOP_N, WAREHOUSE_DB
-from fibo_live.eventlog import append_event
+from fibo_live.eventlog import append_event, read_events
+from fibo_live.notify import already_notified, record_notification, send_email
+from fibo_live.scheduler_support import make_logger, run_unattended
 from fibo_live.watchlist import build_watchlist
 
 SERIES_INCLUDE = ["EQ", "BE", "BZ"]  # same set config.yaml's nse_bhavcopy.series_include uses
 
+log = make_logger()
 
-def log(msg: str) -> None:
-    print(msg, flush=True)
+
+def already_has_watchlist_run(trade_date: dt.date) -> bool:
+    return any(e.get("as_of_date") == str(trade_date) for e in read_events(kind="watchlist_run"))
+
+
+def notify_evening_skipped(trade_date: dt.date, short_reason: str, detail: str) -> None:
+    """Silence from a scheduled job is indistinguishable from success --
+    this is the one alert that exists purely to say "nothing happened,
+    and here is why" rather than to report a result. Deduped per
+    trade_date so a second same-day run (manual re-run, a Task Scheduler
+    catch-up fire) hitting the same refusal doesn't resend."""
+    if already_notified("evening_skipped", trade_date):
+        return
+    subject = f"FIBO EVENING SKIPPED - {short_reason}"
+    body = f"The evening job for {trade_date} did not produce a watchlist.\n\nReason: {detail}"
+    if send_email(subject, body, log=log):
+        record_notification("evening_skipped", trade_date, reason=short_reason)
+    else:
+        log("  evening-skipped email NOT sent -- will retry next run")
 
 
 def main() -> None:
@@ -64,6 +93,19 @@ def main() -> None:
     run_mode = detect_run_mode(trade_date)
 
     log(f"=== FIBO EVENING JOB -- {trade_date} (run_mode={run_mode}) ===")
+
+    # Idempotency: a once-daily scheduled trigger should never fire twice
+    # in a row for the same trade_date, but "Run task as soon as possible
+    # after a scheduled start is missed" or a manual re-run both can. A
+    # second run recomputing the same day's watchlist wastes work rather
+    # than causing wrong data (build_watchlist is pure, re-fetch is
+    # separately idempotent), but it would still mint a redundant
+    # watchlist_run + 200 watchlist events every time -- refuse instead.
+    if already_has_watchlist_run(trade_date):
+        log(f"watchlist_run already logged for {trade_date} -- skipping (idempotent). "
+            f"Nothing else to do.")
+        return
+
     con = get_connection(WAREHOUSE_DB)
 
     # Checked BEFORE today's own fetch, against whatever the warehouse's
@@ -76,6 +118,7 @@ def main() -> None:
         log(f"Freshness check OK: warehouse's latest trading day was {prior_latest} before this run.")
     except StaleDataError as e:
         log(f"REFUSING TO RUN: {e}")
+        notify_evening_skipped(trade_date, "stale data", str(e))
         con.close()
         return
 
@@ -89,8 +132,9 @@ def main() -> None:
 
     existing = con.execute("SELECT COUNT(*) FROM prices_eod WHERE trade_date = ?", [trade_date]).fetchone()[0]
     if existing == 0:
-        log(f"No bhavcopy data for {trade_date} (holiday, weekend, or not yet published) -- "
-            f"no watchlist written. Nothing else to do.")
+        reason = f"No bhavcopy data for {trade_date} (holiday, weekend, or not yet published)"
+        log(f"{reason} -- no watchlist written. Nothing else to do.")
+        notify_evening_skipped(trade_date, "missing bhavcopy", reason)
         con.close()
         return
 
@@ -122,4 +166,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    run_unattended("FIBO EVENING JOB", main, log)
