@@ -155,3 +155,51 @@ already does, instead of re-downloading the full master file on every call;
 at all on a rate-limit error -- it simply fails the run. Neither has been
 changed yet; recorded here so the fix is deliberate rather than
 rediscovered mid-incident.
+
+## `data/fibo_live/v1/events.jsonl` is tracked in git -- the one deliberate exception to the data/ ignore rule
+
+Every other file under `data/` is gitignored, for a licensing reason: most
+of it is NSE market data (bhavcopy, index closes, fundamentals), and this
+project does not redistribute that. `events.jsonl` is different in kind,
+not just in size -- it is the Fibo live paper-trading system's entire
+evidence trail (every evening watchlist, every morning setup/trigger/
+outcome, `src/fibo_live/eventlog.py`), which is:
+
+- **this laptop's own paper-trading decisions**, plus a small number of
+  prices derived from them for display -- not a redistribution of NSE's
+  datasets. The licensing rationale for ignoring the rest of `data/` does
+  not apply to it.
+- **the forward test itself**, with exactly one copy, on one laptop that
+  has already crashed twice in a single week. Losing this file does not
+  just lose data -- a forward test that has to be re-logged from scratch
+  after a crash is not the same test anymore; a re-logged signal after the
+  fact proves nothing about whether it was known before its outcome.
+- **made credible by git's own commit timestamps**: a forward test's whole
+  claim to being forward (not hindsight re-labeled as foresight) rests on
+  the signal having been recorded before the outcome existed. A git commit
+  is independent, third-party-timestamped evidence of exactly that, the
+  same way the event log's own `ts` field is (`eventlog.py`'s docstring),
+  but backed by something other than this one laptop's clock.
+
+**Mechanics**: `.gitignore` un-ignores this one path with a chain of
+negation patterns walking back down through every parent directory
+(`/data/*` -> `!/data/fibo_live` -> `/data/fibo_live/*` -> `!/data/fibo_live/v1`
+-> `/data/fibo_live/v1/*` -> `!/data/fibo_live/v1/events.jsonl`) -- per
+gitignore(5), a single negated pattern on a file inside an otherwise-
+ignored directory does not work; every ancestor directory has to be
+un-ignored and re-ignored in turn. Nothing else under `data/` is affected;
+confirmed with `git status` after staging only this one path.
+
+**Kept current automatically**: `scripts/fibo_evening.py` calls
+`fibo_live.git_sync.sync_events_log_to_git` once at the very end of every
+run (after `run_unattended`, so it fires whether that run produced a new
+watchlist, skipped idempotently, refused on stale data, or crashed with an
+unhandled exception -- whatever got appended before any of those outcomes
+still gets backed up). It stages the file, commits only if something
+actually changed, and pushes. Every step is best-effort: a failed `git
+add`/`commit`/`push` (no network, no upstream, a hook rejecting the
+commit, git itself missing) is logged and the job still exits normally --
+this sync must never be the reason a scheduled run is reported as failed,
+and a missed push just means the laptop is carrying one more unpushed
+commit for next time, not lost data (the file itself is still safe on
+disk; only the off-laptop backup is delayed).

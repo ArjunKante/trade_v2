@@ -43,6 +43,9 @@ its traceback, and swallowed: the process always exits 0. Idempotent
 against an accidental double-fire targeting the same next trading day
 (checks for an existing watchlist_run event first) on top of the
 staleness guard below and load_bhavcopy_to_duckdb's own existing-row skip.
+After every run, the events log is committed and pushed (src/fibo_live/
+git_sync.py), best-effort, never blocking the job on a failed push
+(OPERATIONS.md).
 """
 import argparse
 import datetime as dt
@@ -58,8 +61,9 @@ from data_layer.prices_nse import load_bhavcopy_to_duckdb
 from data_layer.staleness import assert_data_current, StaleDataError
 
 from fibo_live.clock import detect_run_mode
-from fibo_live.config import RAW_PRICES_DIR, TOP_N, WAREHOUSE_DB
+from fibo_live.config import EVENTS_LOG, RAW_PRICES_DIR, TOP_N, WAREHOUSE_DB
 from fibo_live.eventlog import append_event, read_events
+from fibo_live.git_sync import sync_events_log_to_git
 from fibo_live.notify import already_notified, record_notification, send_email
 from fibo_live.scheduler_support import make_logger, run_unattended
 from fibo_live.watchlist import build_watchlist
@@ -247,3 +251,9 @@ def main() -> None:
 
 if __name__ == "__main__":
     run_unattended("FIBO EVENING JOB", main, log)
+    # Runs after run_unattended returns -- which it always does, success,
+    # idempotent skip, stale-data refusal, or a swallowed crash -- so
+    # whatever this run appended (even a partial run cut short by an
+    # exception) still gets backed up off this one laptop. Never raises;
+    # see fibo_live/git_sync.py and OPERATIONS.md.
+    sync_events_log_to_git(EVENTS_LOG, log)

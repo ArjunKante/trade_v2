@@ -1,4 +1,19 @@
-data/
+/data/*
+# Deliberate exception: data/fibo_live/v1/events.jsonl is the Fibo live
+# paper-trading forward test's own evidence log (this laptop's trading
+# decisions, logged before outcomes were known), not NSE market data --
+# the licensing rationale for ignoring the rest of data/ does not apply
+# to it. Tracked so a crash doesn't restart the forward test, and so each
+# commit's own timestamp is independent evidence a signal was logged
+# before its outcome existed. See OPERATIONS.md. Re-including a file deep
+# inside an otherwise-ignored tree requires un-ignoring (and re-ignoring
+# the rest of) every parent directory in turn, per gitignore(5) -- a
+# single `!data/fibo_live/v1/events.jsonl` on its own would not work.
+!/data/fibo_live
+/data/fibo_live/*
+!/data/fibo_live/v1
+/data/fibo_live/v1/*
+!/data/fibo_live/v1/events.jsonl
 .pytest_cache/
 __pycache__/
 *.pyc
