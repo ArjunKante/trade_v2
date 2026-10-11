@@ -190,16 +190,33 @@ ignored directory does not work; every ancestor directory has to be
 un-ignored and re-ignored in turn. Nothing else under `data/` is affected;
 confirmed with `git status` after staging only this one path.
 
-**Kept current automatically**: `scripts/fibo_evening.py` calls
-`fibo_live.git_sync.sync_events_log_to_git` once at the very end of every
-run (after `run_unattended`, so it fires whether that run produced a new
-watchlist, skipped idempotently, refused on stale data, or crashed with an
-unhandled exception -- whatever got appended before any of those outcomes
-still gets backed up). It stages the file, commits only if something
-actually changed, and pushes. Every step is best-effort: a failed `git
-add`/`commit`/`push` (no network, no upstream, a hook rejecting the
-commit, git itself missing) is logged and the job still exits normally --
-this sync must never be the reason a scheduled run is reported as failed,
-and a missed push just means the laptop is carrying one more unpushed
-commit for next time, not lost data (the file itself is still safe on
+**Kept current automatically, from BOTH jobs, not just the evening one**:
+`scripts/fibo_evening.py` AND `scripts/fibo_morning.py` each call
+`fibo_live.git_sync.sync_events_log_to_git` once at the very end of their
+own run (after `run_unattended`, so it fires whether that run produced new
+events, skipped idempotently, refused early, or crashed with an unhandled
+exception -- whatever got appended before any of those outcomes still
+gets backed up).
+
+Syncing only from the evening job would defeat the whole timestamp
+argument above for anything the MORNING job writes -- setup, trigger, and
+outcome events. The evening job runs once, after close; the morning job is
+what logs a stock going SETUP ON around 09:30 and a trigger firing some
+minutes after that, all DURING market hours, with that trade's own outcome
+not yet known. If the only sync point were 18:30 that evening, the first
+git commit touching that setup event would already postdate its outcome
+(resolved by 15:15 the same day) -- at that point git's timestamp proves
+nothing a human claiming to have logged it after the fact couldn't also
+claim. Committing right after each morning run, instead, gives that setup
+a commit timestamp from while the trade was still live -- independent
+evidence it really was recorded before the outcome existed, which is the
+specific thing a forward test needs and the only reason this sync exists.
+
+Each call stages the file, commits only if something actually changed,
+and pushes. Every step is best-effort: a failed `git add`/`commit`/`push`
+(no network, no upstream, a hook rejecting the commit, git itself
+missing) is logged and the job still exits normally -- this sync must
+never be the reason a scheduled run is reported as failed, and a missed
+push just means the laptop is carrying one more unpushed commit for next
+time, not lost data (the file itself is still safe on
 disk; only the off-laptop backup is delayed).

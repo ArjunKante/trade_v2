@@ -79,6 +79,14 @@ it, a scheduler firing every 15 minutes on a holiday would log a
 FETCH_FAILED-shaped "no candle" event for every watchlist stock, every
 run, all morning, for no reason.
 
+After every run, the events log is committed and pushed (src/fibo_live/
+git_sync.py), best-effort, never blocking the job on a failed push. This
+is the run that matters most for a credible git timestamp on setup/
+trigger events specifically: they are written here, during market hours,
+and syncing only from the evening job (hours later, after that trade's
+outcome is already known) would mean git could never independently show
+a setup was recorded before its outcome (OPERATIONS.md).
+
 NOT YET LIVE-VERIFIED: written and reviewed against the exact mechanism
 scripts/fibo_test_backtest.py already uses on historical data, but not run
 against a live market session -- the market is closed at the time this
@@ -111,8 +119,9 @@ from fibo.price_scale import to_raw_scale
 from fibo.resolution import compute_r, compute_target, position_size_shares, resolve_trade
 
 from fibo_live.clock import detect_run_mode
-from fibo_live.config import WAREHOUSE_DB
+from fibo_live.config import EVENTS_LOG, WAREHOUSE_DB
 from fibo_live.eventlog import append_event, read_events
+from fibo_live.git_sync import sync_events_log_to_git
 from fibo_live.notify import already_notified, record_notification, send_email
 from fibo_live.outcomes import record_outcome
 from fibo_live.scheduler_support import make_logger, run_unattended
@@ -529,3 +538,10 @@ def main() -> None:
 
 if __name__ == "__main__":
     run_unattended("FIBO MORNING JOB", main, log)
+    # Runs after run_unattended returns -- success, an early refusal
+    # (stale data, login failure, non-trading day), or a swallowed crash --
+    # so a setup/trigger/outcome logged this run gets a commit timestamp
+    # from during market hours, not held back until the evening job runs
+    # hours later and after that trade's outcome is already known. Never
+    # raises; see fibo_live/git_sync.py and OPERATIONS.md.
+    sync_events_log_to_git(EVENTS_LOG, log)
