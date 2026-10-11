@@ -135,3 +135,76 @@ def is_member(universe: pd.DataFrame, entity_id: str, trade_date) -> bool:
     that date's calendar-year membership list."""
     year = pd.Timestamp(trade_date).year
     return not universe[(universe["year"] == year) & (universe["entity_id"] == entity_id)].empty
+
+
+# --- Universe enforcement: a FILTER and a separate GUARD, not one fix per
+# script. BUGS.md's Bug #11 entry (UPDATE, 2026-10-11): fibo_test_backtest.py
+# and fibo_step5_backtest.py both built their entity list from WHATEVER was
+# downloaded into bars_1min, never filtered against reconstitute_annually's
+# own declared universe -- the sealed test's 188 trades were stable only
+# because that window's intraday archive happened not to grow; the dev
+# window's archive DID grow (an unrelated download campaign backfilled band
+# 101-200 across the full history, not just the sealed-test window) and the
+# dev backtest silently returned 278 trades instead of 67 on a rerun. This
+# is the seventh instance of "fixed where noticed, not everywhere the
+# pattern recurs." Fixing the two scripts protects those two scripts; the
+# functions below exist so the NEXT script that evaluates a Fibo universe
+# gets caught loudly if it forgets to filter, rather than needing its own
+# discovery and its own BUGS.md entry. ---
+
+def effective_universe(universe: pd.DataFrame, stub_year: int | None = None) -> pd.DataFrame:
+    """`universe` with an additional `stub_year` row-set added, copied from
+    the EARLIEST reconstituted year, if `stub_year` has no row of its own --
+    the identical convention `src/fibo/download.py`'s `build_download_plan`
+    already applies for the documented first-year gap (this module's own
+    docstring: "calendar year 2016 has no preceding year to rank against --
+    2016 is dropped"), centralized here so a backtest's universe filter/
+    guard and a download plan agree on what year 2016 (or any dev-window
+    start year before the first reconstituted year) is allowed to trade,
+    instead of each re-deriving the rule. A no-op if `stub_year` is None,
+    already present, or not actually earlier than the first reconstituted
+    year."""
+    if stub_year is None or stub_year in set(universe["year"]):
+        return universe
+    years = sorted(universe["year"].unique())
+    if not years or years[0] <= stub_year:
+        return universe
+    stub = universe[universe["year"] == years[0]].copy()
+    stub["year"] = stub_year
+    return pd.concat([universe, stub], ignore_index=True)
+
+
+def restrict_to_universe(entity_years: pd.DataFrame, universe: pd.DataFrame) -> pd.DataFrame:
+    """THE FILTER. `entity_years`: any DataFrame with `entity_id` and `year`
+    columns (every other column is preserved). Returns only the rows whose
+    (year, entity_id) is a declared member of `universe` -- pass `universe`
+    through `effective_universe()` first if a dev-window stub year applies.
+    An inner join, not a loop-based `is_member` call per row: this is meant
+    to run against the full downloaded-pairs table (hundreds of thousands
+    of rows) once, not per-row."""
+    members = universe[["year", "entity_id"]].drop_duplicates()
+    return entity_years.merge(members, on=["year", "entity_id"], how="inner")
+
+
+def assert_universe_membership(entity_years: pd.DataFrame, universe: pd.DataFrame, label: str = "") -> None:
+    """THE GUARD, independent of the filter above -- call this on whatever
+    a backtest is ABOUT to evaluate, after `restrict_to_universe`, as a
+    structural assertion that the restriction actually held. Protects a
+    FUTURE caller who builds its entity list some other way (a different
+    query, a copy-pasted loop, a forgotten filter call) by failing loudly
+    with a ValueError instead of silently trading whatever the archive
+    happens to contain. `entity_years` needs `entity_id`/`year` columns
+    (extra columns ignored); `universe` should already include any stub
+    year via `effective_universe()`."""
+    declared = set(zip(universe["year"], universe["entity_id"]))
+    evaluated = set(zip(entity_years["year"], entity_years["entity_id"]))
+    violations = evaluated - declared
+    if violations:
+        sample = sorted(violations, key=lambda t: (t[0], t[1]))[:10]
+        raise ValueError(
+            f"UNIVERSE VIOLATION{f' [{label}]' if label else ''}: {len(violations)} (year, entity_id) "
+            f"pair(s) about to be evaluated are NOT members of the declared universe for that year -- "
+            f"this means entities would be traded because they exist in the archive, not because the "
+            f"specification calls for them. Universe must be defined by specification, never by data "
+            f"availability. Sample violations: {sample}"
+        )

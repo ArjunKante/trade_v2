@@ -954,3 +954,80 @@ not fixed by remembering to run ingestion on time, which is exactly the
 thing that already failed once. Regression test fixes this incident's own
 13-day gap as the test fixture: `tests/test_staleness.py::
 test_the_actual_13_day_gap_incident_is_refused`.
+
+## Bug #14: Fibo backtest universe was defined by data availability, not specification -- the sealed test's 188 trades were stable by luck
+
+**Found while verifying the Bug #11 propagation fix above**: re-running
+`fibo_step5_backtest.py` (dev, pre-registered top-50 universe) returned 278
+trades, not the documented 67. Root cause traced, not assumed: the script
+built its entity list from `SELECT DISTINCT entity_id, trade_date FROM
+bars_1min` -- whatever had been downloaded -- and never filtered it against
+`reconstitute_annually`'s own declared top-50 membership. `universe` was
+computed and saved to the output pickle, but used only for nothing; no
+code path ever checked an evaluated entity against it. Separately,
+`scripts/fibo_download_intraday_top200.py`'s download plan spans
+`DEV_START` (2016-10-04) to `FULL_END` (2026-09-18) for the band-51-200
+"additional universe" -- it backfilled band 101-200 names across the ENTIRE
+history, including the dev window, even though those names were never part
+of the dev backtest's own top-50 specification. That backfill (confirmed
+via `fetch_log_intraday`, downloads continuing through 2026-10-01) is what
+grew the dev script's candidate pool from 81 to 280 entities and silently
+changed its trade count on any rerun.
+
+**`fibo_test_backtest.py` (sealed, top-200) has the IDENTICAL shape** --
+`entities` likewise came from `bars_1min`, not filtered against
+`universe`. It does tag every trade with `rank`/`band` afterward
+(`rank_lookup.get(...)`, defaulting to `"unranked"`), but a tag is not a
+filter -- an out-of-universe entity would still generate a counted trade,
+merely labeled differently. Checked directly: of the 785 distinct (year,
+entity) combinations actually evaluated in the current 188-trade sealed
+result, **zero** fall outside the declared top-200 roster for their year,
+and zero trades are tagged `"unranked"`. **This means Section 9's 188
+trades were never protected by an enforced universe -- they were stable
+only because the sealed window's own intraday archive happened not to
+grow the same way the dev window's did.** Had the top-200 widening
+campaign's download plan been scoped as loosely for the sealed window as
+it was for the dev window, the 188-trade sealed result could have
+silently changed on any rerun the same way the dev result did. Recorded
+here as fact, not hypothetical: the mechanism that would have caused it is
+confirmed, only the specific trigger (archive growth) did not happen to
+fire for this window.
+
+**`src/fibo_live/watchlist.py` (the live paper-trading system) does NOT
+have this defect** -- checked, not assumed: `build_watchlist` derives
+`entity_ids` directly from that year's `universe` membership and calls
+`build_daily_ohlc_panel(con, entity_ids=entity_ids)` with that explicit
+list -- it starts from the specification and queries data for it, rather
+than starting from whatever data exists. This is the correct pattern the
+backtest scripts should have used from the start.
+
+**The SEVENTH instance of "fixed where noticed, not everywhere the
+pattern recurs,"** and a different shape from the first six: not a missing
+exclusion on a known-bad data point, but a missing boundary on which data
+points are even eligible to be evaluated at all. Universe must be defined
+by specification, never by data availability.
+
+**Fixed with a FILTER and a separate GUARD, not three local patches**:
+`src/fibo/universe.py` gained `effective_universe()` (handles the
+documented first-reconstituted-year gap -- e.g. 2016 has no preceding year
+to rank against -- by reusing the next available year's membership, the
+same convention `build_download_plan` already used for this exact gap, now
+centralized instead of each caller re-deriving it), `restrict_to_universe()`
+(an inner join restricting any entity/year table to declared members), and
+`assert_universe_membership()` (an independent guard, raises `ValueError`
+loudly if anything about to be evaluated is still outside the declared
+universe after filtering -- protects a FUTURE script that builds its
+entity list some other way and forgets to filter, not just the three
+scripts fixed today). Wired into `fibo_test_backtest.py`,
+`fibo_step5_backtest.py` (with the stub-year handling), and
+`fibo_open_diagnostic_backtest.py` (restricted to the wider top-200 bound,
+since that script computes both top-100 and top-200 by design). 6 new
+tests in `tests/test_fibo_universe.py`.
+
+**Not yet re-run** -- the filter and guard are in place and the full test
+suite passes (322/322), but per instruction this is reported before any
+backtest is re-executed. Expected effect: the sealed 188-trade list should
+be unchanged (zero violations found on inspection); the dev-window list
+should return to something close to its original 67 once restricted back
+to the declared top-50, though the exact count is not yet confirmed by an
+actual run.

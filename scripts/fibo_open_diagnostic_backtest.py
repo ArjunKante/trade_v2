@@ -11,9 +11,8 @@ before any data was read; this module's rules were not).
 MECHANISM: one evaluation pass over every (entity, day) pair with resolved
 scale and an active (uptrend AND has_swing) daily signal, mirroring
 scripts/fibo_test_backtest.py's SQL/caching pattern exactly (same scale-probe
-classification, same signal computation) but over the full range and with
-NO universe pre-filter -- every such pair gets BOTH
-fibo.backtest.evaluate_entity_day (breakout) and
+classification, same signal computation) but over the full range -- every
+such pair gets BOTH fibo.backtest.evaluate_entity_day (breakout) and
 fibo_open.backtest_open.evaluate_entity_day_open (open) evaluated on the
 IDENTICAL (signal_row, scale_decision, scale, factor_d, bars) inputs. Since
 both functions compute the SAME ORB and the SAME zone-overlap test from
@@ -21,11 +20,19 @@ those identical inputs, SETUP_OFF vs SETUP_ON classification is identical
 between the two by construction -- no separate bookkeeping needed to
 guarantee "identical stock-days."
 
-Universe membership (top-100 AND top-200, both reconstituted point-in-time,
-annual) is looked up and attached to every trade AFTERWARDS, as a tag --
-not as a pre-filter -- so the top-100 headline result and the "what did
-excluding band 101-200 cost us" report can both be read off one evaluation
-pass without running it twice.
+UNIVERSE FILTER, added 2026-10-11 (BUGS.md Bug #11 UPDATE -- the seventh
+"fixed where noticed" instance): restricted to the declared top-200
+membership (the WIDER of the two bounds this script itself computes) BEFORE
+evaluation, via src/fibo/universe.py's restrict_to_universe +
+assert_universe_membership -- previously "NO universe pre-filter" by
+documented design, which this entry's own audit showed is indistinguishable
+from "trades whatever the archive contains" once an unrelated download
+campaign adds more than the specification calls for. Top-100 AND top-200
+membership are still looked up and attached to every trade AFTERWARDS, as a
+tag, exactly as before -- that part of the design (reading the top-100
+headline and the "what did excluding band 101-200 cost us" report off one
+evaluation pass) is unchanged; only the upper bound on what gets evaluated
+at all is now enforced rather than left to the archive.
 """
 import sys
 import pickle
@@ -35,7 +42,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from fibo.universe import reconstitute_annually
+from fibo.universe import reconstitute_annually, effective_universe, restrict_to_universe, assert_universe_membership
 from fibo.daily_ohlc import build_daily_ohlc_panel
 from fibo.signals import compute_daily_signals
 from fibo.scale_probe import probe_scale, passes_gap_guard, to_raw_scale as scale_to_raw, ScaleDecision
@@ -107,12 +114,28 @@ def main():
     universe200 = reconstitute_annually(warehouse_con, top_n=TOP_N_WIDE)
     rank100_lookup = {(r["year"], r["entity_id"]): r["rank"] for _, r in universe100.iterrows()}
     rank200_lookup = {(r["year"], r["entity_id"]): r["rank"] for _, r in universe200.iterrows()}
+    # STUB YEAR: no reconstituted row for 2016 (no 2015 to rank against);
+    # RANGE_START is 2016-10-04. 2016 reuses 2017's top-200 membership list,
+    # same convention as fibo_step5_backtest.py / build_download_plan.
+    universe200_eff = effective_universe(universe200, stub_year=RANGE_START.year)
 
     downloaded_pairs = intraday_con.execute(
         "SELECT DISTINCT entity_id, trade_date FROM bars_1min WHERE trade_date >= ? AND trade_date <= ?",
         [RANGE_START, RANGE_END],
     ).fetchdf()
     downloaded_pairs["trade_date"] = pd.to_datetime(downloaded_pairs["trade_date"]).dt.date
+    downloaded_pairs["year"] = downloaded_pairs["trade_date"].apply(lambda d: d.year)
+
+    # UNIVERSE FILTER + GUARD (see module docstring): restrict to the WIDER
+    # declared bound (top-200) before evaluating anything.
+    n_before = len(downloaded_pairs)
+    downloaded_pairs = restrict_to_universe(downloaded_pairs, universe200_eff)
+    n_excluded = n_before - len(downloaded_pairs)
+    if n_excluded:
+        log(f"Universe filter: excluded {n_excluded} (entity,day) pair(s) not in the declared "
+            f"top-200 universe for their year.")
+    assert_universe_membership(downloaded_pairs, universe200_eff, label="fibo_open_diagnostic_backtest")
+
     entities = downloaded_pairs["entity_id"].unique().tolist()
     log(f"Entities with any downloaded bars in range: {len(entities)}, (entity,day) pairs: {len(downloaded_pairs)}")
 

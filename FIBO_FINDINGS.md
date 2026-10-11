@@ -483,3 +483,35 @@ for a reason that has nothing to do with this fix** -- flagged, not
 investigated or resolved here. The 67-trade pickle was restored rather
 than left at 278 so this document's own numbers stay matched to what is
 actually saved on disk.
+
+## 12. Section 9's 188 trades were stable by luck, not by enforcement (2026-10-11)
+
+Full detail in `BUGS.md`'s Bug #14 entry -- recorded here as a direct
+statement against Section 9's own verdict, not just a pointer, because it
+is a fact about how that verdict was produced.
+
+**`fibo_test_backtest.py` (the sealed-test script) never enforced the
+top-200 universe it is specified on.** Its entity list was built from
+whatever had been downloaded into `bars_1min`, not filtered against
+`reconstitute_annually`'s declared membership -- the exact same
+unenforced shape the development-window script had (Section 11 above),
+which silently returned 278 trades instead of 67 once its own archive grew
+beyond its top-50 specification. Checked directly for the sealed window:
+zero of the 785 (year, entity) combinations actually evaluated in the
+current 188-trade result fall outside the declared top-200 roster, and
+zero trades carry the `"unranked"` tag the script's own code would apply
+to an out-of-universe entity. **The 188 is correct, but it was correct
+because the sealed window's intraday archive happened not to grow the
+same way the dev window's did -- not because the script would have
+refused to trade an out-of-universe name if one had appeared.** The
+mechanism that corrupted the dev-window count was fully capable of
+corrupting this one too; it simply didn't fire here.
+
+**Section 9's amended verdict (+0.3673R, t=6.033) is unaffected by this
+finding** -- it is a statement about how the number was produced, not a
+revision of the number itself. A filter and an independent guard
+(`src/fibo/universe.py`: `restrict_to_universe`, `assert_universe_membership`)
+are now in place in all three Fibo backtest scripts, so this cannot recur
+silently again; `src/fibo_live/watchlist.py` (the live system) already
+enforced its universe correctly and needed no change. Not yet re-run as
+of this entry -- reported before execution, per instruction.

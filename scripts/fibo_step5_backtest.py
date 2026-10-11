@@ -18,7 +18,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fibo.holdout import guard_date_range, DEV_START, DEV_END, SEALED_TEST_START
-from fibo.universe import reconstitute_annually
+from fibo.universe import reconstitute_annually, effective_universe, restrict_to_universe, assert_universe_membership
 from fibo.daily_ohlc import build_daily_ohlc_panel
 from fibo.signals import compute_daily_signals
 from fibo.jump_guard import combined_unexplained_jump_dates
@@ -59,10 +59,35 @@ def main():
     intraday_con = get_intraday_read_connection(INTRADAY_DB)
 
     universe = reconstitute_annually(warehouse_con, top_n=50)
+    # STUB YEAR: reconstitute_annually has no row for 2016 (no 2015 to rank
+    # against -- universe.py's own documented first-year gap), but DEV_START
+    # is 2016-10-04. 2016 reuses 2017's membership list, the identical
+    # convention src/fibo/download.py's build_download_plan already applies
+    # for this exact gap.
+    universe_eff = effective_universe(universe, stub_year=DEV_START.year)
+
     downloaded_pairs = intraday_con.execute(
         "SELECT DISTINCT entity_id, trade_date FROM bars_1min WHERE trade_date < ?", [SEALED_TEST_START]
     ).fetchdf()
     downloaded_pairs["trade_date"] = pd.to_datetime(downloaded_pairs["trade_date"]).dt.date
+    downloaded_pairs["year"] = downloaded_pairs["trade_date"].apply(lambda d: d.year)
+
+    # UNIVERSE FILTER (BUGS.md Bug #11 UPDATE, 2026-10-11): the dev backtest
+    # is specified on the TOP-50 universe. This script previously evaluated
+    # whatever entities happened to be downloaded into bars_1min -- an
+    # unrelated download campaign later backfilled band 51-200 across the
+    # FULL history (not just the sealed-test window it was meant for), which
+    # silently grew this script's own candidate pool from 81 to 280 entities
+    # and its trade count from 67 to 278 on a rerun. Restricting here closes
+    # that gap at the source.
+    n_before = len(downloaded_pairs)
+    downloaded_pairs = restrict_to_universe(downloaded_pairs, universe_eff)
+    n_excluded = n_before - len(downloaded_pairs)
+    if n_excluded:
+        log(f"Universe filter: excluded {n_excluded} (entity,day) pair(s) not in the declared "
+            f"top-50 universe for their year (likely band-51-200 names from the later download).")
+    assert_universe_membership(downloaded_pairs, universe_eff, label="fibo_step5_backtest")
+
     entities = downloaded_pairs["entity_id"].unique().tolist()
     log(f"Entities: {len(entities)}, (entity,day) pairs: {len(downloaded_pairs)}")
 

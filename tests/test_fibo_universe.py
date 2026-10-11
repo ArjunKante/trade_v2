@@ -9,7 +9,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from fibo.universe import reconstitute_annually, membership_report, is_member
+from fibo.universe import (
+    reconstitute_annually, membership_report, is_member,
+    effective_universe, restrict_to_universe, assert_universe_membership,
+)
 
 
 def _make_con(rows):
@@ -106,3 +109,64 @@ def test_is_member_point_in_time():
     assert is_member(universe, "A", pd.Timestamp("2021-06-01"))
     assert not is_member(universe, "A", pd.Timestamp("2022-06-01"))
     assert not is_member(universe, "B", pd.Timestamp("2021-06-01"))
+
+
+def _universe_fixture():
+    return pd.DataFrame({
+        "year": [2021, 2021, 2022, 2022],
+        "entity_id": ["A", "B", "A", "C"],
+        "median_turnover_prior_year": [1.0, 1.0, 1.0, 1.0],
+        "rank": [1, 2, 1, 2],
+    })
+
+
+def test_effective_universe_adds_stub_year_from_earliest_reconstituted_year():
+    universe = _universe_fixture()
+    eff = effective_universe(universe, stub_year=2020)
+    assert set(eff.loc[eff["year"] == 2020, "entity_id"]) == {"A", "B"}  # copied from 2021, the earliest year
+    # original years untouched
+    assert set(eff.loc[eff["year"] == 2022, "entity_id"]) == {"A", "C"}
+
+
+def test_effective_universe_noop_when_stub_year_already_present_or_none():
+    universe = _universe_fixture()
+    assert effective_universe(universe, stub_year=None) is universe
+    assert effective_universe(universe, stub_year=2021) is universe  # already has its own row
+    # a stub_year AFTER the first reconstituted year is not a gap to fill -- no-op
+    unchanged = effective_universe(universe, stub_year=2021).equals(universe)
+    assert unchanged
+
+
+def test_restrict_to_universe_keeps_only_declared_members():
+    universe = _universe_fixture()
+    entity_years = pd.DataFrame({
+        "entity_id": ["A", "B", "ROGUE"], "year": [2021, 2021, 2021], "trade_date": ["x", "y", "z"],
+    })
+    kept = restrict_to_universe(entity_years, universe)
+    assert set(kept["entity_id"]) == {"A", "B"}
+    assert "trade_date" in kept.columns  # extra columns preserved
+
+
+def test_assert_universe_membership_passes_when_everything_is_declared():
+    universe = _universe_fixture()
+    entity_years = pd.DataFrame({"entity_id": ["A", "B"], "year": [2021, 2021]})
+    assert_universe_membership(entity_years, universe)  # must not raise
+
+
+def test_assert_universe_membership_fails_loudly_on_a_violation():
+    universe = _universe_fixture()
+    entity_years = pd.DataFrame({"entity_id": ["A", "ROGUE"], "year": [2021, 2021]})
+    with pytest.raises(ValueError, match="UNIVERSE VIOLATION"):
+        assert_universe_membership(entity_years, universe, label="test")
+
+
+def test_restrict_then_assert_is_a_no_raise_pipeline_even_with_contaminated_input():
+    """The actual intended usage: filter first, then guard -- the guard
+    must never fire on output that already went through the filter,
+    confirming the two compose correctly end to end."""
+    universe = _universe_fixture()
+    entity_years = pd.DataFrame({
+        "entity_id": ["A", "B", "ROGUE1", "ROGUE2"], "year": [2021, 2021, 2021, 2099],
+    })
+    filtered = restrict_to_universe(entity_years, universe)
+    assert_universe_membership(filtered, universe)  # must not raise

@@ -23,7 +23,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fibo.holdout import guard_date_range, SEALED_TEST_START
-from fibo.universe import reconstitute_annually
+from fibo.universe import reconstitute_annually, restrict_to_universe, assert_universe_membership
 from fibo.daily_ohlc import build_daily_ohlc_panel
 from fibo.signals import compute_daily_signals
 from fibo.jump_guard import combined_unexplained_jump_dates
@@ -98,6 +98,25 @@ def main():
         [SEALED_TEST_START, TEST_END],
     ).fetchdf()
     downloaded_pairs["trade_date"] = pd.to_datetime(downloaded_pairs["trade_date"]).dt.date
+    downloaded_pairs["year"] = downloaded_pairs["trade_date"].apply(lambda d: d.year)
+
+    # UNIVERSE FILTER (BUGS.md Bug #11 UPDATE, 2026-10-11): restrict to exactly
+    # the declared top-200 membership for each year BEFORE evaluating anything --
+    # the archive may contain more than the specification calls for (the download
+    # campaign that widened band 51-200's coverage was not scoped tightly), and
+    # trading whatever happens to be downloaded is not the same as trading the
+    # declared universe.
+    n_before = len(downloaded_pairs)
+    downloaded_pairs = restrict_to_universe(downloaded_pairs, universe)
+    n_excluded = n_before - len(downloaded_pairs)
+    if n_excluded:
+        log(f"Universe filter: excluded {n_excluded} (entity,day) pair(s) not in the declared "
+            f"top-{TOP_N} universe for their year.")
+    # GUARD, independent of the filter above: fails loudly if anything about to
+    # be evaluated is still outside the declared universe (a bug in the filter,
+    # or a future caller bypassing it).
+    assert_universe_membership(downloaded_pairs, universe, label="fibo_test_backtest")
+
     entities = downloaded_pairs["entity_id"].unique().tolist()
     log(f"Entities: {len(entities)}, (entity,day) pairs: {len(downloaded_pairs)}")
 
