@@ -1031,3 +1031,83 @@ be unchanged (zero violations found on inspection); the dev-window list
 should return to something close to its original 67 once restricted back
 to the declared top-50, though the exact count is not yet confirmed by an
 actual run.
+
+## Bug #15: a fetch made before a day's bhavcopy could possibly be published was cached as a permanent confirmed holiday -- "could not check" recorded as "checked, nothing there"
+
+**Same class as FETCH_FAILED vs SETUP_OFF** (the recurring shape where "we
+could not determine the outcome" and "we determined the outcome was
+negative" collapse into one status, and the second, much stronger claim is
+what gets persisted): `src/data_layer/prices_nse.py`'s `fetch_raw_zip`
+raised the same `NoDataForDate` for every 404 from NSE's archive --
+genuine holiday, weekend, or simply "not published yet" -- and
+`load_bhavcopy_to_duckdb` recorded ALL three as `fetch_log.status = 'no_data'`,
+which its own idempotency check then treats as permanent: once written,
+no later call ever retries that `(source, trade_date)` again.
+
+**Mechanism, confirmed live, not inferred**: `fetch_log` held
+`(NSE_BHAVCOPY_UDIFF, 2026-10-09, 'no_data', attempted_at=2026-10-09 00:23:00)`
+-- 23 minutes after midnight, hours before that day's market opens, let
+alone before NSE publishes that evening's bhavcopy. A 404 at that moment
+proves nothing about whether the day is a holiday; the file simply cannot
+exist yet. The likely origin: `scripts/backfill_prices.py` walking forward
+through dates and crossing midnight mid-run, so "today" rolled over to
+2026-10-09 while it was still fetching, and it immediately tried (and
+necessarily failed to get) that still-nonexistent day's bar. Re-fetched
+live on 2026-10-11: HTTP 200, Content-Length 206,974 bytes, a complete
+valid bhavcopy ZIP, 3,687 real data rows, every row's `TradDt=2026-10-09`
+-- including MEESHO's low of 224.31, which matches the live ORB low the
+Fibo morning job itself recorded that same day in `events.jsonl`. Cross-
+checked against `data/raw/nse_cm_holidays.pkl` (NSE's official CM-segment
+holiday master, fetched directly from NSE in an earlier phase, covering
+2016-2026): 2026-10-09 is not in it. The day traded normally; only the
+EOD bhavcopy fetch for it failed, at a moment it was guaranteed to fail.
+
+**Effect measured, not assumed**: this silently punched a one-day hole in
+`prices_eod` at exactly the boundary `scripts/fibo_evening.py`'s backward
+search for "the latest trading day with data" needed to cross. Every
+manual evening-job run over the following weekend walked back from
+2026-10-11 (Sun) through 2026-10-10 (Sat) and 2026-10-09 (Fri) -- all
+hitting the cached `no_data` with no real network call made -- straight to
+2026-10-08 (Thu), and computed the 2026-10-12 (Mon) watchlist from that
+stale, Friday-less panel. The result was silently wrong in the same way
+Bug #13 describes: not a crash, a plausible-looking watchlist (6
+qualifying names) that happened to be byte-for-byte identical to
+2026-10-08's own watchlist, because it was built on the exact same data.
+Recomputing from the panel through the real 2026-10-09 close raised that
+to **10 qualifying names** -- KOTAKBANK, RBLBANK, MOTILALOFS, and
+AUROPHARMA newly qualify on Friday's bar; none of the original 6 dropped
+out, and their golden zones were unchanged. Had this gone untraded Monday
+morning, four real setups would have been invisible to the paper-trading
+system for no reason it could have reported.
+
+**Status: fixed, stale row corrected, superseded runs annotated, not just
+patched.** `src/data_layer/nse_holidays.py` (new) loads the holiday master
+and exposes `is_nse_holiday(date)`, raising `HolidayCalendarMissing` --
+never silently `False` -- for a year the master doesn't cover, the same
+fail-safe stance `src/spread_monitor/trading_day.py` already takes for the
+live equivalent check. `load_bhavcopy_to_duckdb` now only writes a
+permanent `'no_data'` when `is_nse_holiday` CONFIRMS the date; every other
+404 (including an unverifiable year) is logged `'error'` instead, which is
+always retried on the next call rather than cached forever. The one stale
+row this bug had already written could not be "corrected by appending" --
+`fetch_log` has `PRIMARY KEY(source, trade_date)`, a current-status table,
+not an append-only log -- so it was deleted and re-fetched through the
+now-fixed normal path (`ok`, 2938 rows), with the before/after and full
+reasoning recorded as an append-only `data_correction` event in
+`events.jsonl` instead, since that log format actually supports it.
+`scripts/fibo_evening.py`'s `already_has_watchlist_run` idempotency guard
+was extended to ignore runs marked superseded by a new
+`watchlist_run_correction` event, so the correction could produce a fresh
+run for the same `target_trade_date` (2026-10-12) rather than being
+refused as a false duplicate of the run it was replacing; both the
+`target=2026-10-09` artifact and the stale Friday-less `target=2026-10-12`
+run were annotated superseded this way, not deleted.
+
+**Open item, not investigated tonight**: the same audit (every weekday
+`no_data` row in `fetch_log` cross-checked against the holiday master)
+found one more suspicious row -- `2016-06-20` (a Monday), source
+`NSE_INDEX_CLOSE_ALL`, attempted 2026-09-19 during what looks like a
+historical index-data backfill. Different table, different ingestion path
+(`src/data_layer/index_nse.py`) from the bhavcopy fix above -- plausibly
+the same conflation, not confirmed. Not fixed or even fetched live here;
+flagged for whoever next touches index ingestion.

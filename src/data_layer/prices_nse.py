@@ -22,6 +22,8 @@ import duckdb
 import pandas as pd
 import requests
 
+from data_layer.nse_holidays import HolidayCalendarMissing, is_nse_holiday
+
 UDIFF_URL = "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_{yyyymmdd}_F_0000.csv.zip"
 LEGACY_URL = "https://nsearchives.nseindia.com/content/historical/EQUITIES/{yyyy}/{mmm}/cm{dd}{mmm}{yyyy}bhav.csv.zip"
 USER_AGENT = (
@@ -195,9 +197,24 @@ def load_bhavcopy_to_duckdb(
     series_include: list[str] | None = None,
     source: str | None = None,
 ) -> int:
-    """Fetch+parse+load one trading day. Idempotent: skips if already loaded for that
-    trade_date, and records every attempt (including holidays/errors) in fetch_log so
-    a resumed backfill never re-requests a day it already resolved."""
+    """Fetch+parse+load one trading day. Idempotent: skips if already loaded
+    ('ok'), or already confirmed a holiday via NSE's own holiday master
+    ('no_data') -- a resumed backfill never re-requests a day it already
+    resolved either way. Anything else (no row yet, or a prior 'error') is
+    always retried.
+
+    A 404 from the archive (NoDataForDate) does NOT by itself mean
+    'no_data': it only means nothing is published for trade_date yet, which
+    is equally true of a genuine holiday/weekend AND of a day that simply
+    hasn't closed (or been fetched too early) -- found live, BUGS.md:
+    2026-10-09 (an ordinary Friday) got fetched at 00:23 local time that
+    day, 404'd for the obvious reason that nothing could exist yet, and
+    that got cached as a permanent 'no_data', silently skipping every
+    later re-fetch attempt including the evening job's own. A 404 is only
+    ever recorded as 'no_data' when nse_holidays.is_nse_holiday CONFIRMS
+    trade_date is a real NSE holiday; every other 404 (including an
+    unverifiable year -- HolidayCalendarMissing fails safe, never "assume
+    not a holiday") is logged as 'error' and retried on the next call."""
     source = source or format_for_date(trade_date)
     already = con.execute(
         "SELECT status FROM fetch_log WHERE source = ? AND trade_date = ?", [source, trade_date]
@@ -208,7 +225,11 @@ def load_bhavcopy_to_duckdb(
     try:
         zip_path, used_source = fetch_raw_zip(trade_date, raw_dir, source=source)
     except NoDataForDate:
-        _log_fetch(con, source, trade_date, "no_data", 0)
+        try:
+            confirmed_holiday = is_nse_holiday(trade_date)
+        except HolidayCalendarMissing:
+            confirmed_holiday = False  # fails safe -- unverifiable is never "confirmed"
+        _log_fetch(con, source, trade_date, "no_data" if confirmed_holiday else "error", 0)
         return 0
 
     df = parse_bhavcopy_zip(zip_path, used_source, trade_date, series_include=series_include)
