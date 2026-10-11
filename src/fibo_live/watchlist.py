@@ -77,7 +77,14 @@ def build_watchlist(con: duckdb.DuckDBPyConnection, as_of_date: dt.date, top_n: 
     """One row per top-`top_n` universe member, as of `as_of_date`'s close.
     Columns: entity_id, symbol, year, rank, uptrend, has_swing, passes_atr_filter,
     swing_high, swing_low, atr, golden_zone_low, golden_zone_high,
-    scale_factor, ex_date_flag, qualifies."""
+    scale_factor, ex_date_flag, qualifies, close.
+
+    `close` is `as_of_date`'s own adjusted close (build_daily_ohlc_panel's
+    `adjusted_close`) -- the SAME scale golden_zone_low/high are already
+    in, so a caller (e.g. the evening digest email) can compare the two
+    directly with no further scale conversion. None if this entity has no
+    priced row on `as_of_date` (a genuinely missing day, not expected for
+    an EQ-series universe member but not assumed impossible either)."""
     assert_data_current(con)  # BUGS.md Bug #13 -- refuse rather than compute on a stale/gapped panel
     universe = reconstitute_annually(con, top_n=top_n)
     year = as_of_date.year
@@ -87,7 +94,7 @@ def build_watchlist(con: duckdb.DuckDBPyConnection, as_of_date: dt.date, top_n: 
         return pd.DataFrame(columns=[
             "entity_id", "symbol", "year", "rank", "uptrend", "has_swing", "passes_atr_filter",
             "swing_high", "swing_low", "atr", "golden_zone_low", "golden_zone_high",
-            "scale_factor", "ex_date_flag", "qualifies",
+            "scale_factor", "ex_date_flag", "qualifies", "close",
         ])
     rank_lookup = dict(zip(members["entity_id"], members["rank"]))
     symbols = _latest_symbols(con, entity_ids)
@@ -99,6 +106,9 @@ def build_watchlist(con: duckdb.DuckDBPyConnection, as_of_date: dt.date, top_n: 
     uptrend_df = alligator_uptrend(panel, alligator_df)
     uptrend_today = uptrend_df[uptrend_df["trade_date"] == pd.Timestamp(as_of_date)]
     uptrend_lookup = dict(zip(uptrend_today["entity_id"], uptrend_today["uptrend"]))
+
+    close_today = panel[panel["trade_date"] == pd.Timestamp(as_of_date)]
+    close_lookup = dict(zip(close_today["entity_id"], close_today["adjusted_close"]))
 
     jump_dates = combined_unexplained_jump_dates(con)
     swing_df = most_recent_confirmed_swing(panel, as_of_date=as_of_date, unexplained_jump_dates=jump_dates)
@@ -127,6 +137,8 @@ def build_watchlist(con: duckdb.DuckDBPyConnection, as_of_date: dt.date, top_n: 
                 scale_factor = None
 
         qualifies = uptrend and has_swing and passes_atr and (scale_factor is not None)
+        close = close_lookup.get(entity_id)
+        close = float(close) if close is not None else None
 
         rows.append({
             "entity_id": entity_id, "symbol": symbols.get(entity_id), "year": year,
@@ -134,6 +146,7 @@ def build_watchlist(con: duckdb.DuckDBPyConnection, as_of_date: dt.date, top_n: 
             "passes_atr_filter": passes_atr, "swing_high": swing_high, "swing_low": swing_low,
             "atr": atr, "golden_zone_low": zone_low, "golden_zone_high": zone_high,
             "scale_factor": scale_factor, "ex_date_flag": ex_flag, "qualifies": qualifies,
+            "close": close,
         })
 
     return pd.DataFrame(rows)

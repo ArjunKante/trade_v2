@@ -53,6 +53,8 @@ import sys
 import uuid
 from pathlib import Path
 
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.adjustment import materialize_adjustment_factors
@@ -138,6 +140,68 @@ def notify_evening_skipped(trade_date: dt.date, short_reason: str, detail: str) 
         record_notification("evening_skipped", trade_date, reason=short_reason)
     else:
         log("  evening-skipped email NOT sent -- will retry next run")
+
+
+def _zone_distance(close: float, zone_low: float, zone_high: float) -> str:
+    """'<pct>% / Rs<rupees> above/below zone', measured from the nearer
+    zone boundary, or 'inside zone' if close already sits within
+    [zone_low, zone_high]."""
+    if close > zone_high:
+        diff = close - zone_high
+        return f"{diff / zone_high * 100:.2f}% / Rs{diff:.2f} above zone"
+    if close < zone_low:
+        diff = zone_low - close
+        return f"{diff / zone_low * 100:.2f}% / Rs{diff:.2f} below zone"
+    return "inside zone"
+
+
+def notify_watchlist_digest(target_trade_date: dt.date, watchlist: pd.DataFrame) -> None:
+    """One summary email per NEW watchlist run (never for an idempotent
+    skip or a refusal -- those paths never reach this call, and a refusal
+    already sends its own notify_evening_skipped email). Separate from,
+    and does not replace, the morning job's own per-stock SETUP/trigger
+    alerts (notify.py) -- those depend on tomorrow's opening range, which
+    does not exist yet at evening-job time; this digest only reports
+    where today's close already sits relative to each zone.
+
+    Deduped per target_trade_date the same way every other alert here is
+    (already_notified/record_notification) -- a second run that resolves
+    to the SAME target (e.g. a weekend re-run with no new bhavcopy) will
+    not resend. A genuine correction producing a materially different
+    watchlist for a target that already got a digest (rare -- see
+    BUGS.md's 2026-10-09 fetch-failure-cached-as-holiday entry) will also
+    not resend automatically; that case is intentionally left to be
+    noticed and handled by hand, same as the watchlist_run_correction
+    bookkeeping itself is."""
+    if already_notified("watchlist_digest", target_trade_date):
+        return
+
+    qualifying = watchlist[watchlist["qualifies"]].sort_values("rank")
+    n_qualify = len(qualifying)
+    subject = f"FIBO WATCHLIST for {target_trade_date} - {n_qualify} stocks"
+
+    lines = [
+        "Entry, stop and target depend on tomorrow's 09:15-09:30 opening range "
+        "and are not known yet. You will get a separate SETUP email at ~09:30 "
+        "if any stock's opening range lands in its zone.",
+        "",
+    ]
+    if n_qualify == 0:
+        lines.append("No stocks qualify tonight.")
+    for _, r in qualifying.iterrows():
+        zone_low, zone_high, close = r["golden_zone_low"], r["golden_zone_high"], r["close"]
+        distance = _zone_distance(close, zone_low, zone_high) if close is not None else "close unavailable"
+        close_str = f"{close:.2f}" if close is not None else "n/a"
+        lines.append(
+            f"{r['symbol']} (rank {int(r['rank'])}): zone {zone_low:.2f}-{zone_high:.2f}, "
+            f"close {close_str} -- {distance}"
+        )
+    body = "\n".join(lines)
+
+    if send_email(subject, body, log=log):
+        record_notification("watchlist_digest", target_trade_date, n_qualify=n_qualify)
+    else:
+        log("  watchlist-digest email NOT sent -- will retry next run")
 
 
 def main() -> None:
@@ -247,6 +311,8 @@ def main() -> None:
     if n_qualify:
         qualifying = watchlist[watchlist["qualifies"]][["symbol", "rank", "golden_zone_low", "golden_zone_high"]]
         log(qualifying.to_string(index=False))
+
+    notify_watchlist_digest(target_trade_date, watchlist)
 
 
 if __name__ == "__main__":
