@@ -241,3 +241,103 @@ never be the reason a scheduled run is reported as failed, and a missed
 push just means the laptop is carrying one more unpushed commit for next
 time, not lost data (the file itself is still safe on
 disk; only the off-laptop backup is delayed).
+
+## An ETA built from the throttle sleep alone, not a measured per-item cost -- BUGS.md Bug #4's exact mistake, recurring
+
+**The estimate**: the NIFTY-options backfill (`scripts/backfill_nifty_options.py`)
+was projected at ~73 minutes for ~2,676 trading days, built from 12
+isolated sample fetches (OPTIONS_HISTORICAL_FEASIBILITY.md) averaging
+~0.84s/request, plus the standard 0.8s politeness sleep -- call it
+~1.6s/file.
+
+**What actually happened, measured from the real run's own heartbeat
+log** (`data/options_history/backfill.log`): a sustained ~9-10s/day
+across several consecutive 50-day intervals, no errors, nothing
+anomalous -- just slower, by roughly 6x, for the whole run. Projected
+total: **~6.5 hours, not 73 minutes.**
+
+**Same mechanism BUGS.md's Bug #4 already named**: "the original ETA had
+implicitly assumed the throttle sleep WAS the per-document cost, with no
+allowance for real request latency at all." The 12 samples here were
+each a single, isolated, spaced-out request (with this assistant's own
+processing time as an unplanned extra gap between them) -- not a
+measurement of what the SAME archive does to a few thousand back-to-back
+requests from the same IP in one sustained run. An isolated-request
+timing is not evidence about sustained-throughput timing; Bug #4 already
+established this and it recurred anyway because the ETA was built before
+re-reading that entry.
+
+**Unconfirmed but worth testing before the next similar job**: Bug #4's
+own fix had two parts, and only the throttle-vs-real-cost half of the
+lesson was applied here. The other half -- `src/data_layer/prices_nse.py`'s
+own equity fetcher (and this new F&O fetcher, `src/options_history/
+fetch.py`, which copies its shape) both call bare `requests.get()` per
+request, never a reused `requests.Session()`. Bug #4 measured a 6.4x
+speedup from exactly that swap, on a different host. This was NOT
+re-measured here -- deliberately, to avoid adding a second burst of
+parallel load against NSE while the real backfill was already mid-run
+against it -- so it is a plausible contributing cause, not a confirmed
+one. Worth an isolated measurement (same-host, back-to-back, with vs.
+without a shared Session) before the next bhavcopy-scale backfill's ETA
+is quoted, rather than assumed fixed or assumed irrelevant.
+
+**The fix for THIS kind of estimate, going forward**: time a real
+SUSTAINED sample first -- several dozen consecutive requests against the
+actual target, back to back, at the actual intended throttle -- before
+quoting an ETA for anything in the hundreds-to-thousands of requests.
+A handful of isolated single-shot timings is what produced both this
+miss and Bug #4's.
+
+## The Fibo evening job missed its 18:30 run -- NOT a lock conflict with the options backfill, there is no scheduled trigger for it at all
+
+**Hypothesis going in** (the user's own, reasonable given the backfill was
+running the entire evening): the options backfill holds a write lock on
+the same DuckDB file the evening job needs, so the 18:30 run either
+failed or was blocked. **Checked, ruled out**: the backfill writes only
+to `data/options_history/options_history.duckdb`
+(`src/options_history/db.py::DB_PATH`) -- confirmed live, twice, by
+successfully opening `data/warehouse.duckdb` in a separate connection
+while the backfill was actively running. No lock contention is possible
+between these two files; DuckDB locks per-file, not per-process.
+
+**What actually happened**: `data/fibo_live/scheduler.log` has no entry
+at all between the 09:32:34 morning-job run and this incident -- not a
+refusal, not an error, nothing. `Get-ScheduledTask` confirms why: **no
+Task Scheduler entry exists for `fibo_evening.py` or `fibo_morning.py`,
+and never has.** Every run of either script, this entire project, has
+been triggered manually. 18:30 did not fail -- nothing was listening
+for 18:30 in the first place, and nobody happened to run it by hand that
+evening because attention was on the backfill.
+
+**This is BUGS.md Bug #13's exact meta-pattern recurring one layer up**:
+Bug #13 found this project has no scheduled ingestion runner of any kind
+and that a silent 13-day gap went unnoticed for exactly that reason. The
+evening/morning jobs have the identical gap -- they only run when a
+human remembers to run them -- and it took exactly one evening of
+divided attention to prove it. `scripts/snapshot_options_depth.py` (this
+same session) is the one script in this project that actually has a
+real Task Scheduler entry; `fibo_evening.py`/`fibo_morning.py` do not,
+despite both having the unattended-logging/never-crash machinery
+(`scheduler_support.py`) that ASSUMES something external is triggering
+them on a schedule.
+
+**Compounding effect, found while fixing it**: by the time this was run
+(just after midnight, now the next calendar day), the gap between real
+wall-clock "today" and the warehouse's last-ingested date had grown past
+`assert_data_current`'s 3-day tolerance, so Bug #13's own staleness
+guard correctly refused to run at all -- a second, independent
+consequence of the same missed run, not a new bug. Unblocking it needed
+a manual bhavcopy ingestion for the missed day before the evening job
+would proceed. A scheduled 18:30 trigger would never have let this gap
+open far enough to hit that guard in the first place.
+
+**UPDATE, 2026-10-13: fixed for the evening job.** `FiboEvening` now
+exists (weekdays 18:30, runs on battery, does not wake the machine, runs
+only when logged on, starts in `C:\projects\trade-new`) -- created with
+`schtasks /create /tn FiboEvening /xml scripts/_fibo_evening_task.xml`
+and verified against its own registered settings with
+`schtasks /query /tn FiboEvening /xml`, not just the creation command's
+exit status. Full detail: BUGS.md Bug #17 (this gap) and Bug #16 (the
+staleness-guard-ordering bug it exposed as a second, independent
+consequence). **The morning job still has no scheduled task** -- not
+asked for yet, flagged in Bug #17.

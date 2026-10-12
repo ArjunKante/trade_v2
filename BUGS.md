@@ -1111,3 +1111,95 @@ historical index-data backfill. Different table, different ingestion path
 (`src/data_layer/index_nse.py`) from the bhavcopy fix above -- plausibly
 the same conflation, not confirmed. Not fixed or even fetched live here;
 flagged for whoever next touches index ingestion.
+
+## Bug #16: the evening job's staleness guard ran BEFORE the fetch that would cure it -- a single missed run could never recover on its own
+
+**Mechanism**: `scripts/fibo_evening.py` called `assert_data_current(con)`
+-- the Bug #13 guard -- as the very first thing in `main()`, before
+attempting to fetch anything. That guard compares real wall-clock "today"
+against whatever the warehouse's latest ingested date already was. Found
+live, 2026-10-12: the scheduled 18:30 run never fired (Bug #17, below),
+so nobody fetched Monday's bhavcopy that evening. By the time the job
+was run manually just after midnight into Tuesday, the gap between real
+"today" (Tuesday) and the warehouse's latest date (the preceding Friday)
+had grown to 4 calendar days -- past the guard's 3-day tolerance -- and
+the job refused immediately, **before ever trying to fetch Monday**, the
+one day that would have closed the gap on its own. The job could not
+self-heal from a single missed evening; it needed a human to manually
+ingest the missing day first.
+
+**This inverts what the guard is for.** Bug #13's whole point is to stop
+a computation from running on data that is missing because ingestion
+genuinely stalled -- not to block the one fetch that would prove
+ingestion hadn't stalled at all. A guard checked before the fetch can
+never tell "a stalled feed" apart from "one missed evening, cured by
+trying again" -- it treats both identically, and only the second one is
+actually fixable by the job itself.
+
+**Status: fixed.** The fetch (the existing backward-walk loop that finds
+the latest trading day with published data) now runs unconditionally,
+first. Staleness is checked AFTER, against the warehouse's state once
+the fetch has had its chance to cure an ordinary gap -- immediately
+before the computation (`build_watchlist`) that guard exists to protect,
+not before the fetch that might make the guard's concern moot. A
+genuinely stalled feed (the fetch finds nothing new) is still refused,
+unchanged -- regression-tested directly:
+`tests/test_fibo_evening_staleness_ordering.py::
+test_missed_monday_evening_run_still_produces_tuesdays_watchlist`
+reproduces the exact live scenario (warehouse ends Friday, job runs the
+following Tuesday, Monday is fetchable) and fails against the
+pre-fix ordering (confirmed by reverting the fix and re-running it:
+`AssertionError: Monday 2026-10-12 was never fetched`), passes against
+the fix;
+`test_still_refuses_when_no_fetch_can_cure_the_gap` confirms the fix did
+not turn the guard into a no-op -- a fetch that finds nothing new still
+refuses.
+
+**Checked, not assumed: the morning job does NOT have this bug.**
+`scripts/fibo_morning.py` opens the warehouse with `get_read_connection`
+(read-only) and never fetches bhavcopy itself anywhere in the script --
+it only reads whatever the evening job already ingested. There is no
+fetch step to reorder around; its staleness check correctly guards
+against computing from a warehouse it has no means to refresh on its
+own. Its dependency on the evening job having run is real, but it is not
+this same ordering bug.
+
+## Bug #17: the FiboEvening scheduled task was specified on 2026-10-09 but never actually created -- a manual setup step that silently did not happen
+
+**Mechanism**: a Windows Task Scheduler entry for `scripts/fibo_evening.py`
+(weekdays 18:30) was specified in detail on 2026-10-09 -- name, trigger,
+battery/wake conditions, working directory -- as instructions for a
+manual setup step. **The task was never actually created.** Found live,
+2026-10-12: `data/fibo_live/scheduler.log` has no entry at all for 18:30
+that evening (not a refusal, not an error -- nothing), and
+`Get-ScheduledTask` confirmed no task named anything like "fibo" existed
+on this machine, despite `scripts/snapshot_options_depth.py`'s own task
+(`TradeNew_OptionsDepthTest`) existing and working. Every run of the
+evening/morning jobs, this entire project, has been triggered manually.
+
+**The same meta-pattern as Bug #13, one layer up**: Bug #13 found this
+project had no scheduled ingestion runner of any kind, and a 13-day gap
+went unnoticed for exactly that reason. A set of instructions for a
+manual setup step is not different in kind from a manual ingestion
+step -- both depend on a human remembering to do something with no
+guard watching whether they actually did. Specifying the schedule
+clearly is not the same as the schedule existing; nothing here checked
+that the gap between "specified" and "created" had actually closed
+until a missed run exposed it.
+
+**Compounding effect**: because nothing fetched Monday's bhavcopy that
+evening, by the time the job was run by hand after midnight the gap had
+grown past the staleness guard's tolerance, triggering Bug #16 above as
+a second, independent consequence of this same missed run.
+
+**Status: fixed.** `FiboEvening` now exists
+(`schtasks /create /tn FiboEvening /xml scripts/_fibo_evening_task.xml`),
+weekdays 18:30, runs only when logged on (no password), runs on battery,
+does not wake the machine, starts in `C:\projects\trade-new` -- verified
+directly against the task's own registered settings
+(`schtasks /query /tn FiboEvening /xml`), not just the creation command's
+exit status. No scheduled task exists yet for `fibo_morning.py`;
+flagged, not fixed here -- not asked for, and that script's own 09:15
+market-open timing is less tolerant of the same "specified but not
+created" gap going unnoticed, since a missed morning run has no
+after-midnight catch-up equivalent to what cured this one.
