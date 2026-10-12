@@ -22,6 +22,7 @@ a default, never set in exploratory/development code, never set twice.
 from __future__ import annotations
 
 import datetime as dt
+from pathlib import Path
 
 SEALED_AT = dt.date(2026, 10, 12)  # the date this seal was created
 
@@ -31,17 +32,41 @@ DEV_END = dt.date(2022, 12, 31)
 TEST_START = dt.date(2023, 1, 1)
 TEST_END = dt.date(2026, 9, 30)
 
+ACCESS_LOG_PATH = Path(__file__).resolve().parents[2] / "data" / "options_history" / "test_window_access_log.txt"
+
 
 class TestWindowViolationError(Exception):
     """Raised when an operation would touch data inside the sealed test window."""
 
 
-def guard_date_range(start: dt.date, end: dt.date, authorize_test: bool = False) -> None:
+def _log_test_window_access(start: dt.date, end: dt.date, caller: str, reason: str) -> None:
+    """Append-only audit trail of every authorized bypass -- same
+    convention as src/monitor/web.py's _log_holdout_access for Fibo/
+    momentum's own sealed holdout. Called from guard_date_range itself
+    (not left to each call site to remember) so the log can never be
+    skipped while the bypass is still exercised."""
+    ACCESS_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(ACCESS_LOG_PATH, "a", encoding="utf-8") as f:
+        f.write(
+            f"{dt.datetime.now().isoformat()} | range=[{start},{end}] | caller={caller} | "
+            f"authorize_test=True | {reason}\n"
+        )
+
+
+def guard_date_range(start: dt.date, end: dt.date, authorize_test: bool = False,
+                      caller: str = "", reason: str = "") -> None:
     """Raise if [start, end] intersects the sealed TEST window, unless
     explicitly authorized. Call this at the top of any function that
     bounds a query, a straddle/realized-move computation, or a report by
-    a date range in this study."""
+    a date range in this study. When `authorize_test=True` is actually
+    exercised (i.e. the range really does intersect the sealed window),
+    the access is appended to ACCESS_LOG_PATH -- `caller`/`reason` should
+    describe what is being computed and why, the same way a real holdout
+    read is logged elsewhere in this project."""
     if authorize_test:
+        if end >= TEST_START:
+            _log_test_window_access(start, end, caller or "(caller not specified)",
+                                     reason or "(reason not specified)")
         return
     if end >= TEST_START:
         raise TestWindowViolationError(
