@@ -60,7 +60,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from data_layer.adjustment import materialize_adjustment_factors
 from data_layer.db import get_connection
 from data_layer.prices_nse import load_bhavcopy_to_duckdb
-from data_layer.staleness import assert_data_current, StaleDataError
+from data_layer.staleness import assert_data_current, latest_trade_date, StaleDataError
 
 from fibo_live.clock import detect_run_mode
 from fibo_live.config import EVENTS_LOG, RAW_PRICES_DIR, TOP_N, WAREHOUSE_DB
@@ -71,6 +71,7 @@ from fibo_live.scheduler_support import make_logger, run_unattended
 from fibo_live.watchlist import build_watchlist
 
 SERIES_INCLUDE = ["EQ", "BE", "BZ"]  # same set config.yaml's nse_bhavcopy.series_include uses
+MAX_LOOKBACK_DAYS = 10  # bound for the backward walk only when the warehouse has no prior data at all (see main())
 
 log = make_logger()
 
@@ -214,30 +215,33 @@ def main() -> None:
 
     con = get_connection(WAREHOUSE_DB)
 
-    # Checked BEFORE any fetch below, against whatever the warehouse's
-    # latest trade_date already was -- this is what catches a multi-day
-    # ingestion gap (BUGS.md Bug #13): walking back from requested_date and
-    # computing from whatever we eventually find would otherwise mask a
-    # genuinely stalled feed behind a plausible-looking but wrong watchlist.
-    # It also hands us `prior_latest`, which the walk-back loop below uses
-    # as its floor -- that date is already known to have data.
-    try:
-        prior_latest = assert_data_current(con)
-        log(f"Freshness check OK: warehouse's latest trading day was {prior_latest} before this run.")
-    except StaleDataError as e:
-        log(f"REFUSING TO RUN: {e}")
-        notify_evening_skipped(requested_date, "stale data", str(e))
-        con.close()
-        return
+    # BUGS.md: the staleness guard must protect the COMPUTATION, not block
+    # the fetch that would cure it. Checking staleness BEFORE fetching (the
+    # original order) meant a single missed evening run, hit again after a
+    # weekend, made the gap between real "today" and whatever the warehouse
+    # already had look like a multi-day outage -- and refused before ever
+    # trying to fetch the one day (last Friday, say) that would have closed
+    # it. The fetch below is unconditional; staleness is checked further
+    # down, against the warehouse's state AFTER fetching, right before the
+    # computation that check actually exists to protect.
+    #
+    # `floor` bounds the backward walk below -- normally the warehouse's
+    # own prior latest date (already known to have data, so walking past it
+    # finds nothing new). On a genuinely empty warehouse (prior_latest is
+    # None) there is no such floor, so MAX_LOOKBACK_DAYS stands in instead,
+    # bounding the walk so it cannot loop indefinitely.
+    prior_latest = latest_trade_date(con)
+    floor = prior_latest if prior_latest is not None else (requested_date - dt.timedelta(days=MAX_LOOKBACK_DAYS))
+    log(f"Warehouse's latest trading day before this run: "
+        f"{prior_latest if prior_latest is not None else 'none (empty warehouse)'}.")
 
     # Find the latest trading day that actually HAS published bhavcopy data,
     # starting at requested_date (today, or --date) and walking backward one
     # calendar day at a time. On an ordinary weekday evening run this exits
     # on its first iteration, exactly like the old single-fetch code. On a
-    # weekend or holiday manual run, requested_date has nothing published,
-    # so this keeps trying the prior day until it finds one -- bounded by
-    # prior_latest, which the freshness check above already guarantees has
-    # data, so the loop always terminates with a real data_date.
+    # weekend, holiday, or missed-run catch-up, requested_date (and possibly
+    # several days before it) has nothing published, so this keeps trying
+    # the prior day until it finds one -- bounded by `floor`.
     data_date = None
     candidate = requested_date
     while True:
@@ -253,11 +257,26 @@ def main() -> None:
         if existing > 0:
             data_date = candidate
             break
-        if candidate <= prior_latest:
-            data_date = prior_latest
+        if candidate <= floor:
+            data_date = prior_latest  # may still be None if the warehouse was empty and nothing new was found
             break
         log(f"  No bhavcopy for {candidate} (holiday or weekend) -- trying the prior calendar day.")
         candidate -= dt.timedelta(days=1)
+
+    if data_date is None:
+        # Only reachable when the warehouse had no prior data at all AND
+        # nothing was found within MAX_LOOKBACK_DAYS -- a genuinely empty
+        # warehouse, not a missed-run catch-up. assert_data_current below
+        # would raise on this too (prices_eod is empty), but data_date is
+        # about to be used unchecked (next_trading_day, detect_run_mode) --
+        # fail clearly here rather than on a None a few lines down.
+        log(f"No bhavcopy found for {requested_date} or any of the {MAX_LOOKBACK_DAYS} days before it, "
+            f"and the warehouse has no prior data either. Nothing to compute from.")
+        notify_evening_skipped(requested_date, "no data available",
+                                f"warehouse is empty and no bhavcopy could be fetched within "
+                                f"{MAX_LOOKBACK_DAYS} days of {requested_date}.")
+        con.close()
+        return
 
     target_trade_date = next_trading_day(con, data_date, known_through=requested_date)
     # Detected once, from the clock (src/fibo_live/clock.py), against the
@@ -280,6 +299,21 @@ def main() -> None:
     if already_has_watchlist_run(target_trade_date):
         log(f"watchlist_run already logged targeting {target_trade_date} -- skipping (idempotent). "
             f"Nothing else to do.")
+        con.close()
+        return
+
+    # Checked AFTER fetching, not before: this is what protects the
+    # COMPUTATION from a genuinely stalled feed (BUGS.md Bug #13), now that
+    # the fetch above has already had its chance to cure an ordinary missed-
+    # run gap. If the warehouse is STILL stale at this point -- the fetch
+    # found nothing new, or what it found isn't recent enough -- refuse to
+    # compute rather than build a watchlist from a stale panel.
+    try:
+        confirmed_latest = assert_data_current(con)
+        log(f"Freshness check OK: warehouse's latest trading day is {confirmed_latest} after fetching.")
+    except StaleDataError as e:
+        log(f"REFUSING TO COMPUTE: {e}")
+        notify_evening_skipped(requested_date, "stale data", str(e))
         con.close()
         return
 
