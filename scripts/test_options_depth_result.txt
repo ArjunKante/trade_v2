@@ -1,0 +1,17 @@
+=== Options depth test, run at 2026-10-12T09:40:07.053150 ===
+Contract: NIFTY03NOV2625000CE token=54332 expiry=03NOV2026 strike=2500000.000000
+Login status: True OK
+API status: True
+API message/errorcode: SUCCESS / 
+fetched: 1, unfetched: 0 ([])
+Top-level fields returned: 52WeekHigh, 52WeekLow, avgPrice, close, depth, exchFeedTime, exchTradeTime, exchange, high, lastTradeQty, low, lowerCircuit, ltp, netChange, open, opnInterest, percentChange, referenceLimitPrice, symbolToken, totBuyQuan, totSellQuan, tradeVolume, tradingSymbol, upperCircuit
+'depth' field present: True
+depth.buy entries: 5, depth.sell entries: 5
+depth.buy[0] fields: ['orders', 'price', 'quantity']
+depth.sell[0] fields: ['orders', 'price', 'quantity']
+Best bid: {'price': 4.05, 'quantity': 1300, 'orders': 1}
+Best ask: {'price': 4.55, 'quantity': 65, 'orders': 1}
+ltp: 4.0  open: 4.5
+FULL RAW ROW (for audit, no credentials present in this payload): {"exchange": "NFO", "tradingSymbol": "NIFTY03NOV2625000CE", "symbolToken": "54332", "ltp": 4.0, "open": 4.5, "high": 5.8, "low": 3.7, "close": 5.55, "lastTradeQty": 455, "exchFeedTime": "12-Oct-2026 09:40:09", "exchTradeTime": "12-Oct-2026 09:39:55", "netChange": -1.55, "percentChange": -27.93, "avgPrice": 4.53, "tradeVolume": 17940, "opnInterest": 75205, "lowerCircuit": 0.05, "upperCircuit": 25.55, "totBuyQuan": 79625, "totSellQuan": 43160, "referenceLimitPrice": 0.0, "52WeekLow": 0.0, "52WeekHigh": 15.0, "depth": {"buy": [{"price": 4.05, "quantity": 1300, "orders": 1}, {"price": 3.9, "quantity": 65, "orders": 1}, {"price": 3.85, "quantity": 325, "orders": 1}, {"price": 3.8, "quantity": 1300, "orders": 1}, {"price": 3.75, "quantity": 845, "orders": 3}], "sell": [{"price": 4.55, "quantity": 65, "orders": 1}, {"price": 4.6, "quantity": 390, "orders": 1}, {"price": 4.65, "quantity": 1170, "orders": 3}, {"price": 4.7, "quantity": 780, "orders": 2}, {"price": 4.75, "quantity": 1950, "orders": 2}]}}
+
+VERDICT: YES - depth (bid/ask) present

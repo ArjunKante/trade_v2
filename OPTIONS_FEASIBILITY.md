@@ -82,13 +82,78 @@ project cannot currently fund the data required to evaluate it.
 
 ## Status
 
-One supplementary live check remains scheduled, separate from the verdict
-above: whether Angel One's `getMarketData` FULL mode (the same call
-`src/spread_monitor/` already uses for equities) returns bid/ask depth for
-a **live** (not expired) NFO option contract, during NSE market hours. This
-cannot change the verdict above — it bears only on whether a *forward*
-collector could be built starting now, never on retroactive historical
-coverage, which is blocked regardless of this result. If the live depth
-check comes back negative, it will be appended here and the options
-workstream closes entirely; if positive, it is reported separately for a
-build decision, not acted on in this document.
+**Supplementary live check, run 2026-10-12 09:40 IST during market hours
+(`scripts/test_options_depth.py`): RESULT YES.** Angel One's
+`getMarketData(mode="FULL")` — the same call `src/spread_monitor/` already
+uses for equities — returns full 5-level bid/ask depth for a **live**
+NFO option contract. Tested against `NIFTY03NOV2625000CE` (expiry
+03-Nov-2026, not yet expired): the response carried `depth.buy`/
+`depth.sell`, 5 levels each, with `price`/`quantity`/`orders` per level,
+alongside LTP, open interest, and traded volume. Full raw payload logged
+in the script's own output and `scripts/test_options_depth_result.txt`.
+
+**This changes nothing above.** The verdict (BLOCKED — INSUFFICIENT DATA
+for multi-year EXECUTABLE backtesting) rests on the scrip master carrying
+zero expired option contracts — a fact about the PAST, which live depth
+on a currently-listed contract cannot touch. What this result DOES confirm
+is that a FORWARD depth collector could be built starting now, since the
+one previously-open question (does Angel's live quote endpoint even carry
+option depth at all) is answered. See below for that collector
+(`src/options_depth/`, research/collection only).
+
+**Observed spread on the test contract, a concrete illustration of why
+"forward collector" and "tradeable" are different questions**: best bid
+4.05 (qty 1300) / best ask 4.55 (qty 65), mid 4.30, spread 0.50 —
+**11.6% of mid (1163 bps)**. Against this project's own LIVE-MEASURED
+equity spreads on NSE cash names (`PREREGISTRATION_FIBO.md`'s band-1-50
+median 0.85 bps; `FIBO_FINDINGS.md`'s band-101-200 live reading, six
+names, mean 4.3 bps, range 3.1-5.7 bps) — this one option contract's
+spread is **roughly 200-1400x wider** than any equity band actually
+measured in this project, depending which band it's compared against.
+One contract, one moment, deep out-of-the-money-adjacent but not
+obviously illiquid by OI/volume shown above — not asserted as
+representative of every NIFTY strike/expiry, but a real, measured number
+in the same units as this project's own equity cost model, not an
+assumption.
+
+### Forward collector built (`src/options_depth/`) — research/collection only, not scheduled
+
+A minimal collector exists: `scripts/snapshot_options_depth.py`, one
+snapshot per invocation — live NIFTY spot, then every NIFTY index-option
+contract across the nearest 2 expiries with strike within ±5% of that
+spot, full 5-level bid/ask depth, LTP, volume, OI, appended to
+`data/options_depth/v1/nifty_depth_log.csv`. No strategy, no analysis, no
+signal anywhere in this package — it only collects. Separate from Fibo,
+momentum, swing, and per_stock; nothing in those packages was touched.
+
+**Run live, 2026-10-12 09:50 IST, market open**: spot 22520.5, nearest 2
+expiries (13OCT2026, 19OCT2026) resolved to **180 contracts** (45 strikes
+× 2 types × 2 expiries), fetched in 4 chunks of ≤50 tokens each (Angel's
+`getMarketData` has a **hard 50-token-per-call limit**, confirmed live the
+same session: 51 tokens → error `AB4029` "Tokens max limit exceeded", 50 →
+success — not documented anywhere found in this project before now, and
+the main reason this collector chunks and paces its calls at all). All 180
+recorded, 0 failed.
+
+**Storage size, measured from that real run, not estimated**:
+- 1 contract's row: **~219 bytes** (CSV, 31 columns incl. full 10-price/
+  qty depth fields).
+- 1 snapshot (180 contracts): **~38.6 KB**.
+- **1 day (3 snapshots): ~116 KB.**
+- 1 trading week (5 days): ~578 KB.
+- 1 trading month (~21 days): ~2.4 MB.
+- 1 trading year (~250 days): ~28 MB.
+
+Contract count (180) will drift day to day with spot level and strike
+spacing — this is a real measured count from one live morning, not a
+fixed constant, but representative enough that the day/week/month/year
+figures above should not be read as precise to more than this order of
+magnitude.
+
+**Not scheduled at the time this was written.** See `OPERATIONS.md` for
+the Task Scheduler setup (weekdays 10:30/12:30/14:30, battery-tolerant,
+never wakes the machine, never crashes the schedule) and
+`src/options_depth/__init__.py` for why this log cannot be reconstructed
+if lost and must be copied off this laptop manually -- it is not
+git-tracked (exchange quote data, same as the rest of `data/`) and has
+no automated backup.
