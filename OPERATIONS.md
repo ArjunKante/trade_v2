@@ -156,6 +156,27 @@ at all on a rate-limit error -- it simply fails the run. Neither has been
 changed yet; recorded here so the fix is deliberate rather than
 rediscovered mid-incident.
 
+## `getMarketData` hard-limits at 50 tokens per call -- undocumented anywhere in this project before now
+
+Confirmed LIVE, 2026-10-12, binary search against the real API while
+building `src/options_depth/`: `getMarketData` returns error **`AB4029`
+"Tokens max limit exceeded"** for 51 tokens in one call (any mix of
+exchanges in the request dict), and succeeds at exactly 50. Not a rate
+limit (no backoff fixes it, no `looks_rate_limited`-shaped error) -- a
+hard per-call cap, distinct from every throttle/backoff setting in the
+section above. `scripts/snapshot_options_depth.py` is the one caller that
+chunks for this (`CHUNK_SIZE = 50`, confirmed against the live boundary,
+not guessed).
+
+**Audit of every other `getMarketData` call site in this project** (found
+by grepping for the literal call, not inferred):
+
+| call site | tokens in that call | margin to 50 |
+|---|---|---|
+| `scripts/fibo_morning.py` (`confirm_trading_day`) | 1 (Nifty 50 index only) | **48/50 free -- no exposure.** Nothing about this call ever grows with the watchlist; it only ever checks the index. |
+| `scripts/snapshot_spreads.py` | `len(token_map) + 1` -- currently 20 symbols (`config/spread_monitor_symbols.txt`) + the Nifty index = **21** | **29 tokens of headroom, UNGUARDED.** Nothing in `snapshot_spreads.py` or `spread_monitor.tokens.resolve_tokens` chunks, checks, or even warns if the config file's symbol count grows past 29 more entries (50 total). At 50+ tokens the ENTIRE call fails with `AB4029` and the run records zero rows, silently, for every symbol -- not a partial failure, a total one, and nothing currently watches for it. Not fixed here (not asked for, and the current 20-symbol research list is a deliberately curated, individually-commented sample, not something likely to silently grow past 29 more entries by accident) -- but flagged with its exact margin so whoever next edits that config file does so knowing the ceiling exists. |
+| `scripts/snapshot_options_depth.py` | chunked at 50, by design | n/a -- the one caller built with this limit already in mind. |
+
 ## `data/fibo_live/v1/events.jsonl` is tracked in git -- the one deliberate exception to the data/ ignore rule
 
 Every other file under `data/` is gitignored, for a licensing reason: most
