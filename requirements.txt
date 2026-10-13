@@ -11,6 +11,7 @@ anthropic
 fastapi
 uvicorn
 smartapi-python
+websocket-client
 pyotp
 logzero
 python-dotenv

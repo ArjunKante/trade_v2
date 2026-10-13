@@ -20,9 +20,15 @@ jobs:
 
       # Minimal install, not the full requirements.txt -- this probe
       # never touches duckdb/pandas/etc, only what fibo.auth and
-      # fibo_live.notify actually import.
+      # fibo_live.notify actually import. websocket-client is required
+      # because SmartApi/__init__.py eagerly imports SmartWebSocket at
+      # package-import time (even though login()/getCandleData never use
+      # it) -- undeclared in smartapi-python's own install_requires, so
+      # pip never pulls it in automatically; confirmed missing by the
+      # probe's first real run (ModuleNotFoundError: No module named
+      # 'websocket').
       - name: Install minimal dependencies
-        run: pip install smartapi-python pyotp logzero python-dotenv requests
+        run: pip install smartapi-python websocket-client pyotp logzero python-dotenv requests
 
       # Credentials come ONLY from GitHub Secrets, injected as env vars
       # here. Nothing in this workflow echoes them, dumps `env`, or
