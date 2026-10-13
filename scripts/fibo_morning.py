@@ -382,11 +382,16 @@ def watch_for_triggers(client, con, setups: pd.DataFrame, trade_date: dt.date, r
     # ALREADY closed as of right now and returns -- it never sleeps waiting
     # for a future candle. Catching a trigger on a candle that hasn't closed
     # yet means running this script again after that candle closes.
-    now = dt.datetime.now()
+    #
+    # now is explicit IST, never the host's local clock (dt.datetime.now())
+    # -- this must stay correct on a GitHub Actions runner (OS clock UTC)
+    # exactly as it is on the laptop (OS clock already IST), so every
+    # candle_close_wall it's compared against is built with tzinfo=IST too.
+    now = dt.datetime.now(IST)
     for candle_start in ENTRY_STARTS:
         if not pending:
             break
-        candle_close_wall = dt.datetime.combine(trade_date, candle_start) + dt.timedelta(minutes=15, seconds=POLL_BUFFER_SECONDS)
+        candle_close_wall = dt.datetime.combine(trade_date, candle_start, tzinfo=IST) + dt.timedelta(minutes=15, seconds=POLL_BUFFER_SECONDS)
         if now < candle_close_wall:
             log(f"  {candle_start.strftime('%H:%M')} candle not closed yet "
                 f"(closes {candle_close_wall.strftime('%H:%M:%S')}) -- run again after then.")
@@ -419,7 +424,7 @@ def watch_for_triggers(client, con, setups: pd.DataFrame, trade_date: dt.date, r
 
     if not pending:
         return
-    if dt.datetime.now() >= dt.datetime.combine(trade_date, ENTRY_WINDOW_CLOSE):
+    if dt.datetime.now(IST) >= dt.datetime.combine(trade_date, ENTRY_WINDOW_CLOSE, tzinfo=IST):
         for entity_id in pending:
             log(f"  no trigger by 11:30: {pending[entity_id]['symbol']}")
     else:
@@ -442,8 +447,9 @@ def resolve_outcomes(client, con, setups: pd.DataFrame, trade_date: dt.date, run
     # NOT a blocking wait: if the market hasn't reached 15:15 yet, there is
     # nothing this run can resolve -- say so and return rather than holding
     # the terminal open for hours. Re-run this script after 15:15 instead.
-    now = dt.datetime.now()
-    exit_deadline = dt.datetime.combine(trade_date, EXIT_TIME)
+    # Explicit IST, not the host clock -- see watch_for_triggers above.
+    now = dt.datetime.now(IST)
+    exit_deadline = dt.datetime.combine(trade_date, EXIT_TIME, tzinfo=IST)
     if now < exit_deadline:
         log(f"Market hasn't reached {EXIT_TIME.strftime('%H:%M')} yet -- outcomes not resolvable. "
             f"Run again after {EXIT_TIME.strftime('%H:%M')}.")
@@ -491,7 +497,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", type=str, default=None, help="YYYY-MM-DD, default: today")
     args = parser.parse_args()
-    trade_date = dt.date.fromisoformat(args.date) if args.date else dt.date.today()
+    # Explicit IST, not dt.date.today() (host-local) -- "today" for this
+    # script always means today in India, regardless of what timezone the
+    # machine running it (laptop or a GitHub Actions runner) is set to.
+    trade_date = dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(IST).date()
 
     # Detected ONCE, from the clock, for this whole run -- never re-detected
     # per event (see src/fibo_live/clock.py for why that would be wrong).

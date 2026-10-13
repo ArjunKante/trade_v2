@@ -1,0 +1,41 @@
+name: Fibo morning job - GitHub Actions probe
+
+# Manual trigger ONLY -- no `schedule:` here. This exists purely to
+# answer, once, whether Angel One login, the IST clock fix, outbound
+# email, and the Angel scrip-master download all work from a GitHub
+# Actions runner, before scripts/fibo_morning.py is ever scheduled here.
+# See scripts/probe_github_actions.py for what each step actually checks.
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Minimal install, not the full requirements.txt -- this probe
+      # never touches duckdb/pandas/etc, only what fibo.auth and
+      # fibo_live.notify actually import.
+      - name: Install minimal dependencies
+        run: pip install smartapi-python pyotp logzero python-dotenv requests
+
+      # Credentials come ONLY from GitHub Secrets, injected as env vars
+      # here. Nothing in this workflow echoes them, dumps `env`, or
+      # enables step-debug logging. scripts/probe_github_actions.py never
+      # prints a raw credential -- only a redacted status string, a
+      # timestamp, a boolean, and a duration.
+      - name: Run probe
+        env:
+          ANGEL_API_KEY: ${{ secrets.ANGEL_API_KEY }}
+          ANGEL_CLIENT_CODE: ${{ secrets.ANGEL_CLIENT_CODE }}
+          ANGEL_MPIN: ${{ secrets.ANGEL_MPIN }}
+          ANGEL_TOTP_SECRET: ${{ secrets.ANGEL_TOTP_SECRET }}
+          FIBO_EMAIL_FROM: ${{ secrets.FIBO_EMAIL_FROM }}
+          FIBO_EMAIL_APP_PASSWORD: ${{ secrets.FIBO_EMAIL_APP_PASSWORD }}
+          FIBO_EMAIL_TO: ${{ secrets.FIBO_EMAIL_TO }}
+        run: python scripts/probe_github_actions.py

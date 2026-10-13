@@ -70,6 +70,8 @@ from fibo_live.notify import already_notified, record_notification, send_email
 from fibo_live.scheduler_support import make_logger, run_unattended
 from fibo_live.watchlist import build_watchlist
 
+from spread_monitor.market_hours import IST
+
 SERIES_INCLUDE = ["EQ", "BE", "BZ"]  # same set config.yaml's nse_bhavcopy.series_include uses
 MAX_LOOKBACK_DAYS = 10  # bound for the backward walk only when the warehouse has no prior data at all (see main())
 
@@ -209,7 +211,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", type=str, default=None, help="YYYY-MM-DD, default: today")
     args = parser.parse_args()
-    requested_date = dt.date.fromisoformat(args.date) if args.date else dt.date.today()
+    # Explicit IST, not dt.date.today() (host-local) -- parity with
+    # scripts/fibo_morning.py's same fix, even though this job stays on
+    # the IST laptop for now.
+    requested_date = dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(IST).date()
 
     log(f"=== FIBO EVENING JOB -- requested {requested_date} ===")
 

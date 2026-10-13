@@ -27,9 +27,13 @@ itself.
 from __future__ import annotations
 
 import datetime as dt
+from zoneinfo import ZoneInfo
 
 import duckdb
 
+IST = ZoneInfo("Asia/Kolkata")  # same tz as spread_monitor.market_hours.IST; defined
+                                 # locally rather than imported to avoid data_layer
+                                 # depending on a higher-level live-trading module.
 DEFAULT_MAX_STALENESS_DAYS = 3  # 1 trading day plus a long weekend's worth of margin
 
 
@@ -50,11 +54,13 @@ def assert_data_current(
     max_staleness_days: int = DEFAULT_MAX_STALENESS_DAYS,
 ) -> dt.date:
     """Returns the warehouse's latest trade_date if it is within
-    max_staleness_days of `as_of` (real wall-clock today by default --
-    override only for tests that need to pin "today" to reproduce a
-    specific historical gap deterministically). Raises StaleDataError
-    otherwise."""
-    as_of = as_of or dt.date.today()
+    max_staleness_days of `as_of` (real wall-clock today IN IST by
+    default -- never the host machine's own local clock, so this stays
+    correct whether it runs on an IST laptop or a UTC GitHub Actions
+    runner -- override only for tests that need to pin "today" to
+    reproduce a specific historical gap deterministically). Raises
+    StaleDataError otherwise."""
+    as_of = as_of or dt.datetime.now(IST).date()
     latest = latest_trade_date(con)
     if latest is None:
         raise StaleDataError("prices_eod is empty -- nothing to compute from.")

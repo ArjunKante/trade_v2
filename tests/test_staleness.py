@@ -17,6 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from data_layer import staleness as staleness_module
 from data_layer.db import SCHEMA_SQL
 from data_layer.staleness import assert_data_current, latest_trade_date, StaleDataError
 
@@ -67,3 +68,41 @@ def test_empty_prices_eod_is_refused_not_treated_as_fresh():
     assert latest_trade_date(con) is None
     with pytest.raises(StaleDataError):
         assert_data_current(con, as_of=dt.date(2026, 10, 8))
+
+
+class _FakeDateTimeOnUTCHost(dt.datetime):
+    """See tests/test_fibo_live_clock.py's identical fake -- simulates a
+    host OS clock set to UTC. now() with no tz returns the naive UTC
+    wall-clock reading; now(tz) still converts the same real instant
+    correctly."""
+
+    # 2026-10-08 19:00 UTC == 2026-10-09 00:30 IST -- a naive (UTC-as-
+    # local) reading says "2026-10-08" while the true IST calendar date
+    # is already 2026-10-09, one day later.
+    _real_instant = dt.datetime(2026, 10, 8, 19, 0, 0, tzinfo=dt.timezone.utc)
+
+    @classmethod
+    def now(cls, tz=None):
+        if tz is None:
+            return cls._real_instant.replace(tzinfo=None)
+        return cls._real_instant.astimezone(tz)
+
+
+def test_default_as_of_is_ist_correct_even_if_host_clock_is_utc(monkeypatch):
+    """Regression for the GitHub Actions migration: assert_data_current's
+    default `as_of` (every real caller omits it) must be today's date IN
+    IST, not the host machine's own local "today". Warehouse's latest
+    trading day is 2026-10-07; the true IST "as_of" is 2026-10-09 (a
+    1-day gap, within the 3-day default tolerance). A regression to a
+    bare dt.date.today() on a UTC-clock host would instead compute
+    as_of=2026-10-08, still within tolerance here too by coincidence of
+    the gap size -- so this test picks a gap that is ONLY within
+    tolerance under the correct IST date, to actually discriminate the
+    two."""
+    con = _warehouse_with_latest(dt.date(2026, 10, 5))
+    monkeypatch.setattr(staleness_module.dt, "datetime", _FakeDateTimeOnUTCHost)
+    # Correct (IST) as_of=2026-10-09 -> gap=4 days -> OUTSIDE max_staleness_days=3,
+    # so this must raise. A bug that used the naive UTC date (2026-10-08,
+    # gap=3) would wrongly let this pass instead.
+    with pytest.raises(StaleDataError):
+        assert_data_current(con, max_staleness_days=3)
