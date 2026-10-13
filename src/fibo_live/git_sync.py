@@ -37,6 +37,48 @@ def _run_git(*args: str) -> subprocess.CompletedProcess:
     )
 
 
+class GitPullError(Exception):
+    """Raised by pull_before_appending when the pre-run pull fails --
+    callers must let this propagate (main() aborts, run_unattended logs
+    the full traceback and still exits 0), never catch and continue
+    against a possibly-stale events.jsonl."""
+
+
+def pull_before_appending(log) -> None:
+    """Fast-forward-only pull -- must be the FIRST thing fibo_evening.py's
+    main() does, before any append_event call touches events.jsonl on
+    disk. Once the Fibo morning job runs on GitHub Actions (committing
+    and pushing its own setup/trigger/outcome events during market
+    hours) while the evening job still runs on this laptop hours later,
+    the laptop's checkout can be behind origin by however many morning
+    commits happened that day. Pulling FIRST -- before this run appends
+    a single line -- means the local file already contains the
+    morning's lines before the evening job's own new lines are appended
+    after them, so every subsequent commit is a clean linear fast-
+    forward: there is never a divergent history to merge, and never a
+    rejected non-fast-forward push.
+
+    UNLIKE this module's push (sync_events_log_to_git, best-effort,
+    every failure swallowed): this RAISES on failure. Proceeding on a
+    stale local events.jsonl is exactly the scenario this exists to
+    prevent -- silently computing against a watchlist that doesn't yet
+    include this morning's events, or a non-fast-forward push rejected
+    hours later with this run's own commit stuck on top of it. One
+    precondition this depends on for a plain `--ff-only` to ever
+    succeed: fibo_morning.py must be the ONLY thing that ever commits to
+    this repo from anywhere else -- the laptop never runs it once the
+    GitHub Actions schedule is live (see OPERATIONS.md)."""
+    result = _run_git("pull", "--ff-only")
+    output = (result.stdout.strip() + " " + result.stderr.strip()).strip()
+    if result.returncode != 0:
+        raise GitPullError(
+            f"git pull --ff-only failed ({result.returncode}): {output} -- refusing to run "
+            f"against a possibly-stale events.jsonl. Resolve manually (check for a diverged "
+            f"history -- this should only ever be a clean fast-forward) before re-running."
+        )
+    log(f"  git pull --ff-only: {output or 'already up to date'}")
+
+
 def sync_events_log_to_git(path: Path, log) -> None:
     """Stages `path`, commits iff there is something new to commit, and
     pushes -- each step best-effort and logged, never raised. The common

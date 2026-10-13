@@ -61,23 +61,35 @@ re-run this script at any point in the day (e.g. if it crashes at 10:15,
 re-running it will not re-fetch an ORB it already has, and will not
 double-log a trigger or outcome).
 
-UNATTENDED (Windows Task Scheduler): every log() line also goes to
-data/fibo_live/scheduler.log (src/fibo_live/scheduler_support.py), since a
-scheduled run has no terminal for stdout to land in. main() is wrapped so
-ANY unhandled exception -- dead network, Angel down, anything -- is caught,
-logged with its traceback, and swallowed: the process always exits 0 and a
-bad run never blocks a later one. Two refusal checks run before any
-per-stock work: data_layer.staleness.assert_data_current (catches a
-stalled multi-day ingestion -- BUGS.md Bug #13) and a LIVE trading-day
-check (catches a single isolated NSE holiday landing on a weekday, which
-the staleness check alone does NOT -- a one-day gap is within its default
-tolerance). The live check reuses the exact mechanism
-scripts/snapshot_spreads.py already uses and has run live
-(src/spread_monitor/trading_day.py's verify_trading_day against Angel's
-getMarketData exchFeedTime), rather than inventing a second one: without
-it, a scheduler firing every 15 minutes on a holiday would log a
-FETCH_FAILED-shaped "no candle" event for every watchlist stock, every
-run, all morning, for no reason.
+NO WAREHOUSE DEPENDENCY (GitHub Actions migration): this script never
+opens data/warehouse.duckdb. Everything it needs comes from events.jsonl
+(the watchlist, already carrying each row's `symbol`) and Angel One
+itself: an Angel instrument token is resolved straight from that
+`symbol` (spread_monitor.tokens.resolve_tokens -- the instrument master,
+disk-cached per IST date, never the warehouse's isin_lineage/prices_eod
+join fibo.download.resolve_entity_tokens used to do this through). This
+keeps NSE price data, and the warehouse file itself, off of any machine
+this script runs on that isn't the laptop.
+
+UNATTENDED (Windows Task Scheduler, or GitHub Actions): every log() line
+also goes to data/fibo_live/scheduler.log (src/fibo_live/
+scheduler_support.py), since a scheduled run has no terminal for stdout
+to land in. main() is wrapped so ANY unhandled exception -- dead
+network, Angel down, anything -- is caught, logged with its traceback,
+and swallowed: the process always exits 0 and a bad run never blocks a
+later one. Two refusal checks run before any per-stock work:
+assert_watchlist_current (below -- catches the evening job never having
+logged tonight's watchlist at all, the events.jsonl-only replacement for
+the old data_layer.staleness.assert_data_current warehouse check; see
+BUGS.md Bug #13 for the silent-gap failure mode both guard against) and
+a LIVE trading-day check (catches a single isolated NSE holiday landing
+on a weekday, which the freshness check alone does NOT). The live check
+reuses the exact mechanism scripts/snapshot_spreads.py already uses and
+has run live (src/spread_monitor/trading_day.py's verify_trading_day
+against Angel's getMarketData exchFeedTime), rather than inventing a
+second one: without it, a scheduler firing every 15 minutes on a holiday
+would log a FETCH_FAILED-shaped "no candle" event for every watchlist
+stock, every run, all morning, for no reason.
 
 After every run, the events log is committed and pushed (src/fibo_live/
 git_sync.py), best-effort, never blocking the job on a failed push. This
@@ -109,17 +121,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
-from data_layer.db import get_read_connection
-from data_layer.staleness import assert_data_current, StaleDataError
-
 from fibo.auth import login, _redact
 from fibo.backtest import zones_overlap
-from fibo.download import resolve_entity_tokens, looks_rate_limited
+from fibo.download import looks_rate_limited
 from fibo.price_scale import to_raw_scale
 from fibo.resolution import compute_r, compute_target, position_size_shares, resolve_trade
 
 from fibo_live.clock import detect_run_mode
-from fibo_live.config import EVENTS_LOG, WAREHOUSE_DB
+from fibo_live.config import EVENTS_LOG
 from fibo_live.eventlog import append_event, read_events
 from fibo_live.git_sync import sync_events_log_to_git
 from fibo_live.notify import already_notified, record_notification, send_email
@@ -127,6 +136,7 @@ from fibo_live.outcomes import record_outcome
 from fibo_live.scheduler_support import make_logger, run_unattended
 
 from spread_monitor.market_hours import IST
+from spread_monitor.tokens import resolve_tokens
 from spread_monitor.trading_day import verify_trading_day
 
 NIFTY_50_INDEX_TOKEN = "99926000"  # Angel's NSE instrument-master token for the Nifty 50 index
@@ -165,6 +175,54 @@ def confirm_trading_day(client) -> tuple[bool, str]:
     return True, ""
 
 
+class StaleWatchlistError(Exception):
+    """Raised instead of silently running against a missing or stale
+    watchlist. Callers must let this propagate -- never catch and
+    continue."""
+
+
+def assert_watchlist_current(trade_date: dt.date, max_staleness_hours: float = 36.0,
+                              log_path: Path = EVENTS_LOG) -> dict:
+    """The events.jsonl-only replacement for the old
+    data_layer.staleness.assert_data_current(warehouse) check, now that
+    this script never opens the warehouse. Checks the one fact the
+    morning job actually depends on, directly: a watchlist_run event
+    targeting `trade_date` exists, logged within max_staleness_hours of
+    right now (IST). Raises StaleWatchlistError otherwise -- no evening
+    run has computed tonight's watchlist at all, or the only one that
+    did is too old to trust (e.g. a multi-day gap in the evening job
+    itself -- see BUGS.md Bug #13's meta-pattern: a silent gap must
+    refuse loudly, not compute on faith).
+
+    36 hours, not the warehouse check's 3 days: the evening job runs
+    once nightly and this is checked the very next morning, so the
+    normal gap between "watchlist logged" and "morning job runs" is a
+    few hours, never days -- a wider tolerance here would hide exactly
+    the staleness this exists to catch. Returns the matching
+    watchlist_run event (for logging) on success.
+
+    `log_path` defaults to the real events.jsonl; overridable for tests
+    the same way outcomes.py's record_outcome/evaluate already are."""
+    runs = [e for e in read_events(kind="watchlist_run", log_path=log_path)
+            if e.get("target_trade_date") == str(trade_date)]
+    if not runs:
+        raise StaleWatchlistError(
+            f"No watchlist_run event targets {trade_date} -- the evening job has not "
+            f"logged tonight's watchlist (or hasn't run at all)."
+        )
+    latest_run = max(runs, key=lambda e: e["ts"])
+    run_ts = dt.datetime.fromisoformat(latest_run["ts"])
+    if run_ts.tzinfo is None:
+        run_ts = run_ts.replace(tzinfo=IST)  # pre-fix events: naive ts already meant IST wall time
+    age_hours = (dt.datetime.now(IST) - run_ts.astimezone(IST)).total_seconds() / 3600
+    if age_hours > max_staleness_hours:
+        raise StaleWatchlistError(
+            f"watchlist_run {latest_run['run_id']} targeting {trade_date} was logged "
+            f"{age_hours:.1f}h ago (max allowed: {max_staleness_hours}h) -- too old to trust."
+        )
+    return latest_run
+
+
 def latest_watchlist(trade_date: dt.date) -> pd.DataFrame:
     runs = [e for e in read_events(kind="watchlist_run") if e["as_of_date"] < str(trade_date)]
     if not runs:
@@ -172,6 +230,25 @@ def latest_watchlist(trade_date: dt.date) -> pd.DataFrame:
     latest_run_id = max(runs, key=lambda e: e["ts"])["run_id"]
     rows = [e for e in read_events(kind="watchlist") if e["run_id"] == latest_run_id and e["qualifies"]]
     return pd.DataFrame(rows)
+
+
+def resolve_tokens_for_rows(rows) -> dict[str, str]:
+    """{entity_id: token} resolved purely from the `symbol` each row
+    already carries (from events.jsonl -- fibo_evening.py's watchlist.py
+    computed it the same way, hours earlier), against Angel's current
+    instrument master (spread_monitor.tokens.resolve_tokens, disk-cached
+    per IST date) -- never the warehouse. `rows` may be a DataFrame or a
+    list of Series, as used at each of this script's three call sites.
+    A symbol with no resolvable token (delisted/renamed since last
+    night) is logged, never silently dropped."""
+    if hasattr(rows, "iterrows"):
+        rows = [r for _, r in rows.iterrows()]
+    symbols = {r["entity_id"]: r["symbol"] for r in rows}
+    token_map, missing_symbols = resolve_tokens(list(symbols.values()))
+    if missing_symbols:
+        log(f"  {len(missing_symbols)} symbol(s) have no resolvable Angel token "
+            f"(delisted/renamed?): {missing_symbols}")
+    return {entity_id: token_map[sym] for entity_id, sym in symbols.items() if sym in token_map}
 
 
 def already_logged(kind: str, entity_id: str, trade_date: dt.date) -> bool:
@@ -227,16 +304,12 @@ def candle_to_bar(c) -> dict:
     return {"ts": ts, "open": float(c[1]), "high": float(c[2]), "low": float(c[3]), "close": float(c[4]), "volume": c[5]}
 
 
-def phase1_setups(client, con, watchlist: pd.DataFrame, trade_date: dt.date, run_mode: str) -> pd.DataFrame:
+def phase1_setups(client, watchlist: pd.DataFrame, trade_date: dt.date, run_mode: str) -> pd.DataFrame:
     if watchlist.empty:
         log("No qualifying watchlist rows for today -- nothing to do.")
         return watchlist
 
-    entity_ids = watchlist["entity_id"].tolist()
-    resolved, missing = resolve_entity_tokens(con, entity_ids)
-    if missing:
-        log(f"  {len(missing)} entities have no resolvable Angel token (delisted/renamed?): {missing}")
-    token_lookup = dict(zip(resolved["entity_id"], resolved["token"]))
+    token_lookup = resolve_tokens_for_rows(watchlist)
 
     setups = []
     for _, r in watchlist.iterrows():
@@ -361,14 +434,12 @@ def notify_pending_triggers(trade_date: dt.date) -> None:
             log(f"  trigger email NOT sent for {t['symbol']} -- will retry next run")
 
 
-def watch_for_triggers(client, con, setups: pd.DataFrame, trade_date: dt.date, run_mode: str) -> None:
+def watch_for_triggers(client, setups: pd.DataFrame, trade_date: dt.date, run_mode: str) -> None:
     active = setups[setups.get("setup_on") == True].copy() if not setups.empty else setups  # noqa: E712
     if active.empty:
         log("No SETUP ON stocks -- nothing to watch.")
         return
-    entity_ids = active["entity_id"].tolist()
-    resolved, _ = resolve_entity_tokens(con, entity_ids)
-    token_lookup = dict(zip(resolved["entity_id"], resolved["token"]))
+    token_lookup = resolve_tokens_for_rows(active)
 
     pending = {r["entity_id"]: r for _, r in active.iterrows() if not already_logged("trigger", r["entity_id"], trade_date)}
     if not pending:
@@ -432,7 +503,7 @@ def watch_for_triggers(client, con, setups: pd.DataFrame, trade_date: dt.date, r
         log(f"  still pending (no trigger yet): {names} -- run again before 11:30")
 
 
-def resolve_outcomes(client, con, setups: pd.DataFrame, trade_date: dt.date, run_mode: str) -> None:
+def resolve_outcomes(client, setups: pd.DataFrame, trade_date: dt.date, run_mode: str) -> None:
     if setups.empty:
         return
     active = setups[setups.get("setup_on") == True] if not setups.empty else setups  # noqa: E712
@@ -456,9 +527,7 @@ def resolve_outcomes(client, con, setups: pd.DataFrame, trade_date: dt.date, run
         return
 
     triggers = {e["entity_id"]: e for e in read_events(kind="trigger") if e["trade_date"] == str(trade_date)}
-    entity_ids = [s["entity_id"] for s in pending]
-    resolved, _ = resolve_entity_tokens(con, entity_ids)
-    token_lookup = dict(zip(resolved["entity_id"], resolved["token"]))
+    token_lookup = resolve_tokens_for_rows(pending)
 
     for s in pending:
         entity_id = s["entity_id"]
@@ -507,14 +576,13 @@ def main() -> None:
     run_mode = detect_run_mode(trade_date)
 
     log(f"=== FIBO MORNING JOB -- {trade_date} (run_mode={run_mode}) ===")
-    con = get_read_connection(WAREHOUSE_DB)
 
     try:
-        prior_latest = assert_data_current(con)
-        log(f"Freshness check OK: warehouse's latest trading day was {prior_latest}.")
-    except StaleDataError as e:
+        latest_run = assert_watchlist_current(trade_date)
+        log(f"Watchlist freshness check OK: watchlist_run {latest_run['run_id']} "
+            f"targeting {trade_date}, logged {latest_run['ts']}.")
+    except StaleWatchlistError as e:
         log(f"REFUSING TO RUN: {e}")
-        con.close()
         return
 
     watchlist = latest_watchlist(trade_date)
@@ -524,7 +592,6 @@ def main() -> None:
     if not result.ok:
         log(f"Angel One login FAILED: {result.status} -- offline, Angel down, or bad credentials. "
             f"Not retrying; the next scheduled run will try again.")
-        con.close()
         return
     log("Angel One login OK (data-only session).")
 
@@ -532,16 +599,14 @@ def main() -> None:
     if not is_trading:
         log(f"REFUSING TO RUN: {reason} -- likely a weekend/NSE holiday the scheduler fired on anyway. "
             f"No per-stock events logged this run.")
-        con.close()
         return
     log("Live trading-day check OK.")
 
-    setups = phase1_setups(result.client, con, watchlist, trade_date, run_mode)
+    setups = phase1_setups(result.client, watchlist, trade_date, run_mode)
     notify_setup_on(setups, trade_date)
-    watch_for_triggers(result.client, con, setups, trade_date, run_mode)
+    watch_for_triggers(result.client, setups, trade_date, run_mode)
     notify_pending_triggers(trade_date)
-    resolve_outcomes(result.client, con, setups, trade_date, run_mode)
-    con.close()
+    resolve_outcomes(result.client, setups, trade_date, run_mode)
     log("=== Morning job complete. ===")
 
 

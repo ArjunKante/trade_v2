@@ -65,7 +65,7 @@ from data_layer.staleness import assert_data_current, latest_trade_date, StaleDa
 from fibo_live.clock import detect_run_mode
 from fibo_live.config import EVENTS_LOG, RAW_PRICES_DIR, TOP_N, WAREHOUSE_DB
 from fibo_live.eventlog import append_event, read_events
-from fibo_live.git_sync import sync_events_log_to_git
+from fibo_live.git_sync import pull_before_appending, sync_events_log_to_git
 from fibo_live.notify import already_notified, record_notification, send_email
 from fibo_live.scheduler_support import make_logger, run_unattended
 from fibo_live.watchlist import build_watchlist
@@ -215,6 +215,12 @@ def main() -> None:
     # scripts/fibo_morning.py's same fix, even though this job stays on
     # the IST laptop for now.
     requested_date = dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(IST).date()
+
+    # FIRST thing this job does, before any append_event call -- see
+    # fibo_live/git_sync.py's pull_before_appending docstring. Raises
+    # (abort, logged loudly via run_unattended) rather than proceeding
+    # against a possibly-stale local events.jsonl.
+    pull_before_appending(log)
 
     log(f"=== FIBO EVENING JOB -- requested {requested_date} ===")
 

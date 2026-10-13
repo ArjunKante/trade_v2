@@ -22,6 +22,7 @@ import uuid
 from pathlib import Path
 
 from fibo_live.config import EVENTS_LOG
+from spread_monitor.market_hours import IST
 
 
 def _jsonable(obj):
@@ -34,13 +35,17 @@ def _jsonable(obj):
 
 def append_event(kind: str, payload: dict, log_path: Path = EVENTS_LOG) -> dict:
     """Appends one event line {event_id, ts, kind, **payload} and returns
-    it. `ts` is wall-clock now() -- for the evening watchlist this is what
-    makes the forward test honest (logged before any price for that date
-    is known); for every other kind it is simply when the event happened."""
+    it. `ts` is wall-clock now() IN IST -- explicit, never the host
+    machine's own local clock, so entries logged from the laptop
+    (evening job) and a GitHub Actions runner (morning job, OS clock
+    UTC) stay on the same clock in the SAME file. For the evening
+    watchlist this is what makes the forward test honest (logged before
+    any price for that date is known); for every other kind it is simply
+    when the event happened."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
     event = {
         "event_id": str(uuid.uuid4()),
-        "ts": dt.datetime.now().isoformat(timespec="seconds"),
+        "ts": dt.datetime.now(IST).isoformat(timespec="seconds"),
         "kind": kind,
         **{k: _jsonable(v) for k, v in payload.items()},
     }

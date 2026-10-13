@@ -29,6 +29,7 @@ import traceback
 from pathlib import Path
 
 from fibo_live.config import LIVE_DIR
+from spread_monitor.market_hours import IST
 
 SCHEDULER_LOG = LIVE_DIR.parent / "scheduler.log"  # data/fibo_live/scheduler.log
 
@@ -44,7 +45,10 @@ def make_logger(log_path: Path = SCHEDULER_LOG):
     def log(msg: object = "") -> None:
         text = str(msg)
         print(text, flush=True)
-        ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Explicit IST, not the host clock -- so scheduler.log reads
+        # consistently whether a line came from the laptop or a GitHub
+        # Actions runner.
+        ts = dt.datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
         with open(log_path, "a", encoding="utf-8") as f:
             for line in text.splitlines() or [""]:
                 f.write(f"[{ts}] {line}\n")

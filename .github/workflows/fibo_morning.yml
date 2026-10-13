@@ -1,0 +1,74 @@
+name: Fibo morning job
+
+# BUILT BUT NOT YET LIVE -- the `schedule:` trigger below is deliberately
+# commented out. Only `workflow_dispatch` is active right now, so this
+# can be run manually (once, during market hours) to confirm it behaves
+# identically to a laptop run before it ever fires on its own. Uncomment
+# the `schedule:` block only after that manual run has been reviewed --
+# see OPERATIONS.md's "The morning job is moving to GitHub Actions"
+# section. Once uncommented and merged, this job becomes the ONE place
+# scripts/fibo_morning.py runs -- see that same section for why it must
+# never also be run on the laptop from that point on.
+on:
+  workflow_dispatch:
+  # schedule:
+  #   # All times UTC (IST = UTC+5:30, no DST). 09:30-11:30 IST entry
+  #   # window = 04:00-06:00 UTC; outcome resolution needs a pass after
+  #   # 15:15 IST = 09:45 UTC. A late or occasionally-skipped GitHub
+  #   # Actions trigger is safe here: every time-window decision in
+  #   # scripts/fibo_morning.py compares against the REAL wall-clock
+  #   # instant the run actually executes at, never the scheduled
+  #   # trigger time, and re-running is idempotent (already-logged
+  #   # setup/trigger/outcome events are skipped) -- a late run just
+  #   # detects things a little later, never incorrectly.
+  #   - cron: "*/15 4,5 * * 1-5"  # 04:00-05:45 UTC (09:30-11:15 IST): setup/trigger checks
+  #   - cron: "0 6 * * 1-5"       # 06:00 UTC (11:30 IST): final entry-window-close check
+  #   - cron: "45 9 * * 1-5"      # 09:45 UTC (15:15 IST): outcome resolution
+  #   - cron: "0 10 * * 1-5"      # 10:00 UTC: backup outcome-resolution pass
+
+# This job commits and pushes events.jsonl itself (fibo_live/
+# git_sync.py), the same as the laptop's evening job does -- needs write
+# access to repo contents via the default GITHUB_TOKEN.
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # TZ is a SECOND safeguard only -- scripts/fibo_morning.py and its
+    # dependencies compute IST explicitly in code (dt.datetime.now(IST)),
+    # so correctness does not depend on this. Set anyway so any stray
+    # naive datetime call -- in a dependency, or a future change that
+    # regresses the explicit-IST fix -- fails the same way it would on
+    # the laptop instead of silently reading UTC.
+    env:
+      TZ: Asia/Kolkata
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure git identity for the push this job makes
+        run: |
+          git config user.name "fibo-morning-job[bot]"
+          git config user.email "fibo-morning-job@users.noreply.github.com"
+
+      # Credentials come ONLY from GitHub Secrets. Nothing here echoes
+      # them or dumps `env`; fibo.auth._redact and send_email's fail-soft
+      # exception handling are the real safety net (see
+      # scripts/probe_github_actions.py and src/fibo/auth.py).
+      - name: Run the morning job
+        env:
+          ANGEL_API_KEY: ${{ secrets.ANGEL_API_KEY }}
+          ANGEL_CLIENT_CODE: ${{ secrets.ANGEL_CLIENT_CODE }}
+          ANGEL_MPIN: ${{ secrets.ANGEL_MPIN }}
+          ANGEL_TOTP_SECRET: ${{ secrets.ANGEL_TOTP_SECRET }}
+          FIBO_EMAIL_FROM: ${{ secrets.FIBO_EMAIL_FROM }}
+          FIBO_EMAIL_APP_PASSWORD: ${{ secrets.FIBO_EMAIL_APP_PASSWORD }}
+          FIBO_EMAIL_TO: ${{ secrets.FIBO_EMAIL_TO }}
+        run: python scripts/fibo_morning.py

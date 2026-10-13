@@ -341,3 +341,55 @@ exit status. Full detail: BUGS.md Bug #17 (this gap) and Bug #16 (the
 staleness-guard-ordering bug it exposed as a second, independent
 consequence). **The morning job still has no scheduled task** -- not
 asked for yet, flagged in Bug #17.
+
+## The morning job is moving to GitHub Actions -- ONE owner only, never both
+
+**In progress, 2026-10-13/14.** `scripts/fibo_morning.py` is moving to a
+scheduled GitHub Actions workflow (`.github/workflows/`) instead of a
+local Task Scheduler entry, so it runs even when the laptop is closed.
+This required three prerequisite fixes, all landed:
+
+1. **Explicit IST everywhere on the morning path.** `detect_run_mode`,
+   the morning job's own trigger/outcome time-window checks, and
+   `append_event`'s `ts` stamp all used to default to the HOST machine's
+   local clock (`dt.datetime.now()`/`dt.date.today()`), correct only by
+   coincidence because the laptop's OS clock happens to be IST. A GitHub
+   Actions runner's clock is UTC. Fixed to compute IST explicitly
+   everywhere on this path, verified by a test that fakes a UTC-clock
+   host and checks the decisions are still IST-correct (see
+   `tests/test_fibo_live_clock.py`, `tests/test_staleness.py`).
+2. **No warehouse dependency.** The morning job used to open
+   `data/warehouse.duckdb` for two things: a staleness check, and
+   resolving each stock's Angel token via `isin_lineage`/`prices_eod`.
+   Both are gone -- replaced by `assert_watchlist_current` (did the
+   evening job log a `watchlist_run` targeting today, in `events.jsonl`,
+   recently enough to trust) and `spread_monitor.tokens.resolve_tokens`
+   (resolves straight from the `symbol` already on the watchlist event,
+   against Angel's own instrument master -- no DB connection at all).
+   NSE price data and the warehouse file itself never need to reach any
+   machine running this job that isn't the laptop.
+3. **`git pull --ff-only` as the first thing the evening job's `main()`
+   does**, before any `append_event` call (`fibo_live/git_sync.py`'s
+   `pull_before_appending`) -- so a day the GitHub-Actions-run morning
+   job has already pushed commits, the laptop's evening run starts from
+   that state before appending its own lines, keeping every push a
+   clean fast-forward. Unlike the existing push (best-effort, swallowed
+   on failure), this one raises and aborts the run on failure.
+
+Probe workflow (`.github/workflows/probe_github_actions.yml`,
+workflow_dispatch only) confirmed, 2026-10-13: Angel One login OK from a
+GitHub Actions runner, the IST clock computation correct, outbound email
+OK, scrip-master download ~5.5s (no caching needed).
+
+**ONE OWNER RULE, once the real schedule is enabled: `fibo_morning.py`
+must never be run on the laptop again.** Both the morning job's own
+idempotency (skips anything already logged for today) and the evening
+job's pre-run pull assume there is exactly one place committing
+`setup`/`trigger`/`outcome`/`notification` events during market hours.
+Running it from both the laptop and GitHub Actions on the same morning
+does not corrupt anything outright (idempotent skips still apply by
+entity+trade_date), but it reintroduces the exact non-fast-forward-push
+risk item 3 above exists to eliminate, for no benefit. If the morning
+job is ever run manually for debugging, do it with `--date` against a
+past date and do NOT let its git_sync push run (or push manually and
+reconcile) -- never as a stand-in for a day the schedule already covers.
