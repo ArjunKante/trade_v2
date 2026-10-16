@@ -440,6 +440,111 @@ Three fixes landed before the schedule was uncommented:
    passes `"Fibo morning events"` so its own commits are distinguishable
    from the evening job's in `git log`.
 
+## Watchlist freshness was judged by elapsed hours, not by what actually matters
+
+Found before it ever caused a real incident, checking the schedule
+ahead of 2026-10-19: `assert_watchlist_current` refused to run unless a
+`watchlist_run` targeting today had been logged within the last **36
+hours**. A Friday-evening run targeting the following Monday is,
+correctly, about **63 hours old** by 09:30 Monday -- the evening job
+runs once per trading night by design, so this check would have
+refused **every single Monday**, including the real one already queued
+up in `events.jsonl` for 2026-10-19.
+
+Fixed by judging the relationship that actually matters instead of
+elapsed time: a `watchlist_run` exists whose `target_trade_date` is
+today AND whose `as_of_date` is today's own previous trading day
+(`previous_trading_day`, `scripts/fibo_morning.py`) -- weekend- and
+NSE-holiday-aware, via `data_layer.nse_holidays.is_nse_holiday`. This
+still catches the real failure mode the 36-hour check was built for
+(BUGS.md Bug #13's meta-pattern -- a multi-day gap in the evening job,
+where the logged `as_of_date` is genuinely stale data, not just an
+old-looking timestamp), without being fooled by an ordinary weekend.
+Verified against the real `events.jsonl`: the already-logged Friday run
+for 2026-10-19 (`as_of_date=2026-10-16`) now passes; the old rule would
+have refused it. 10 tests, `tests/test_fibo_morning_watchlist_freshness.py`.
+
+**One residual, explicitly flagged gap, not fixed by this change
+alone** (closed separately below): `previous_trading_day` falls back to
+weekend-only skipping when the NSE holiday calendar can't be confirmed
+(`HolidayCalendarMissing`). On a GitHub Actions runner that never had
+any holiday calendar at all, a weekday holiday the Friday before a
+Monday would have been mistaken for an ordinary trading day, and the
+Monday run would have wrongly refused a genuinely fresh watchlist built
+from Thursday's data instead. See "Holiday calendar now reaches the
+runner" immediately below.
+
+## Durable refusal logging: a refusal is now recorded in events.jsonl, not just printed
+
+**The gap**: every refusal (`assert_watchlist_current` raising, a login
+failure, `confirm_trading_day` finding today unconfirmed as a trading
+day) was logged only via `log()` -- stdout, plus
+`data/fibo_live/scheduler.log`. On a laptop that file persists; on a
+GitHub Actions runner it lives only on that ephemeral runner and is
+never committed, so the only durable trace of a refusal was that one
+run's own entry in GitHub's Actions log (retained for a limited window,
+not pushed anywhere, not visible from `git log` or `events.jsonl`). This
+is the exact ambiguity that made the 2026-10-15/2026-10-16 gap (above)
+need a manual, after-the-fact backfill: nothing in the committed
+evidence trail distinguished "the evening job never ran" from "the
+morning job ran and refused" from "the morning job ran and found a
+quiet, zero-setup morning."
+
+**The fix**: every refusal path in `main()` now funnels through
+`log_refusal` (`scripts/fibo_morning.py`), which still logs to
+scheduler.log/stdout as before AND appends a `session_status` event
+(`src/fibo_live/session_status.py`) to `events.jsonl` -- committed and
+pushed by the same `sync_events_log_to_git` call that already runs
+after every run, refusal or not. Fields: `trade_date`, `session`
+(`"morning"`), `status`, `reason`, `run_mode`.
+
+`status` is `NON_TRADING_DAY` when `trade_date` is confirmed not a
+trading day (a weekend, or an NSE holiday confirmed by
+`is_nse_holiday`) and `REFUSED` otherwise -- so a holiday reads
+differently, at a glance, from a genuinely missed or broken evening
+job. An unverifiable day (`HolidayCalendarMissing`) is never assumed to
+be a holiday, so it logs `REFUSED`, not `NON_TRADING_DAY` -- consistent
+with `nse_holidays.py`'s own fail-safe stance.
+
+Deduplicated on `(trade_date, session, reason)`: the `*/15` cron fires
+every 15 minutes all morning, and a schedule re-hitting the identical
+refusal must log it once, not nine times. 16 tests across
+`tests/test_fibo_live_session_status.py` (the dedup/record logic in
+isolation) and `tests/test_fibo_morning_refusal_logging.py` (including
+`main()` itself refusing on an ordinary weekday with no watchlist at
+all -- the actual Monday-with-no-watchlist shape -- and on a weekend,
+and twice in a row to prove the dedup holds end-to-end).
+
+## Holiday calendar now reaches the runner
+
+**The gap**: `data_layer.nse_holidays.is_nse_holiday`'s only data
+source, `data/raw/nse_cm_holidays.pkl`, is deliberately not committed
+to git -- each environment keeps its own copy. A GitHub Actions
+runner's fresh checkout never has one, so every call raised
+`HolidayCalendarMissing` there, and every caller that degrades
+gracefully on that (`previous_trading_day`, `is_non_trading_day`) was
+silently running in weekend-only mode in production, the whole time.
+
+**The fix**: `data/raw/nse_cm_holidays_fallback.json` -- a trimmed copy
+of the same source, dates only (the pkl carries no holiday names
+either, so none were lost by trimming) -- is now committed (`.gitignore`
+carves out this one path the same way it already does for
+`data/fibo_live/v1/events.jsonl`). `nse_holidays.py`'s `_load` prefers
+the full pkl when present (more years, the laptop's own source of
+truth) and falls back to this JSON otherwise.
+
+**Known limitation, stated plainly**: the source pkl only covers
+2016-2026 -- there is no 2027 data anywhere in this project to trim
+from, so the committed fallback covers **2026 only**. A holiday check
+for any 2027 date will raise `HolidayCalendarMissing` on a runner
+without the pkl (degrading to weekend-only, same as before) until
+someone extends the fallback file with real 2027 NSE holiday dates
+before 2027 starts mattering to this schedule. Flagged here rather than
+quietly left for next December to discover. 6 tests,
+`tests/test_nse_holidays.py`, including the fallback resolving
+2026-10-20 (a real, confirmed-live NSE holiday) correctly with no pkl
+present at all -- the actual runner path.
+
 ## What to check on the first fully automatic Monday (2026-10-19)
 
 1. **The cron actually fired.** Check the Actions tab for "Fibo morning
@@ -452,11 +557,11 @@ Three fixes landed before the schedule was uncommented:
    `ubuntu-latest` would have become on this exact date (GitHub's Ubuntu
    26 migration lands 2026-10-19) -- check the run log's "Set up job"
    step reports `24.04`.
-3. **Watchlist freshness check passes** against Sunday night's/Friday
-   night's evening run (confirm `scheduler.log` or the evening job's
-   `watchlist_run` event actually targets 2026-10-19 -- a weekend means
-   the relevant evening run was Friday 2026-10-16 night, still inside the
-   36-hour staleness window from a Monday 09:30 run).
+3. **Watchlist freshness check passes** against Friday night's evening
+   run (confirm the evening job's `watchlist_run` event for 2026-10-19
+   has `as_of_date=2026-10-16` -- see "Watchlist freshness was judged by
+   elapsed hours, not by what actually matters" below for why this is no
+   longer an hours-based check).
 4. **At least one `setup` event gets logged** for 2026-10-19, and its
    `status` is `SETUP_ON`, `SETUP_OFF`, or `FETCH_FAILED` -- never a
    missing row for a watchlist stock (that would mean the run refused
@@ -472,3 +577,20 @@ Three fixes landed before the schedule was uncommented:
 7. **No duplicate/overlapping run**: confirm nobody also ran
    `scripts/fibo_morning.py` on the laptop that morning -- the ONE OWNER
    RULE above.
+8. **Tuesday 2026-10-20 should refuse with `NON_TRADING_DAY`, not
+   `SETUP_OFF`/`SETUP_ON`.** Confirmed live against the holiday
+   calendar while building this: 2026-10-20 is an NSE holiday. The
+   schedule still fires that morning (cron doesn't know about holidays,
+   only weekday-vs-weekend); the job should log a `session_status`
+   event with `status=NON_TRADING_DAY` and exit without any per-stock
+   events, not a stale-watchlist `REFUSED` and not a quiet `SETUP_OFF`
+   morning. If it instead shows `REFUSED`, the holiday calendar isn't
+   being consulted correctly on that runner -- check whether
+   `data/raw/nse_cm_holidays_fallback.json` was actually in the checkout
+   for that run.
+9. **Every `session_status` event that does appear in `events.jsonl`
+   this week should have `session=morning` and a `reason` that matches
+   what the run log says** -- durable refusal logging (below) means a
+   refusal is no longer only visible in a GitHub Actions run log that
+   expires; spot-check that the git-committed copy and the Actions run's
+   own stdout agree.

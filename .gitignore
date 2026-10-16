@@ -14,6 +14,21 @@
 !/data/fibo_live/v1
 /data/fibo_live/v1/*
 !/data/fibo_live/v1/events.jsonl
+
+# Deliberate exception: data/raw/nse_cm_holidays_fallback.json is a
+# trimmed copy (dates only, no names -- the source pickle carries none
+# either) of data_layer/nse_holidays.py's own NSE holiday calendar,
+# committed so a GitHub Actions runner's fresh checkout has SOME
+# calendar to confirm a holiday against. The full data/raw/
+# nse_cm_holidays.pkl stays un-committed -- everything else under
+# data/raw/ is real NSE price/bhavcopy data this project doesn't
+# redistribute, and that pkl lives in the same directory; this is
+# purely a trading-calendar date list, not a price feed, so the
+# licensing reason for ignoring the rest of data/raw/ does not apply to
+# it. See src/data_layer/nse_holidays.py.
+!/data/raw
+/data/raw/*
+!/data/raw/nse_cm_holidays_fallback.json
 .pytest_cache/
 __pycache__/
 *.pyc

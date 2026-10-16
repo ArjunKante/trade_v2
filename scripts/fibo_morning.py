@@ -136,6 +136,7 @@ from fibo_live.git_sync import sync_events_log_to_git
 from fibo_live.notify import already_notified, record_notification, send_email
 from fibo_live.outcomes import record_outcome
 from fibo_live.scheduler_support import make_logger, run_unattended
+from fibo_live.session_status import NON_TRADING_DAY, REFUSED, record_session_status
 
 from spread_monitor.market_hours import IST
 from spread_monitor.tokens import resolve_tokens
@@ -627,6 +628,43 @@ def resolve_outcomes(client, setups: pd.DataFrame, trade_date: dt.date, run_mode
         log(f"  {s['symbol']}: outcome logged -- {resolution['outcome']} @ {resolution['exit_price']:.2f}")
 
 
+def is_non_trading_day(trade_date: dt.date) -> bool:
+    """True iff trade_date is CONFIRMED not a trading day: a weekend, or
+    an NSE holiday confirmed by data_layer.nse_holidays.is_nse_holiday
+    (full pkl if present, else the committed fallback JSON -- see that
+    module). False for an ordinary weekday OR when the holiday calendar
+    can't confirm either way (HolidayCalendarMissing) -- an unverifiable
+    day is never assumed to be a holiday, same fail-safe stance
+    nse_holidays.py itself takes; it just means a refusal that morning
+    gets logged as REFUSED rather than NON_TRADING_DAY."""
+    if trade_date.weekday() >= 5:  # Saturday=5, Sunday=6
+        return True
+    try:
+        return is_nse_holiday(trade_date)
+    except HolidayCalendarMissing:
+        return False
+
+
+def log_refusal(trade_date: dt.date, run_mode: str, reason: str) -> None:
+    """The ONE place every refusal path in main() funnels through.
+    Logs `reason` to scheduler.log/stdout (as every refusal already did)
+    AND appends a durable session_status event to events.jsonl -- a
+    refusal visible only in scheduler.log is lost the instant a GitHub
+    Actions runner is destroyed; events.jsonl is the one thing this job
+    commits and pushes (sync_events_log_to_git still runs after main()
+    returns from a refusal, same as any other run -- see __main__ below).
+
+    NON_TRADING_DAY instead of REFUSED when trade_date is confirmed not
+    a trading day (is_non_trading_day) -- so a holiday reads differently
+    from a genuinely missed or broken evening run. Deduplicated per
+    (trade_date, reason) by record_session_status -- a 15-minute
+    schedule re-hitting the same refusal all morning logs it once."""
+    status = NON_TRADING_DAY if is_non_trading_day(trade_date) else REFUSED
+    log(f"REFUSING TO RUN ({status}): {reason}")
+    if record_session_status(trade_date, "morning", status, reason, run_mode=run_mode) is None:
+        log(f"  session_status: identical {status} for {trade_date} already logged today -- not duplicating.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", type=str, default=None, help="YYYY-MM-DD, default: today")
@@ -647,7 +685,7 @@ def main() -> None:
         log(f"Watchlist freshness check OK: watchlist_run {latest_run['run_id']} "
             f"targeting {trade_date}, logged {latest_run['ts']}.")
     except StaleWatchlistError as e:
-        log(f"REFUSING TO RUN: {e}")
+        log_refusal(trade_date, run_mode, str(e))
         return
 
     watchlist = latest_watchlist(trade_date)
@@ -655,15 +693,17 @@ def main() -> None:
 
     result = login()
     if not result.ok:
-        log(f"Angel One login FAILED: {result.status} -- offline, Angel down, or bad credentials. "
-            f"Not retrying; the next scheduled run will try again.")
+        log_refusal(trade_date, run_mode,
+                    f"Angel One login FAILED: {result.status} -- offline, Angel down, or bad credentials. "
+                    f"Not retrying; the next scheduled run will try again.")
         return
     log("Angel One login OK (data-only session).")
 
     is_trading, reason = confirm_trading_day(result.client)
     if not is_trading:
-        log(f"REFUSING TO RUN: {reason} -- likely a weekend/NSE holiday the scheduler fired on anyway. "
-            f"No per-stock events logged this run.")
+        log_refusal(trade_date, run_mode,
+                    f"{reason} -- likely a weekend/NSE holiday the scheduler fired on anyway. "
+                    f"No per-stock events logged this run.")
         return
     log("Live trading-day check OK.")
 
