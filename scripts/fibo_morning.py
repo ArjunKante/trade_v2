@@ -121,6 +121,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
+from data_layer.nse_holidays import HolidayCalendarMissing, is_nse_holiday
+
 from fibo.auth import login, _redact
 from fibo.backtest import zones_overlap
 from fibo.download import looks_rate_limited
@@ -188,25 +190,67 @@ class StaleWatchlistError(Exception):
     continue."""
 
 
-def assert_watchlist_current(trade_date: dt.date, max_staleness_hours: float = 36.0,
-                              log_path: Path = EVENTS_LOG) -> dict:
+def previous_trading_day(d: dt.date) -> dt.date:
+    """The trading day immediately before `d`: steps back one calendar
+    day at a time, always skipping Saturday/Sunday, and also skipping a
+    weekday when src/data_layer/nse_holidays.py's calendar confirms it
+    was an NSE holiday.
+
+    That calendar (data/raw/nse_cm_holidays.pkl) is deliberately NOT
+    committed to git (see nse_holidays.py's own docstring) -- a GitHub
+    Actions runner's fresh checkout never has a copy. When it's missing
+    (HolidayCalendarMissing), this falls back to the same weekend-only
+    heuristic scripts/fibo_evening.py's own next_trading_day already
+    uses for anything it can't otherwise confirm -- a known, already-
+    flagged gap (fibo_live/clock.py, config.py), not a new one. In that
+    degraded mode, a weekday NSE holiday landing on a day this runs
+    without the calendar file would be mistaken for an ordinary trading
+    day, and assert_watchlist_current below would wrongly refuse a
+    genuinely fresh watchlist computed around it. Flagged, not fixed
+    here -- fixing it needs the calendar to actually reach that runner,
+    a separate change."""
+    candidate = d - dt.timedelta(days=1)
+    while True:
+        if candidate.weekday() >= 5:  # Saturday=5, Sunday=6
+            candidate -= dt.timedelta(days=1)
+            continue
+        try:
+            if is_nse_holiday(candidate):
+                candidate -= dt.timedelta(days=1)
+                continue
+        except HolidayCalendarMissing:
+            pass  # cannot confirm either way -- see docstring above
+        return candidate
+
+
+def assert_watchlist_current(trade_date: dt.date, log_path: Path = EVENTS_LOG) -> dict:
     """The events.jsonl-only replacement for the old
     data_layer.staleness.assert_data_current(warehouse) check, now that
-    this script never opens the warehouse. Checks the one fact the
-    morning job actually depends on, directly: a watchlist_run event
-    targeting `trade_date` exists, logged within max_staleness_hours of
-    right now (IST). Raises StaleWatchlistError otherwise -- no evening
-    run has computed tonight's watchlist at all, or the only one that
-    did is too old to trust (e.g. a multi-day gap in the evening job
-    itself -- see BUGS.md Bug #13's meta-pattern: a silent gap must
-    refuse loudly, not compute on faith).
+    this script never opens the warehouse. Checks the two facts the
+    morning job actually depends on: a watchlist_run event targets
+    `trade_date` (its `target_trade_date`), AND that run's `as_of_date`
+    genuinely is the previous trading day relative to `trade_date`
+    (previous_trading_day, above) -- never how many wall-clock hours ago
+    it was logged.
 
-    36 hours, not the warehouse check's 3 days: the evening job runs
-    once nightly and this is checked the very next morning, so the
-    normal gap between "watchlist logged" and "morning job runs" is a
-    few hours, never days -- a wider tolerance here would hide exactly
-    the staleness this exists to catch. Returns the matching
-    watchlist_run event (for logging) on success.
+    An elapsed-hours cutoff was the original check here, and it is the
+    WRONG axis for this job: the evening job runs once per trading
+    night by design, so a Friday-evening run targeting the following
+    Monday is, correctly, about 63 hours old by the time Monday
+    morning's job checks it -- any cutoff tight enough to catch a real
+    multi-day gap (BUGS.md Bug #13's meta-pattern) also falsely refuses
+    every single Monday. Judging the target/as_of_date relationship
+    instead catches the same real gap (a watchlist computed from data
+    that is NOT actually trade_date's own previous trading day) without
+    being fooled by an ordinary weekend -- see previous_trading_day for
+    the one known residual gap (a weekday holiday with no local
+    calendar file), carried over, not introduced, by this change.
+
+    Raises StaleWatchlistError if no watchlist_run targets trade_date at
+    all (the evening job hasn't logged tonight's watchlist, or hasn't
+    run at all), or if every run that does target it has the wrong
+    as_of_date. Returns the matching event (the most recently logged, by
+    `ts`, if more than one correctly targets trade_date) on success.
 
     `log_path` defaults to the real events.jsonl; overridable for tests
     the same way outcomes.py's record_outcome/evaluate already are."""
@@ -217,17 +261,16 @@ def assert_watchlist_current(trade_date: dt.date, max_staleness_hours: float = 3
             f"No watchlist_run event targets {trade_date} -- the evening job has not "
             f"logged tonight's watchlist (or hasn't run at all)."
         )
-    latest_run = max(runs, key=lambda e: e["ts"])
-    run_ts = dt.datetime.fromisoformat(latest_run["ts"])
-    if run_ts.tzinfo is None:
-        run_ts = run_ts.replace(tzinfo=IST)  # pre-fix events: naive ts already meant IST wall time
-    age_hours = (dt.datetime.now(IST) - run_ts.astimezone(IST)).total_seconds() / 3600
-    if age_hours > max_staleness_hours:
+    expected_as_of = previous_trading_day(trade_date)
+    valid = [e for e in runs if e.get("as_of_date") == str(expected_as_of)]
+    if not valid:
+        found = sorted({e.get("as_of_date") for e in runs})
         raise StaleWatchlistError(
-            f"watchlist_run {latest_run['run_id']} targeting {trade_date} was logged "
-            f"{age_hours:.1f}h ago (max allowed: {max_staleness_hours}h) -- too old to trust."
+            f"watchlist_run(s) targeting {trade_date} exist, but as_of_date is {found}, "
+            f"not the expected previous trading day {expected_as_of} -- this watchlist "
+            f"was not computed from {trade_date}'s own previous trading day's data."
         )
-    return latest_run
+    return max(valid, key=lambda e: e["ts"])
 
 
 def latest_watchlist(trade_date: dt.date) -> pd.DataFrame:
