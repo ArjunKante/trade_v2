@@ -59,6 +59,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.adjustment import materialize_adjustment_factors
 from data_layer.db import get_connection
+from data_layer.nse_holidays import HolidayCalendarMissing, is_nse_holiday
 from data_layer.prices_nse import load_bhavcopy_to_duckdb
 from data_layer.staleness import assert_data_current, latest_trade_date, StaleDataError
 
@@ -79,30 +80,60 @@ log = make_logger()
 
 
 def next_trading_day(con, d: dt.date, known_through: dt.date) -> dt.date:
-    """Next trading day after `d`: skips Saturday/Sunday, and also skips any
-    day up to `known_through` that this run's own backward walk (or an
-    earlier run's) already confirmed has no published bhavcopy -- a real
-    NSE weekday holiday, like 2026-10-09 (a Friday) with nothing published.
-    No NSE holiday calendar exists anywhere in this project (fibo_live/
-    clock.py's docstring; config.py's EX_DATE_LOOKAHEAD_DAYS take the same
-    stance), so beyond `known_through` -- a day that hasn't happened yet --
-    there is no way to know about a holiday in advance; the weekend-only
-    heuristic is all that's left there, consistent with that same known,
-    flagged gap. Only used for the idempotency guard below and the report
-    line; the watchlist itself is always computed from `data_date`, the
-    actual latest day with published bhavcopy, never from this."""
+    """Next trading day after `d`: skips Saturday/Sunday, and skips a
+    weekday CONFIRMED an NSE holiday by data_layer.nse_holidays.
+    is_nse_holiday (the full local pkl if present, else the committed
+    fallback JSON) -- holiday-aware UP FRONT, not just reactively.
+
+    Previously this only learned about a holiday from an EXISTING
+    fetch_log 'no_data' row (confirmed by some prior fetch attempt
+    against that exact date) -- which meant a day's own holiday status
+    was invisible until something had already tried and failed to fetch
+    it. Found live: Monday 2026-10-19's evening run targeted Tuesday
+    2026-10-20 (a real NSE holiday) directly, because nothing had tried
+    fetching Tuesday yet -- leaving a stale watchlist_run and a
+    misleading digest email for a day nobody would trade. Consulting
+    is_nse_holiday up front is what lets Monday's own run see Tuesday's
+    holiday in advance and target Wednesday directly instead.
+
+    DEGRADES to the OLD reactive-only check, one candidate day at a
+    time, when is_nse_holiday raises HolidayCalendarMissing for that
+    candidate's year (e.g. 2027, absent from the committed fallback as
+    of this writing, see data/raw/nse_cm_holidays_fallback.json) --
+    logged as a visible WARNING every time, never a silent degradation.
+    In that fallback mode this function is exactly as holiday-blind as
+    it always was: it can only skip a day up to `known_through` that
+    this run's own backward walk (or an earlier run's) already confirmed
+    has no published bhavcopy; a day beyond `known_through` with no
+    calendar coverage is simply assumed an ordinary trading day, the
+    same known, flagged gap this project has always carried for an
+    uncovered year.
+
+    Only used for the idempotency guard below and the report line; the
+    watchlist itself is always computed from `data_date`, the actual
+    latest day with published bhavcopy, never from this."""
     nxt = d + dt.timedelta(days=1)
     while True:
         if nxt.weekday() >= 5:  # Saturday=5, Sunday=6
             nxt += dt.timedelta(days=1)
             continue
-        if nxt <= known_through:
-            no_data = con.execute(
-                "SELECT 1 FROM fetch_log WHERE trade_date = ? AND status = 'no_data' LIMIT 1", [nxt]
-            ).fetchone()
-            if no_data is not None:
+        try:
+            if is_nse_holiday(nxt):
                 nxt += dt.timedelta(days=1)
                 continue
+        except HolidayCalendarMissing:
+            log(f"WARNING: next_trading_day cannot confirm whether {nxt} is an NSE holiday -- "
+                f"no calendar entry for {nxt.year} (neither the local pkl nor the committed "
+                f"fallback covers it). Falling back to the reactive, fetch_log-only check for "
+                f"this date -- a real holiday that year will only be caught AFTER a fetch "
+                f"attempt against it confirms no bhavcopy was published, not in advance.")
+            if nxt <= known_through:
+                no_data = con.execute(
+                    "SELECT 1 FROM fetch_log WHERE trade_date = ? AND status = 'no_data' LIMIT 1", [nxt]
+                ).fetchone()
+                if no_data is not None:
+                    nxt += dt.timedelta(days=1)
+                    continue
         return nxt
 
 

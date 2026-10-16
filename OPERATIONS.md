@@ -540,7 +540,10 @@ for any 2027 date will raise `HolidayCalendarMissing` on a runner
 without the pkl (degrading to weekend-only, same as before) until
 someone extends the fallback file with real 2027 NSE holiday dates
 before 2027 starts mattering to this schedule. Flagged here rather than
-quietly left for next December to discover. 6 tests,
+quietly left for next December to discover. **Update, 2026-10-16**: the
+2027 NSE holiday calendar is not yet in the fallback file -- `next_trading_day`
+logs a warning and falls back to reactive detection for 2027 dates; to be
+added from NSE's own holiday circular before January 2027. 6 tests,
 `tests/test_nse_holidays.py`, including the fallback resolving
 2026-10-20 (a real, confirmed-live NSE holiday) correctly with no pkl
 present at all -- the actual runner path.
