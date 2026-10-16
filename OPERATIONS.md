@@ -314,12 +314,26 @@ Bug #13 found this project has no scheduled ingestion runner of any kind
 and that a silent 13-day gap went unnoticed for exactly that reason. The
 evening/morning jobs have the identical gap -- they only run when a
 human remembers to run them -- and it took exactly one evening of
-divided attention to prove it. `scripts/snapshot_options_depth.py` (this
-same session) is the one script in this project that actually has a
-real Task Scheduler entry; `fibo_evening.py`/`fibo_morning.py` do not,
+divided attention to prove it. `fibo_evening.py`/`fibo_morning.py` had no
+Task Scheduler entry of any kind at the time this section was written,
 despite both having the unattended-logging/never-crash machinery
 (`scheduler_support.py`) that ASSUMES something external is triggering
-them on a schedule.
+them on a schedule -- fixed below (`FiboEvening`, 2026-10-13) and further
+below (morning job moved to GitHub Actions).
+
+**Correction, 2026-10-16**: this section previously claimed `scripts/
+snapshot_options_depth.py` already had a real Task Scheduler entry at
+the time it was written. Checked against a live `schtasks /query`: that
+was false. The only entry that existed for it before today was
+`TradeNew_OptionsDepthTest`, a ONE-TIME task (2026-10-12, already fired,
+`Next Run Time: N/A`) -- never a recurring schedule. `nifty_depth_log.csv`
+confirms this independently: exactly 2 distinct snapshot timestamps, both
+on 2026-10-12, nothing before and nothing after until today. A real
+recurring task, `TradeNew_OptionsDepth` (weekdays 10:30/12:30/14:30,
+runs on battery, does not wake the machine), was created 2026-10-16
+evening -- same `schtasks /create /xml` method as `FiboEvening`
+(`scripts/_options_depth_task.xml`), verified the same way
+(`schtasks /query /tn TradeNew_OptionsDepth /v`).
 
 **Compounding effect, found while fixing it**: by the time this was run
 (just after midnight, now the next calendar day), the gap between real
