@@ -148,6 +148,13 @@ ENTRY_WINDOW_CLOSE = dt.time(11, 30)
 EXIT_TIME = dt.time(15, 15)
 POLL_BUFFER_SECONDS = 20  # wait this long past a candle's close before trusting it's final
 THROTTLE_SECONDS = 0.4
+# The opening-range pass hit rate limits hardest of the three fetch passes
+# (2026-10-14 manual run: most of 16 stocks retried, LAURUSLABS exhausted
+# all 5 retries) -- every ORB fetch happens back-to-back in one burst at
+# the start of the run, unlike the trigger/outcome passes which are
+# naturally spread across re-runs. Slower pace here specifically rather
+# than raising THROTTLE_SECONDS everywhere.
+ORB_THROTTLE_SECONDS = 0.8
 MAX_FETCH_RETRIES = 5  # retries on a RATE-LIMIT error specifically, not on any other error
 RETRY_BASE_DELAY_SECONDS = 2.0
 
@@ -258,7 +265,8 @@ def already_logged(kind: str, entity_id: str, trade_date: dt.date) -> bool:
     return False
 
 
-def fetch_candle(client, token: str, start: dt.datetime, end: dt.datetime, interval: str):
+def fetch_candle(client, token: str, start: dt.datetime, end: dt.datetime, interval: str,
+                  throttle_seconds: float = THROTTLE_SECONDS):
     params = {
         "exchange": "NSE", "symboltoken": str(token), "interval": interval,
         "fromdate": start.strftime("%Y-%m-%d %H:%M"), "todate": end.strftime("%Y-%m-%d %H:%M"),
@@ -268,13 +276,14 @@ def fetch_candle(client, token: str, start: dt.datetime, end: dt.datetime, inter
     except Exception as e:
         return None, _redact(f"{type(e).__name__}: {e}")
     finally:
-        time.sleep(THROTTLE_SECONDS)
+        time.sleep(throttle_seconds)
     if isinstance(resp, dict) and resp.get("status") is True:
         return resp.get("data") or [], None
     return None, _redact(str(resp.get("message") if isinstance(resp, dict) else resp))
 
 
-def fetch_candle_with_retry(client, token: str, start: dt.datetime, end: dt.datetime, interval: str):
+def fetch_candle_with_retry(client, token: str, start: dt.datetime, end: dt.datetime, interval: str,
+                             throttle_seconds: float = THROTTLE_SECONDS):
     """Same contract as fetch_candle, but a RATE-LIMIT error (specifically --
     not any other error) triggers exponential backoff and retry rather than
     an immediate give-up, since a rate-limit means the account is fine and
@@ -282,7 +291,7 @@ def fetch_candle_with_retry(client, token: str, start: dt.datetime, end: dt.date
     delay = RETRY_BASE_DELAY_SECONDS
     candles, err = None, None
     for attempt in range(MAX_FETCH_RETRIES + 1):
-        candles, err = fetch_candle(client, token, start, end, interval)
+        candles, err = fetch_candle(client, token, start, end, interval, throttle_seconds=throttle_seconds)
         if err is None:
             return candles, None
         if not looks_rate_limited(err) or attempt == MAX_FETCH_RETRIES:
@@ -309,23 +318,36 @@ def phase1_setups(client, watchlist: pd.DataFrame, trade_date: dt.date, run_mode
         log("No qualifying watchlist rows for today -- nothing to do.")
         return watchlist
 
-    token_lookup = resolve_tokens_for_rows(watchlist)
-
-    setups = []
+    # Resolved rows (a terminal SETUP_ON/SETUP_OFF already logged today)
+    # need no token at all -- splitting this BEFORE resolving tokens means
+    # a run where every stock is already resolved makes no Angel One call
+    # whatsoever here (not even the scrip-master lookup), not just skips
+    # the ORB candle fetch. A run with nothing left to do should exit in
+    # seconds, not pay for a lookup it will throw away.
+    setups: list[dict] = []
+    to_fetch = []
     for _, r in watchlist.iterrows():
-        entity_id = r["entity_id"]
-        prior = latest_setup_event(entity_id, trade_date)
+        prior = latest_setup_event(r["entity_id"], trade_date)
         if prior is not None and prior.get("status") != "FETCH_FAILED":
             log(f"  {r['symbol']}: setup already logged today, skipping re-fetch")
             setups.append(prior)
             continue
+        to_fetch.append(r)
 
+    if not to_fetch:
+        return pd.DataFrame(setups)
+
+    token_lookup = resolve_tokens_for_rows(to_fetch)
+
+    for r in to_fetch:
+        entity_id = r["entity_id"]
         token = token_lookup.get(entity_id)
         if token is None:
             continue
         start = dt.datetime.combine(trade_date, ORB_START)
         end = dt.datetime.combine(trade_date, ORB_END)
-        candles, err = fetch_candle_with_retry(client, token, start, end, "FIFTEEN_MINUTE")
+        candles, err = fetch_candle_with_retry(client, token, start, end, "FIFTEEN_MINUTE",
+                                                throttle_seconds=ORB_THROTTLE_SECONDS)
         if err or not candles:
             # A symbol whose ORB we never actually fetched must never be
             # recorded as SETUP OFF -- that would silently claim we checked
@@ -618,4 +640,4 @@ if __name__ == "__main__":
     # from during market hours, not held back until the evening job runs
     # hours later and after that trade's outcome is already known. Never
     # raises; see fibo_live/git_sync.py and OPERATIONS.md.
-    sync_events_log_to_git(EVENTS_LOG, log)
+    sync_events_log_to_git(EVENTS_LOG, log, job_label="Fibo morning events")

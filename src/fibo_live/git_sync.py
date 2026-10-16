@@ -79,12 +79,17 @@ def pull_before_appending(log) -> None:
     log(f"  git pull --ff-only: {output or 'already up to date'}")
 
 
-def sync_events_log_to_git(path: Path, log) -> None:
+def sync_events_log_to_git(path: Path, log, job_label: str = "Fibo evening events") -> None:
     """Stages `path`, commits iff there is something new to commit, and
     pushes -- each step best-effort and logged, never raised. The common
     case (an idempotent-skip or stale-data-refusal run that appended
     nothing new) is a clean no-op, logged as such, not treated as a
-    failure."""
+    failure.
+
+    `job_label` names which job produced the commit (e.g. "Fibo morning
+    events" vs "Fibo evening events") -- both jobs call this same
+    function, and a commit message that always said "evening" made every
+    morning-job commit look like it came from the wrong job."""
     try:
         rel = str(path.relative_to(ROOT))
     except ValueError:
@@ -101,7 +106,7 @@ def sync_events_log_to_git(path: Path, log) -> None:
             log(f"  git sync: no changes to {rel} this run -- nothing to commit.")
             return
 
-        message = f"Fibo evening events -- synced {dt.date.today().isoformat()}"
+        message = f"{job_label} -- synced {dt.date.today().isoformat()}"
         commit = _run_git("commit", "-m", message, "--", rel)
         if commit.returncode != 0:
             log(f"  git sync: commit failed ({commit.returncode}): {commit.stderr.strip()}")

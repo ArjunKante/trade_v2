@@ -393,3 +393,82 @@ risk item 3 above exists to eliminate, for no benefit. If the morning
 job is ever run manually for debugging, do it with `--date` against a
 past date and do NOT let its git_sync push run (or push manually and
 reconcile) -- never as a stand-in for a day the schedule already covers.
+
+## The morning job schedule went LIVE 2026-10-16
+
+The manual `workflow_dispatch` run on 2026-10-14 confirmed the job
+behaves correctly on a GitHub Actions runner (LIVE mode, watchlist
+freshness check OK, 16 stocks fetched, git sync pushed, zero setups).
+The `schedule:` trigger itself, though, was never uncommented until
+2026-10-16 -- so **2026-10-15 and 2026-10-16 are known gaps**: nothing
+ran the morning check on either day. Recorded honestly as two
+`session_status`/`MISSED` events in `events.jsonl` (appended, not
+backfilled as `SETUP_OFF` for any stock -- a stock whose ORB was never
+checked must never be recorded as if it had been). If either morning is
+ever replayed from stored 1-minute data, that is a separate run with
+`run_mode=REPLAY`, reported as replay evidence, never live evidence.
+
+Three fixes landed before the schedule was uncommented:
+
+1. **Skip-resolved idempotency confirmed, and tested.** `phase1_setups`
+   already split resolved rows (a terminal `SETUP_ON`/`SETUP_OFF` already
+   logged today) from rows needing a fetch *before* calling
+   `resolve_tokens_for_rows` -- a fully-resolved run now makes no Angel
+   One call of any kind in that function, not just skips the candle
+   fetch. `watch_for_triggers`/`resolve_outcomes` already restricted
+   themselves to `setup_on == True` rows and skipped anything with an
+   existing trigger/outcome event. `tests/test_fibo_morning_idempotency.py`
+   covers all of this, including the actual 16-stock-all-`SETUP_OFF`
+   shape of the 2026-10-14 run, with a client stub that raises if
+   `getCandleData` is ever called.
+2. **ORB fetch throttle raised to 0.8s** (`ORB_THROTTLE_SECONDS`,
+   `scripts/fibo_morning.py`) -- the 2026-10-14 run hit rate limits on
+   most of 16 stocks (LAURUSLABS exhausted all 5 retries), because every
+   ORB fetch happens back-to-back in one burst at the start of the run.
+   The trigger-watch and outcome-resolution passes keep the original
+   0.4s (`THROTTLE_SECONDS`) -- they are naturally spread across re-runs,
+   not one burst. 16 stocks at 0.8s throttle alone is ~12.8s; this is a
+   calculated lower bound on the ORB pass's duration, not a measured one
+   (no live market session was available to re-run this against) -- see
+   this file's own "ETA built from the throttle sleep alone" entry for
+   why a throttle-only number is a floor, not an estimate, of real
+   per-request latency. Confirm the real figure the next time this job
+   actually runs against a live market with several stocks queued.
+3. **Git sync commit message now names the job.** `sync_events_log_to_git`
+   took a hardcoded "Fibo evening events" message regardless of which job
+   called it; it now takes a `job_label` parameter, and the morning job
+   passes `"Fibo morning events"` so its own commits are distinguishable
+   from the evening job's in `git log`.
+
+## What to check on the first fully automatic Monday (2026-10-19)
+
+1. **The cron actually fired.** Check the Actions tab for "Fibo morning
+   job" runs between 04:00-06:00 UTC and again at 09:45/10:00 UTC on
+   2026-10-19 -- a schedule that silently never fires (GitHub disables
+   scheduled workflows on a repo with no activity for 60 days, not a risk
+   here, but worth the first-time check) would recreate exactly the gap
+   this section just closed.
+2. **The runner image is actually `ubuntu-24.04`**, not whatever
+   `ubuntu-latest` would have become on this exact date (GitHub's Ubuntu
+   26 migration lands 2026-10-19) -- check the run log's "Set up job"
+   step reports `24.04`.
+3. **Watchlist freshness check passes** against Sunday night's/Friday
+   night's evening run (confirm `scheduler.log` or the evening job's
+   `watchlist_run` event actually targets 2026-10-19 -- a weekend means
+   the relevant evening run was Friday 2026-10-16 night, still inside the
+   36-hour staleness window from a Monday 09:30 run).
+4. **At least one `setup` event gets logged** for 2026-10-19, and its
+   `status` is `SETUP_ON`, `SETUP_OFF`, or `FETCH_FAILED` -- never a
+   missing row for a watchlist stock (that would mean the run refused
+   early or crashed silently).
+5. **No `FETCH_FAILED` survives past the last scheduled run of the
+   morning** -- the 0.8s ORB throttle should mean most stocks succeed on
+   the first attempt now; if several still exhaust all 5 retries, the
+   rate limit is tighter than 0.8s/request handles and needs another
+   look (see this file's "Angel One rate limiting" section).
+6. **`git log` shows a "Fibo morning events" commit** (not "Fibo evening
+   events") pushed during market hours, and the evening job's own commit
+   that night still fast-forwards cleanly on top of it.
+7. **No duplicate/overlapping run**: confirm nobody also ran
+   `scripts/fibo_morning.py` on the laptop that morning -- the ONE OWNER
+   RULE above.

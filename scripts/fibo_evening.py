@@ -367,4 +367,4 @@ if __name__ == "__main__":
     # whatever this run appended (even a partial run cut short by an
     # exception) still gets backed up off this one laptop. Never raises;
     # see fibo_live/git_sync.py and OPERATIONS.md.
-    sync_events_log_to_git(EVENTS_LOG, log)
+    sync_events_log_to_git(EVENTS_LOG, log, job_label="Fibo evening events")
