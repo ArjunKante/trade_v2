@@ -71,6 +71,7 @@ from fibo_live.notify import already_notified, record_notification, send_email
 from fibo_live.scheduler_support import make_logger, run_unattended
 from fibo_live.watchlist import build_watchlist
 
+from options_depth.writer import snapshot_health
 from spread_monitor.market_hours import IST
 
 SERIES_INCLUDE = ["EQ", "BE", "BZ"]  # same set config.yaml's nse_bhavcopy.series_include uses
@@ -254,6 +255,20 @@ def main() -> None:
     pull_before_appending(log)
 
     log(f"=== FIBO EVENING JOB -- requested {requested_date} ===")
+
+    # Daily options-depth health line, log only (no email) -- placed before
+    # any early-return path below (idempotent skip, stale-data refusal) so
+    # it always fires, every run. Real wall-clock IST "today", not
+    # requested_date: a manual --date backfill run is reporting about a
+    # past trading day, but this question ("did the collector run today")
+    # is about right now. A day with zero snapshots is only alarming on a
+    # genuine trading day; this line doesn't judge that itself -- it just
+    # makes the fact visible in scheduler.log instead of discovered months
+    # later (the gap this job's own history, above, already demonstrates).
+    today_ist = dt.datetime.now(IST).date()
+    health = snapshot_health(today_ist)
+    log(f"Options depth health: {health['snapshots_today']} snapshot(s) recorded today ({today_ist}); "
+        f"most recent ever: {health['most_recent_ts'] or 'none recorded'}.")
 
     con = get_connection(WAREHOUSE_DB)
 
