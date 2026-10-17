@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>ONE-OFF, TEMPORARY: runs the Box Theory DEV backtest (scripts/box_theory_dev_run.py) detached from any interactive session, so it survives independent of an assistant tool session or a screen lock/sleep. Safe to delete once dev_report.json appears in data/box_theory/. See PREREGISTRATION_BOX.md.</Description>
+    <URI>\TradeNew_BoxTheoryDevRun</URI>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-21-3454145650-2635795589-489556244-1002</UserId>
+      <LogonType>InteractiveToken</LogonType>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <WakeToRun>false</WakeToRun>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <ExecutionTimeLimit>PT8H</ExecutionTimeLimit>
+  </Settings>
+  <Triggers>
+    <TimeTrigger>
+      <StartBoundary>2026-10-17T13:30:22</StartBoundary>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
+  </Triggers>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Users\arjun kante\AppData\Local\Programs\Python\Python313\python.exe</Command>
+      <Arguments>"C:\projects\trade-new\scripts\box_theory_dev_run.py"</Arguments>
+      <WorkingDirectory>C:\projects\trade-new</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

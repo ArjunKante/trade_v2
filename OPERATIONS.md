@@ -611,3 +611,81 @@ present at all -- the actual runner path.
    refusal is no longer only visible in a GitHub Actions run log that
    expires; spot-check that the git-committed copy and the Actions run's
    own stdout agree.
+
+## The Box Theory DEV run cost ~17 hours of wall clock for ~4 hours of actual work -- the lesson is about unattended jobs in general, not this study
+
+**2026-10-16 evening through 2026-10-17 20:29.** `scripts/box_theory_
+dev_run.py` (`src/box_theory/`, a separate study, see `BOX_THEORY.md`)
+needed six process starts to produce one finished result, across two
+genuine code bugs and at least two environment-level kills unrelated to
+either. Recorded here because the lesson is general -- any future long,
+unattended, multi-stage script in this project should assume it will be
+interrupted and should be built accordingly from the start, not patched
+into that shape after paying for the gap twice.
+
+**What actually happened, in order:**
+
+1. **Launch 1** (2026-10-16 ~22:47, backgrounded via `nohup` inside a
+   shell wrapper): died silently with no error, mid Stage 1. Root cause
+   found later: this environment tears down backgrounded processes at
+   conversation turn boundaries -- a wrapper process dying to the same
+   cause took the actual job down with it. Not a code bug.
+2. **Launch 2** (same evening, backgrounded directly via the tool's own
+   `run_in_background` instead of `nohup`): this one crashed on a real
+   bug -- `resolve_exit` raised an unhandled `ValueError` on a stock-day
+   whose own archive never reached 15:15 (an afternoon trading halt),
+   a case no Section 2b eligibility check was checking for, since those
+   all validate the PREVIOUS session, never today's. Fixed with a
+   fallback to the latest available candle (the same convention `fibo.
+   resolution.resolve_trade` already uses for an analogous gap), plus a
+   bounded per-trade exception handler so the NEXT unanticipated edge
+   case costs one skipped trade, not the whole run.
+3. **Launch 3** (after the fix, `run_in_background` again): killed by
+   the same turn-boundary teardown as Launch 1 -- confirmed this was a
+   pattern, not a fluke, by watching both the job and its own separate
+   polling watcher die at the same instant. Switched launch mechanism
+   entirely: a one-off Windows Task Scheduler task
+   (`TradeNew_BoxTheoryDevRun`), a process owned by the OS scheduler, not
+   a child of any tool session -- the same mechanism already proven
+   reliable for `FiboEvening`/`TradeNew_OptionsDepth`.
+4. **Launch 4** (2026-10-17 13:30, Task Scheduler): ran for real --
+   Stage 1 (27.1 min), Stage 2, and partway into Stage 3 (FAST at
+   100/500 seeds) before being deliberately killed to apply an
+   authorized, zero-rule-impact fix (Stage 4 and Stage 5 were each
+   calling `build_month_pool` for nearly the same ~75 months
+   independently, paying the ~30s/month cost twice for the same data).
+5. **Launch 5** (14:21, after the Stage 4/5 merge): resumed Stage 1-2
+   from their checkpoints, but Stage 3 had no mid-stage checkpoint of
+   its own, so its 500-seed TIMING null restarted from seed 0 --
+   SECOND TIME this exact loss happened (first at Launch 4's kill, now
+   again). Reached FAST at 300/500 seeds before this run surfaced the
+   second real bug: `build_timing_pool` kept every context's full
+   `day_raw`/`candles5` pandas frames alive for all 82,365 trades,
+   for the whole null computation, even though the array-native draw
+   path (`resolve_exit_arrays`) never reads them after the numpy arrays
+   are cached -- confirmed by a clean, isolated re-measurement (not a
+   guess): peak OS-tracked working set 4.27 GB, draw time for the same
+   20-seed probe nearly tripled (107s -> 295s) versus the first
+   measurement on identical work. Fixed by dropping the two keys right
+   after `prepare_ctx` extracts the arrays it actually needs.
+6. **Launch 6** (15:26, after the memory fix): completed cleanly,
+   302.8 minutes end to end, through Stage 6's final report.
+
+**Afterwards** (this entry's other half): added per-seed-batch
+checkpointing to Stage 3 and the merged Stage 4+5 (`CHECKPOINT_EVERY_
+SEEDS`, a month-by-month checkpoint for Stage 4+5), verified by
+deliberately killing a smoke-scale run mid-stage twice and confirming
+each resumed from its last checkpoint rather than from zero, with
+byte-identical final output either way.
+
+**The lesson, stated the way it should have been applied from the
+start**: a script expected to run unattended for hours should get (a)
+checkpointing fine-grained enough that a kill never costs more than a
+few minutes of recomputation, built in from the first version, not
+added after two restarts already paid the tax -- and (b) a one-off
+timing-and-peak-memory measurement on a representative slice BEFORE the
+real launch, the same discipline this file already asks for throttle
+costs (`fibo_morning.py`'s own ETA section) and getMarketData limits,
+just not yet generalized to every long job. Neither fix would have
+been expensive to do first; both were expensive to discover by paying
+for their absence twice.

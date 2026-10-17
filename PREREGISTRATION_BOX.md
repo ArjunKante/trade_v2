@@ -407,6 +407,23 @@ substituted.
 against the TIMING and SELECTION null distributions (10,000 — or 500-
 seed-equivalent — means each), separately, per configuration, per window.
 
+**Option raised and declined, 2026-10-17, before any DEV number existed
+(Stage 1 of the DEV run was mid-flight, but no trade had yet been
+aggregated into a mean, a CI, or a null percentile at the time this was
+discussed)**: dropping the seed count further, to 200, was raised purely
+as a runtime-saving option during a performance review of the DEV run
+script. The user declined it. Record of why, in the user's own terms:
+the only reason to drop to 200 would be impatience, and the resulting
+precision loss (SE on a measured 95th-percentile ≈ ±1.5 points at 200
+seeds, versus ≈ ±0.7 at 1000 and ≈ ±1.0 at 500) lands exactly where it
+would matter most — near the 95th-percentile gate itself. **This is
+recorded as a non-amendment**: the seed-count rule in this section is
+unchanged — 1000 seeds, dropping to 500 only if 1000 would exceed
+roughly an hour, per the contingency already stated above. The only
+thing that happened here is that a faster, lower-precision option was
+considered and explicitly rejected before a number existed to be
+protecting against.
+
 ## 7. Windows and gates
 
 **DEV**: 2016-10-04 to 2022-12-31 (the archive's own earliest available
