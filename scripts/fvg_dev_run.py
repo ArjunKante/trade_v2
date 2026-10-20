@@ -44,7 +44,7 @@ from fibo.jump_guard import combined_unexplained_jump_dates
 from fvg import test_seal
 from fvg.backtest import run_backtest, CONFIG_NAMES
 from box_theory.inference import day_clustered_bootstrap, percentile_vs_null, excludes_zero
-from fvg.nulls import build_timing_pool, timing_null_seed_mean, build_month_pool, selection_null_seed_mean
+from fvg.nulls import build_timing_pool, timing_null_seed_sum_count, build_month_pool, selection_null_seed_mean
 
 ROOT = Path(__file__).resolve().parents[1]
 WAREHOUSE_DB = ROOT / "data" / "warehouse.duckdb"
@@ -57,6 +57,12 @@ SMALL_RUN_SEEDS = 20
 TIME_BUDGET_SECONDS = 3600
 CHECKPOINT_EVERY_SEEDS = 50
 PEAK_MEMORY_WARN_MB = 2000
+# TIMING null is batched by entity (not one global pool) -- found live that
+# holding every entity's own shared array alive at once peaked at 7.46 GB
+# for Configuration A's 54,482-trade population, on a machine with only
+# ~5.6 GB free of 15.7 GB total. 25 entities/batch measured at well under
+# 1 GB RSS per batch (see fvg.nulls module docstring for the full story).
+ENTITY_BATCH_SIZE = 25
 
 OUT_DIR = None
 TRADES_PATH = INFERENCE_PATH = REPORT_PATH = LOG_PATH = None
@@ -117,6 +123,16 @@ def decide_seed_count(small_run_seconds: float, small_run_n: int, label: str) ->
 
 def run_timing_null(config: str, trades: pd.DataFrame, intraday_con, warehouse_con,
                      rank_lookup: dict, jump_dates_by_entity: dict) -> dict:
+    """BATCHED BY ENTITY, not built as one global pool: holding every
+    entity's own shared array alive simultaneously for the full real-trade
+    population measured at several GB peak working set on this machine's
+    15.7GB total / ~5.6GB-free budget -- a real memory finding, caught by
+    this exact preflight discipline before it was committed to. Entities
+    are split into fixed-size batches; each batch's pool is built, run
+    for ALL seeds, and discarded before the next batch -- (sum, count)
+    accumulated per seed across batches gives the identical pooled mean a
+    single unbatched pass would (same principle `selection_null_seed_
+    mean`'s own month-at-a-time caller already relies on)."""
     path = OUT_DIR / f"fvg_dev_timing_null_{config}.pkl"
     ckpt_path = OUT_DIR / f"fvg_dev_timing_null_{config}_checkpoint.pkl"
     if path.exists():
@@ -124,37 +140,65 @@ def run_timing_null(config: str, trades: pd.DataFrame, intraday_con, warehouse_c
         with open(path, "rb") as f:
             return pickle.load(f)
 
-    log(f"Stage 3 [timing null {config}]: building pool for {len(trades)} trades ...")
-    t0 = time.time()
-    pool = build_timing_pool(intraday_con, warehouse_con, trades, rank_lookup, jump_dates_by_entity)
-    log(f"  [{config}] pool built in {time.time()-t0:.1f}s, size={len(pool)}")
-    log_memory_checkpoint(f"timing-{config}-pool-built")
+    entities = sorted(trades["entity_id"].unique())
+    batches = [entities[i:i + ENTITY_BATCH_SIZE] for i in range(0, len(entities), ENTITY_BATCH_SIZE)]
+    log(f"Stage 3 [timing null {config}]: {len(trades)} trades, {len(entities)} entities, "
+        f"{len(batches)} batches of <= {ENTITY_BATCH_SIZE} entities")
 
-    ckpt = _load_checkpoint(ckpt_path) or {}
-    if ckpt.get("n_seeds") is not None:
+    ckpt = _load_checkpoint(ckpt_path)
+    if ckpt is not None:
         n_seeds = ckpt["n_seeds"]
-        means = list(ckpt["means"])
-        log(f"Stage 3 [timing null {config}]: resuming at seed {len(means)}/{n_seeds} from checkpoint")
+        seed_sums, seed_counts = ckpt["seed_sums"], ckpt["seed_counts"]
+        completed_batches = ckpt["completed_batches"]
+        log(f"Stage 3 [timing null {config}]: resuming, {len(completed_batches)}/{len(batches)} batches done")
     else:
+        probe_trades = trades[trades["entity_id"].isin(batches[0])]
+        t0 = time.time()
+        probe_pool = build_timing_pool(intraday_con, warehouse_con, probe_trades, rank_lookup, jump_dates_by_entity)
+        probe_build_time = time.time() - t0
+        log_memory_checkpoint(f"timing-{config}-probe-build")
         t0 = time.time()
         for s in range(SMALL_RUN_SEEDS):
-            timing_null_seed_mean(pool, np.random.default_rng(s))
-        elapsed = time.time() - t0
-        log(f"  [{config}] {SMALL_RUN_SEEDS}-seed probe in {elapsed:.1f}s")
-        log_memory_checkpoint(f"timing-{config}-probe-done")
-        n_seeds = decide_seed_count(elapsed, SMALL_RUN_SEEDS, f"timing-{config}")
-        means = [timing_null_seed_mean(pool, np.random.default_rng(s)) for s in range(SMALL_RUN_SEEDS)]
-        means = means[:n_seeds]
+            timing_null_seed_sum_count(probe_pool, np.random.default_rng([s, 0]))
+        probe_draw_time = time.time() - t0
+        projected_total = (
+            probe_build_time * len(batches) + (probe_draw_time / SMALL_RUN_SEEDS) * N_SEEDS_TARGET * len(batches)
+        )
+        log(f"Stage 3 [timing null {config}]: probe batch (size={len(probe_pool)}) build={probe_build_time:.1f}s, "
+            f"{SMALL_RUN_SEEDS}-seed draw time={probe_draw_time:.1f}s -- projected FULL {N_SEEDS_TARGET}-seed "
+            f"runtime = {projected_total/60:.1f} min, peak working set so far {peak_wset_mb():.0f} MB")
+        n_seeds = N_SEEDS_FALLBACK if projected_total > TIME_BUDGET_SECONDS else N_SEEDS_TARGET
+        if n_seeds == N_SEEDS_FALLBACK:
+            log(f"Stage 3 [timing null {config}]: projection exceeds budget -- using {N_SEEDS_FALLBACK} seeds "
+                f"instead of {N_SEEDS_TARGET}, per PREREGISTRATION_FVG.md Section 8's contingency")
+        del probe_pool
+        seed_sums = np.zeros(n_seeds)
+        seed_counts = np.zeros(n_seeds)
+        completed_batches = set()
 
-    t0 = time.time()
-    start_seed = len(means)
-    for s in range(start_seed, n_seeds):
-        means.append(timing_null_seed_mean(pool, np.random.default_rng(s)))
-        if (s + 1) % CHECKPOINT_EVERY_SEEDS == 0 or (s + 1) == n_seeds:
-            _save_checkpoint(ckpt_path, {"means": means, "n_seeds": n_seeds})
-            log(f"  [{config}] timing: {s+1}/{n_seeds} seeds done ({time.time()-t0:.0f}s elapsed, checkpointed)")
+    for bi, batch_entities in enumerate(batches):
+        if bi in completed_batches:
+            continue
+        batch_trades = trades[trades["entity_id"].isin(batch_entities)]
+        t0 = time.time()
+        pool = build_timing_pool(intraday_con, warehouse_con, batch_trades, rank_lookup, jump_dates_by_entity)
+        for s in range(n_seeds):
+            s_sum, s_count = timing_null_seed_sum_count(pool, np.random.default_rng([s, bi]))
+            seed_sums[s] += s_sum
+            seed_counts[s] += s_count
+        log(f"Stage 3 [timing null {config}]: batch {bi+1}/{len(batches)} "
+            f"({len(batch_entities)} entities, pool size {len(pool)}) done in {time.time()-t0:.1f}s")
+        log_memory_checkpoint(f"timing-{config}-batch-{bi+1}")
+        del pool
+        completed_batches.add(bi)
+        _save_checkpoint(ckpt_path, {
+            "n_seeds": n_seeds, "seed_sums": seed_sums, "seed_counts": seed_counts,
+            "completed_batches": completed_batches,
+        })
 
-    result = {"means": np.array(means), "n_seeds": n_seeds, "pool_size": len(pool)}
+    with np.errstate(invalid="ignore", divide="ignore"):
+        means = np.where(seed_counts > 0, seed_sums / seed_counts, np.nan)
+    result = {"means": means, "n_seeds": n_seeds, "pool_size": int(seed_counts.max()) if n_seeds else 0}
     with open(path, "wb") as f:
         pickle.dump(result, f)
     log(f"Stage 3 [timing null {config}]: saved to {path}")
