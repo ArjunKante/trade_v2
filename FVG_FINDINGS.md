@@ -170,6 +170,186 @@ for the three ENTERED cases; the correct non-entry classification for the
 other two) -- cross-checked against the real universe's own rank/band
 assignment, not a placeholder. No discrepancy found.
 
-## Step 3: DEV run
+## Step 3: DEV result -- NO EDGE, both configurations. Study closes.
 
-*(pending)*
+**Bad result, stated first, per discipline**: both configurations fail
+DEV, decisively and on every criterion. Configuration A's mean net R is
+**-0.1282** (97.5% CI [-0.1788, -0.0773] -- excludes zero, on the losing
+side); Configuration B's is **-0.1693** (CI [-0.2193, -0.1195], same
+losing side). Both TIMING-null percentiles are **0.0** (the real
+strategy's mean underperforms every one of 500/1000 random-entry draws
+on the same stock-days). Both SELECTION-null percentiles are far short
+of the 95th-percentile bar (A: 14.3; B: 0.0). Both remain negative after
+dropping each configuration's own single best calendar year (A:
+-0.1524; B: -0.1982) and within bands 1-100 alone (A: -0.1164; B:
+-0.1510). Per `PREREGISTRATION_FVG.md` Section 9, **the study closes at
+DEV. The sealed TEST window is never read.**
+
+### Performance notes, recorded because they shaped the run
+
+Two real engineering problems were found and fixed via the
+preregistration's own "measure memory and per-seed timing before the
+long stages" discipline, before either null was allowed to commit to a
+full seed count -- recorded here because they are part of what actually
+happened, not polished away:
+
+1. A first implementation of the TIMING null re-ran numpy-array
+   extraction and timestamp construction inside the per-draw loop. A
+   5-entity timed probe projected **~31 hours** for Configuration A's
+   real 54,482-trade pool. Fixed by extracting every array and every
+   per-day time-exit cutoff ONCE at pool-build time (the same fix
+   `box_theory.nulls.prepare_ctx` already applies for box theory's own
+   nulls) -- verified to produce numerically identical results, then
+   re-measured at ~70 minutes projected for the full pool.
+2. That fix's first version then sliced and copied a bounded window per
+   TRADE rather than sharing one array per entity. The real pool's own
+   preflight measurement put peak working set at **7.46 GB** on a
+   machine with ~5.6 GB free of 15.7 GB total -- caught before
+   committing, exactly as the discipline requires, and fixed by sharing
+   one array per entity (never copied) and bounding each draw's scan via
+   `np.searchsorted` instead of a physical slice, then batching the
+   TIMING null by entity group (25/batch, accumulating (sum, count) per
+   seed across batches, the same pooling principle the SELECTION null's
+   own per-month accumulation already uses). Peak working set during the
+   real run stayed under ~3 GB throughout both configurations.
+
+Seed counts, decided by the preflight timing probe per PREREGISTRATION_
+FVG.md Section 8's contingency: Configuration A's TIMING null and both
+configurations' SELECTION nulls ran the full 1000 seeds; Configuration
+B's TIMING null's probe projected over the 1-hour budget and fell back
+to 500 seeds, logged at the time.
+
+Total DEV run wall time: **51.7 minutes** for Stage 1 (the real
+backtest, both configurations, full 200-stock universe, 2016-10-04 to
+2022-12-31) plus **98.9 minutes** for inference and both nulls across
+both configurations (after the fixes above) -- **~150 minutes total**,
+fully checkpointed throughout (per-batch for TIMING, per-month for
+SELECTION), surviving two unrelated background-process interruptions
+without losing any completed work.
+
+### Common counts (both configurations share the same gap population)
+
+| | |
+|---|---|
+| Total valid gaps found | 109,766 |
+| Inside-bar rejected | 5 |
+| Overnight-excluded | 102,609 |
+| A/B overlap (gaps trading in both configs) | 21,890 |
+| `bad_previous_session` / `ex_date` / `jump_guard` skips | 16,301 / 70 / 0 |
+| Day errors | 0 |
+| BASELINE | **reused directly** from box theory's own `data/box_theory/dev_baseline.pkl` (mean net return -0.4262%, median -0.5059%, 255,980 stock-days) -- not recomputed, since BASELINE depends only on the universe, DEV window, and cost model, all identical here (stated per Section 0/8) |
+
+**`bad_previous_session`/`ex_date`/`jump_guard` are IDENTICAL to box
+theory's own DEV-window counts** (16,301 / 70 / 0) -- the same per-day
+eligibility pipeline behaving identically for an unrelated study, not
+independently re-derived; a sanity check that passed.
+
+**Overnight-excluded (102,609) exceeds total valid gaps (109,766) by a
+smaller margin than it first appears**: the sliding-window scan checks
+every consecutive triple, including many that span a session boundary
+by construction (the last one or two candles of a day paired with the
+first one or two of the next) -- most such boundary-crossing triples
+that happen to satisfy the bare geometric FVG test are exactly the
+"overnight gap, not an intraday structure" case Section 4 excludes by
+design, not a sign anything is wrong with the scan.
+
+### Configuration A -- BREAKOUT
+
+| | |
+|---|---|
+| Trades / distinct entry days | 54,482 / 1,533 |
+| Win rate | 30.17% |
+| Mean net R (97.5% CI) | **-0.1282** [-0.1788, -0.0773] |
+| Median net R (descriptive) | -1.1245 |
+| MDE | 0.0509 |
+| TIMING null percentile | **0.0** (500 seeds -- preflight fell back from 1000, logged at the time) |
+| SELECTION null percentile | **14.3** (1000 seeds) |
+| Ex-best-year mean (drops 2020) | -0.1524 |
+| Bands 1-100 mean | -0.1164 |
+| Exit mix | STOP 36,287 (66.6%) / TARGET 12,038 (22.1%) / TIME_EXIT 6,157 (11.3%) |
+| Peak concurrent positions / capital | 176 / Rs 64.63 lakh |
+| Median concurrent positions (when >0) | 64 |
+| Room-at-entry (fraction) | mean 1.71%, median 1.28%, p25 0.84%, p75 2.04%, max 29.1%, min 0.50% (floor) |
+| Time-exit fallback count | 489 |
+| Monitoring-gap days (aggregate) | 7,635 |
+| **DEV_PASS** | **False** |
+
+**By year (net R)**: 2016 -0.262 (1,686), 2017 -0.144 (7,570), 2018
+-0.265 (8,441), 2019 -0.194 (8,409), **2020 -0.0154** (9,612 -- the best
+year, barely less negative than breakeven), 2021 -0.0214 (9,152), 2022
+-0.129 (9,612). **Negative in every single calendar year** -- there is
+no good year propping this up; even the best year lost money.
+
+**By band (net R)**: 1-50 -0.108 (14,810), 51-100 -0.125 (14,808),
+101-200 -0.142 (24,864). Negative everywhere, mildly worse in the
+thinner bands, no thin-band dependency that would explain the result.
+
+**Skip/diagnostic breakdown**: `superseded_by_newer_gap` 26,275 (the
+single largest reason -- gaps form often enough on the same entity that
+a majority of candidates never get a full, untruncated window),
+`stop_too_tight` 13,562 (the 0.5% floor is doing real, frequent work --
+about one in six of all candidates that found a trigger candle (81,142
+total) were rejected here), `no_fill_bar` 12,739 (the trigger candle was a day's own last
+15:15-15:30 candle with no next-session bar at the exact next
+timestamp), `expired_unused` 2,349, `zero_qty` 359.
+
+### Configuration B -- RETEST
+
+| | |
+|---|---|
+| Trades / distinct entry days | 28,801 / 1,532 |
+| Win rate | 29.10% |
+| Mean net R (97.5% CI) | **-0.1693** [-0.2193, -0.1195] |
+| Median net R (descriptive) | -1.1247 |
+| MDE | 0.0506 |
+| TIMING null percentile | **0.0** (500 seeds -- preflight fell back from 1000) |
+| SELECTION null percentile | **0.0** (1000 seeds) |
+| Ex-best-year mean (drops 2020) | -0.1982 |
+| Bands 1-100 mean | -0.1510 |
+| Exit mix | STOP 19,449 (67.5%) / TARGET 5,952 (20.7%) / TIME_EXIT 3,400 (11.8%) |
+| Peak concurrent positions / capital | 114 / Rs 36.22 lakh |
+| Median concurrent positions (when >0) | 36 |
+| Room-at-entry (fraction) | mean 1.72%, median 1.33%, p25 0.88%, p75 2.07%, max 29.1%, min 0.50% (floor) |
+| Time-exit fallback count | 215 |
+| Monitoring-gap days (aggregate) | 3,915 |
+| Touched count | 28,801 of 28,801 (100% -- every B entry is, by construction, a touch-then-confirm) |
+| **DEV_PASS** | **False** |
+
+**By year (net R)**: 2016 -0.300 (860), 2017 -0.160 (4,112), 2018 -0.304
+(4,525), 2019 -0.214 (4,468), **2020 -0.0255** (4,829 -- again the best
+year, again barely short of breakeven), 2021 -0.128 (5,052), 2022 -0.173
+(4,955). Also **negative in every single calendar year**.
+
+**By band (net R)**: 1-50 -0.131 (7,783), 51-100 -0.171 (7,883), 101-200
+-0.191 (13,135). Negative everywhere.
+
+**Skip/diagnostic breakdown**: `invalidated_before_retest` 34,059 (the
+single largest reason, and larger than B's own trade count -- most
+touched gaps get invalidated, closing fully below GAP_LOW, before ever
+confirming), `superseded_by_newer_gap` 33,151, `no_fill_bar` 7,457,
+`stop_too_tight` 5,308, `expired_unused` 762, `touched_never_confirmed`
+61 (distinguished from plain `expired_unused`, per Section 10 -- rare:
+almost every touch resolves one way or the other, either invalidation or
+confirmation, well before the 30-candle window runs out), `zero_qty`
+167.
+
+### Internal consistency and what the result actually says
+
+Both configurations lose money in **every one of the seven calendar
+years** in DEV, including the COVID-crash year (2020) that is the single
+best year for both -- and even that year is only barely short of
+breakeven, not genuinely profitable. The two configurations' TIMING-null
+percentile is identically 0.0: a uniformly random entry time on the
+exact same stock-days the real signal traded beats the real signal's
+entry timing in essentially every one of 500-1000 random draws, for
+both the breakout and the retest trigger. That is a strong, consistent
+signal that the ENTRY TRIGGER itself -- "price closed above the top of
+an unfilled three-candle gap," with or without a retest first -- carries
+no exploitable timing information on this universe, at this time frame,
+once realistic costs are applied; it is not a borderline result sensitive
+to one bad year, one thin band, or one null construction choice.
+
+**Status: closed.** Per `PREREGISTRATION_FVG.md` Sections 9 and 12, this
+result is not rescued by retrying the 3:1 target, the 30-candle expiry,
+or the 0.5% floor at other values. The sealed TEST window (2023-01-01 to
+2026-09-18) is never read.
