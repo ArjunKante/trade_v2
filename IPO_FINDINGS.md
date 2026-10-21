@@ -14,8 +14,10 @@ discipline**: the fetch and bhavcopy cross-check surfaced a real data
 problem not anticipated in the preregistration -- Angel One returns
 split/bonus-ADJUSTED historical prices, not RAW ones -- which has now
 been found, diagnosed, and corrected in code (`ipo_listing.rescale`)
-before any Phase 2 rule touches the data. 501 of 552 identified listings
-(90.8%) now have usable, bhavcopy-cross-validated 1-minute data.
+before any Phase 2 rule touches the data. A further 3 listings were then
+excluded for an independent single-tick data defect (Section 3). **Final
+usable sample: 498 of 552 identified listings (90.2%)**, bhavcopy-
+cross-validated 1-minute data.
 
 ### 1. Survivorship recovery outcome
 
@@ -51,29 +53,30 @@ by hand against `prices_eod` directly):
   Proteins, Stallion India, Sri Lotus, Milky Mist, Jindal Supreme) are
   recent, small/thin-liquidity listings Angel's master may simply not
   carry yet, not necessarily delisted.
-- **21 / 501 final usable sample = 4.19%** -- under the 5% prominence
+- **21 / 498 final usable sample = 4.22%** -- under the 5% prominence
   threshold `PREREGISTRATION_IPO.md` Section 3a sets, but close enough
   to it that it is stated here plainly rather than waved past. The
   direction remains as recorded before this number existed: dropping
   these listings biases the usable sample toward IPOs that survived
   cleanly to 2026, which flatters this study's own result.
 
-### 2. DEV/TEST boundary -- frozen, sealed, reported before any rule runs
+### 2. DEV/TEST boundary -- frozen, sealed, AFTER all exclusions (Section 3), reported before any rule runs
 
-On the 501 usable (`OK`) listings, split chronologically 60/40 by
-listing date:
+On the final 498 usable listings (501 that fetched `OK`, minus the 3
+excluded in Section 3 below), split chronologically 60/40 by listing
+date:
 
 | | count | listing-date range |
 |---|---|---|
-| **DEV** | 301 | through **2024-11-27** |
-| **TEST (sealed)** | 200 | from **2024-11-29** onward |
+| **DEV** | 299 | through **2024-11-29** |
+| **TEST (sealed)** | 199 | from **2024-12-06** onward |
 
 Frozen in code at `ipo_listing.test_seal` (`SEALED_AT = 2026-10-22`,
-the day Phase 1's fetch completed), same `guard_date_range`/
-`authorize_test` mechanism as `box_theory.test_seal`, its own
-independent access log. Not read unless DEV passes
-`PREREGISTRATION_IPO.md` Section 9's gate AND the user explicitly
-approves.
+the day Phase 1's fetch AND the post-validation exclusions completed),
+same `guard_date_range`/`authorize_test` mechanism as
+`box_theory.test_seal`, its own independent access log. Not read unless
+DEV passes `PREREGISTRATION_IPO.md` Section 9's gate AND the user
+explicitly approves.
 
 ### 3. Bhavcopy validation mismatch rate -- the real number, and what drives it
 
@@ -112,41 +115,48 @@ market-data licensing reasoning as `fibo_intraday.duckdb`/
 `warehouse.duckdb` -- reproducible by rerunning
 `scripts/ipo_listing_fetch.py`).
 
-**Mismatch rate AFTER correction: 52.89%** -- barely moved, which is
-itself the real finding: the scale bug explained only a fraction of the
-60.28%. The REMAINING ~53% is overwhelmingly tiny and not a sign of bad
-data: post-correction, median difference on every OHLC field is
-~0.00%, 90th-percentile difference is under 1% on three of four fields,
-and **75% of all 501 listings match bhavcopy within 0.5% on BOTH open
-and close**. The headline "mismatch rate" is almost entirely an
-artifact of the EXISTING 0.1% tolerance (`fibo.validation`'s own
-default, calibrated for box theory's liquid top-200 names on ordinary
-trading days) being far tighter than a listing day's own special
-pre-open call-auction and early price-discovery noise warrants -- 209 of
-501 differ by only 0.1-1%, a further 53 by 1-5%, and only **3 listings
-(0.6%) differ by more than 5%**, named below rather than hidden in the
-aggregate:
+**Mismatch rate AFTER scale correction, at the project-standard 0.1%
+tolerance -- NOT loosened, this is the number that stands: 52.89%**
+(501 listing-days). The scale bug explained only a fraction of the raw
+60.28%; the correction is kept, but the tolerance is not touched to
+make the remaining number look better.
 
-| Company | Date | open diff | low diff | close diff |
+**Listing days are structurally different from ordinary trading
+sessions, and a higher mismatch rate than this project's other studies
+see is EXPECTED, not a sign of bad data**: there is a special pre-open
+call-auction with no prior close to anchor price discovery to, and the
+early minutes of trading are thin by construction (no settled trading
+range yet exists). Context for that expectation, reported as context
+only and explicitly **not adopted as a new tolerance standard**: 376 of
+501 listings (**75.0%**) match bhavcopy within 0.5% on BOTH open and
+close post-correction; 209 differ by only 0.1-1%, a further 53 by
+1-5%. The 52.89% figure stands as the real, reported number; the 75.0%
+figure exists only to show that the deviations behind it are
+overwhelmingly small, not to argue the tolerance should move.
+
+**3 listings (0.6% of the 501) differ by more than 5% -- EXCLUDED from
+the usable sample**, not merely flagged, per instruction: the first
+1-minute candle is exactly what `PREREGISTRATION_IPO.md` Section 5's
+ENTRY rule reads, so a corrupted tick on day 1 cannot be risked into
+Phase 2. All three share the identical signature -- `low_pct_diff =
+100%`, open diverging 34-44%, close matching within 1% -- consistent
+with a single spurious near-zero LOW tick in the fetched feed on that
+one day, pointing to a data defect rather than a scale or
+identification problem:
+
+| Company | Listing date | open diff | low diff | close diff |
 |---|---|---|---|---|
 | Archean Chemical Industries | 2022-11-21 | 44.2% | 100.0% | 0.0% |
 | Five-Star Business Finance | 2022-11-21 | 36.0% | 100.0% | 0.2% |
 | Yatharth Hospital & Trauma CARE | 2023-08-07 | 34.7% | 100.0% | 0.9% |
 
-All three share the same `low_pct_diff = 100%` signature with a
-near-perfect close match -- consistent with a single spurious near-zero
-LOW tick in one feed on that specific day (a known broker-feed artifact
-type, not re-investigated further here), not a scale or identification
-problem. Not excluded from the usable sample; flagged for awareness
-going into Phase 2's hand-traces.
+Excluded in code (`ipo_listing.exclusions.KNOWN_DATA_DEFECTS`, applied
+by `scripts/ipo_listing_fetch.py` as a named, reproducible step -- not a
+one-off manual database edit), fetch_log status
+`EXCLUDED_DATA_DEFECT`. **Usable sample after this exclusion: 498** (the
+501 that fetched `OK`, minus these 3).
 
-**This project's existing 0.1% tolerance is not loosened here** --
-that is a methodology decision for the user, not mine to make silently;
-the number above is reported as computed, with the diagnosis attached so
-it is not read as "the data is unreliable" when the evidence says
-otherwise.
-
-### 4. Fetch losses -- two different kinds, kept separate per instruction
+### 4. Fetch losses -- three different kinds, kept separate per instruction
 
 - **19 listings (2016-01-06 through 2016-09-29) hit Angel's own archive
   floor**: a validly resolved token, zero candles returned. This lines
@@ -163,25 +173,35 @@ otherwise.
   Industries (2021-11-15), HP Adhesives (2021-12-27), Tamilnad
   Mercantile Bank (2022-09-15), Pyramid Technoplast (2023-08-29),
   Ratnaveer Precision Engineering (2023-09-11), Motisons Jewellers
-  (2023-12-26). This is a THIRD, distinct kind of gap -- not the 2016
-  floor, not a token-resolution/survivorship issue (every one of these
-  had a valid, current Angel token) -- an isolated archive hole on that
-  specific day for an otherwise-covered instrument. Not investigated
-  further; named here rather than folded into either of the other two
-  categories.
+  (2023-12-26). **Checked against bhavcopy before accepting these as
+  lost, per instruction**: every one of the 11 shows substantial real
+  volume and trade count in `prices_eod` that day (range: 731K-37.1M
+  shares, 2,714-899,495 trades -- e.g. Mrs. Bectors Food Specialities,
+  37.1M shares/899,495 trades; HP Adhesives, the thinnest of the 11,
+  still 731K shares/2,714 trades). **None are a real "no trading"
+  market fact -- all 11 are genuine Angel archive gaps**, a third,
+  distinct kind of loss: not the 2016 floor, not a token-resolution/
+  survivorship issue (every one had a valid, current Angel token), not
+  thin trading -- an isolated hole in Angel's own historical archive on
+  that specific day for an otherwise well-covered instrument. Not
+  investigated further beyond this check.
 
 ### Final status breakdown (552 identified listings)
 
 | status | count |
 |---|---|
-| OK (usable) | 501 |
+| OK (usable) | 498 |
+| EXCLUDED_DATA_DEFECT (Section 3) | 3 |
 | FETCH_FAILED (2016 archive floor) | 19 |
-| FETCH_FAILED (isolated archive gap, 2018-2023) | 11 |
+| FETCH_FAILED (isolated archive gap, 2018-2023, confirmed via bhavcopy volume) | 11 |
 | NO_TOKEN (unresolved after recovery) | 21 |
+
+**Total: 552.** Final usable sample for DEV/TEST: **498** (Section 2).
 
 ## Status
 
 **>>> STOPPING HERE, per the user's explicit instruction and
 `PREREGISTRATION_IPO.md` Process Step 3/4 boundary.** No hand-trace has
-been performed and no DEV backtest code exists yet. The three items
-above are reported for review before anything further is built or run.
+been performed and no DEV backtest code exists yet. The final sample
+(498 usable, DEV 299 / TEST 199) is reported for review before anything
+further is built or run.

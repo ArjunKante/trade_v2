@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS fetch_log (
     listing_date  DATE NOT NULL,
     symbol_used   VARCHAR,
     token_used    VARCHAR,
-    status        VARCHAR NOT NULL,   -- 'OK' | 'FETCH_FAILED' | 'NO_TOKEN'
+    status        VARCHAR NOT NULL,   -- 'OK' | 'FETCH_FAILED' | 'NO_TOKEN' | 'EXCLUDED_DATA_DEFECT'
     reason        VARCHAR,
     n_candles     INTEGER NOT NULL,
     attempted_at  TIMESTAMP NOT NULL,

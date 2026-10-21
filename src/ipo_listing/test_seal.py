@@ -10,12 +10,15 @@ own "Provenance" section): this dataset has never been touched by any
 prior study, so this TEST window is a genuine, first-exposure holdout,
 not a forward-only discipline device. Enforced accordingly: no slack.
 
-Sealed NOW (2026-10-22, the moment Phase 1's fetch completed, before any
-IPO trade, R value, or null has been computed), on the 501 listings that
-fetched 'OK' (`data/ipo_listing/phase1_fetch_summary.json`), split
+Sealed NOW (2026-10-22, the moment Phase 1's fetch AND the post-
+validation exclusions completed, before any IPO trade, R value, or null
+has been computed), on the 498 listings that fetched 'OK' AND were not
+excluded for a known data defect (`ipo_listing.exclusions.
+KNOWN_DATA_DEFECTS` -- 3 listings dropped for a single-tick low-price
+artifact; `data/ipo_listing/phase1_fetch_summary.json`), split
 chronologically by listing date, earlier 60% / most recent 40%:
-    DEV:  listings through 2024-11-27 (301 listings)
-    TEST (sealed): listings from 2024-11-29 onward (200 listings)
+    DEV:  listings through 2024-11-29 (299 listings)
+    TEST (sealed): listings from 2024-12-06 onward (199 listings)
 """
 from __future__ import annotations
 
@@ -24,11 +27,11 @@ from pathlib import Path
 
 SEALED_AT = dt.date(2026, 10, 22)
 
-DEV_END = dt.date(2024, 11, 27)
-TEST_START = dt.date(2024, 11, 29)
+DEV_END = dt.date(2024, 11, 29)
+TEST_START = dt.date(2024, 12, 6)
 
-N_DEV = 301
-N_TEST = 200
+N_DEV = 299
+N_TEST = 199
 
 ACCESS_LOG_PATH = Path(__file__).resolve().parents[2] / "data" / "ipo_listing" / "test_window_access_log.txt"
 

@@ -37,6 +37,7 @@ from ipo_listing.token_resolution import resolve_listing_tokens
 from ipo_listing.intraday_db import get_connection as get_intraday_connection, SOURCE_NAME
 from ipo_listing.validation import validate_against_bhavcopy
 from ipo_listing.rescale import compute_and_apply_scale_corrections, SCALE_TOLERANCE
+from ipo_listing.exclusions import KNOWN_DATA_DEFECTS
 
 ROOT = Path(__file__).resolve().parents[1]
 WAREHOUSE = ROOT / "data" / "warehouse.duckdb"
@@ -342,6 +343,36 @@ def main():
                 log(f"    listing_id={r['entity_id']} trade_date={r['trade_date']} "
                     f"open_diff={r['open_pct_diff']:.2f}% close_diff={r['close_pct_diff']:.2f}%")
 
+    # Context-only figure, NOT a tolerance change (user instruction): what
+    # fraction match closely even though the project-standard 0.1%
+    # tolerance -- never loosened -- still calls them a mismatch.
+    pct_within_half_pct = None
+    if not cmp_after.empty:
+        within = (cmp_after["open_pct_diff"] <= 0.5) & (cmp_after["close_pct_diff"] <= 0.5)
+        pct_within_half_pct = float(within.mean()) * 100.0
+        log(f"  Context only, NOT a tolerance change: {within.sum()}/{len(cmp_after)} "
+            f"({pct_within_half_pct:.1f}%) match bhavcopy within 0.5% on BOTH open and close.")
+
+    # ---- Exclude known data-defect listings (ipo_listing.exclusions) --
+    # found during THIS validation pass, applied as code so a fresh run
+    # reproduces the same final sample, never a one-off manual DB edit. ----
+    if KNOWN_DATA_DEFECTS:
+        log(f"Excluding {len(KNOWN_DATA_DEFECTS)} listing(s) for a known single-tick data defect "
+            f"(ipo_listing.exclusions.KNOWN_DATA_DEFECTS):")
+        for listing_id, reason in KNOWN_DATA_DEFECTS.items():
+            row = intraday_con.execute(
+                "SELECT listing_date, symbol_used, token_used, n_candles FROM fetch_log WHERE listing_id = ?",
+                [listing_id],
+            ).fetchone()
+            if row is None:
+                log(f"    listing_id={listing_id}: not found in fetch_log -- skipping exclusion (nothing to exclude)")
+                continue
+            day, symbol_used, token_used, n_candles = row
+            _log_fetch(intraday_con, listing_id, day, symbol_used, token_used,
+                       "EXCLUDED_DATA_DEFECT", reason, n_candles)
+            intraday_con.commit()
+            log(f"    listing_id={listing_id}: {reason}")
+
     # ---- Final status breakdown and DEV/TEST boundary (Section 7) ----
     status_counts = intraday_con.execute(
         "SELECT status, COUNT(*) FROM fetch_log GROUP BY status"
@@ -390,7 +421,9 @@ def main():
             "mismatch_rate_pct_before_scale_correction": mismatch_rate_before,
             "mismatch_rate_pct_after_scale_correction": mismatch_rate_after,
             "n_listings_scale_corrected": n_corrected,
+            "pct_within_0.5pct_context_only_not_a_tolerance_change": pct_within_half_pct,
         },
+        "known_data_defect_exclusions": KNOWN_DATA_DEFECTS,
         "dev_test_boundary": boundary,
         "survivorship": survivorship,
         "stop_reason": stop_reason,
