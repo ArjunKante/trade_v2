@@ -198,10 +198,151 @@ one-off manual database edit), fetch_log status
 
 **Total: 552.** Final usable sample for DEV/TEST: **498** (Section 2).
 
+## Process Step 4: five hand-traced DEV-window cases, before any aggregate
+
+All five independently verified by hand against `PREREGISTRATION_IPO.md`
+Section 5's frozen rules before any aggregate number was computed, via
+`scripts/ipo_listing_handtrace.py`.
+
+### 1. TARGET hit -- Ola Electric Mobility Ltd. (OLAELEC), listed 2024-08-09
+
+First candle (10:00): open=74.65, high=76.55, low=74.63, **close=76.34**
+-- green (close > open). Fill at next candle's (10:01) open = **76.28**.
+qty = floor(500/(76.28*0.05)) = floor(131.13) = **131**. Stop =
+76.28*0.95 = **72.466**. Target = 76.28*1.125 = **85.815**. Scanning
+forward, the 10:27 bar's high reaches target -> **TARGET**, exit_price
+= 85.815 (the level itself, bar's own open was below it). pnl =
+131*(85.815-76.28) = **Rs 1,249.085**. position_size = 131*76.28 =
+Rs 9,992.68. **net_r (7bps) = 2.4300**.
+
+### 2. STOP hit -- Global Surfaces Ltd. (GSLSU), listed 2023-03-23
+
+First candle (10:00): open=166.00, close=**168.10** -- green. Fill at
+10:01 open = **169.10**. qty = floor(500/(169.1*0.05)) = **59**. Stop =
+169.1*0.95 = **160.645**. Target = 190.2375. At 10:20 the bar's low
+breaches stop AND its own open (160.00) is already below the stop level
+-- gapped through, fills at that bar's **open = 160.00**, not the stop
+level. pnl = 59*(160.00-169.10) = **-Rs 536.90**. position_size =
+Rs 9,976.90. **net_r (7bps) = -1.1419**.
+
+### 3. 15:15 TIME_EXIT -- PSP Projects Ltd. (PSPPROJECT), listed 2017-05-29
+
+First candle (11:36): open=190.00, close=**199.50** -- green (this
+listing's archived bars are sparse/gapped -- 11:36, 11:40, 11:53... --
+consistent with a very thinly-traded early session; `resolve_exit`
+makes no assumption of one row per minute). Fill at next archived bar
+(11:40) open = **199.50**. Stop=189.525, target=224.4375. Price never
+moves off 199.50 for the rest of the archived day -- neither level is
+ever touched. The archive has no bar exactly at ts=15:15 that day, so
+the fallback fires (`time_exit_fallback=True`): exits at the latest bar
+at or before 15:15, which is **15:14, close=199.50** -- unchanged from
+entry. pnl = 50*(199.50-199.50) = **Rs 0**. **net_r (7bps) = -0.0681**
+(cost alone, on a flat trade).
+
+### 4. SKIPPED (red/flat first candle) -- HPL Electric & Power Ltd. (HPL), listed 2016-10-04
+
+First candle (09:44): open=190.00, **close=190.00** -- flat
+(close == open, fails the `close > open` green test). **No trade this
+day**, per the frozen rule.
+
+### 5. SCALE-CORRECTED listing -- Indian Energy Exchange Ltd. (IEX), listed 2017-10-23
+
+Demonstrates the scale-correction fix (Section 3) mattering for the
+actual ENTRY price, not just the validation step: Angel's AS-FETCHED
+first bar (revision_seq=1, split-adjusted for a later ~10:1 corporate
+action) shows open=**150.00**, close=161.64. The RAW-CORRECTED bars
+(revision_seq=2, scale factor 9.9997, matching this listing's own
+factor already logged in Section 3) show the SAME first candle as
+open=**1499.95**, close=1616.35 -- still green either way, but at the
+TRUE 2017 listing-day price level, consistent with IEX's real
+historical listing price (~Rs 1500-1600) before its later split. Fill
+at next bar (10:18) open = **1617.05**. qty = floor(500/(1617.05*0.05))
+= **6**. Stop=1536.20, target=1819.18. Neither hit; **TIME_EXIT** at
+15:15, exit_price=**1631.85**. pnl = 6*(1631.85-1617.05) = **Rs
+88.80**. **net_r (7bps) = 0.1114**. Had the as-fetched (unscaled)
+price been used instead, qty would have been computed on a ~10x-wrong
+entry price (floor(500/(161.70*0.05))=61, not 6) -- an order-of-
+magnitude sizing error this fix specifically prevents.
+
+## Process Step 5: DEV run -- NO EDGE, study closes
+
+**Bad result, stated first, per discipline**: DEV fails EVERY gate
+criterion in `PREREGISTRATION_IPO.md` Section 9, and fails them
+decisively, not marginally. **The sample is also far too small to have
+concluded anything else**, a limitation stated prominently rather than
+glossed past: of 299 DEV-window usable listings, only **41 produced a
+trade** (37 distinct days) -- 256 were skipped for a red/flat first
+candle, 2 had no second archived bar to fill at (`NO_FILL_BAR`), 0 hit
+the zero-qty floor. **MDE = 0.3599** -- at n=41 trades/37 days, this
+study could only have detected a true effect of **>=0.36R per trade** as
+statistically distinguishable from zero. That is an enormous effect
+size threshold (far larger than any edge this project has found
+viable elsewhere); a small-to-moderate real edge would be
+statistically invisible at this sample size regardless of whether it
+exists. This is the single most important number in this report and is
+stated here, prominently, before any other result.
+
+**Entries are rare and concentrated in just 4 of 9 DEV calendar years**:
+0 entries out of 58 2021 listings (the single busiest IPO year in the
+DEV sample), 0/20 in 2018, 0/12 in 2020, 0/32 in 2022, 0/6 in 2016 --
+every listing in those five years had either a red/flat first candle or
+no second bar to fill at. Entries occurred only in 2017 (3/31), 2019
+(1/15), 2023 (14/51), 2024 (23/73).
+
+**Gate components, all five False**:
+
+| Criterion | Result | Pass? |
+|---|---|---|
+| Mean net R > 0, 97.5% CI excludes zero | mean=-0.1488, CI=[-0.4833, 0.2323] (includes zero) | **False** |
+| >=95th percentile vs TIMING null | 82.5th percentile | **False** |
+| >=95th percentile vs SELECTION null | 0.0th percentile | **False** |
+| Still > 0 after dropping single best year | drops 2019 (n=1, mean 0.224) -> mean=-0.1581 | **False** |
+| Still > 0 at 2x cost (14bps) | mean=-0.1625 | **False** |
+
+**Win rate 31.71%** (13/41). **Median net R -0.0679** (descriptive).
+**Exit mix**: TIME_EXIT 22 (53.7%), STOP 17 (41.5%), TARGET 2 (4.9%) --
+`time_exit_fallback` fired once.
+
+**By calendar year (net R, 7bps)**: 2017 +0.194 (n=3), 2019 +0.224
+(n=1), 2023 -0.292 (n=14), 2024 -0.122 (n=23). The two years with any
+real trade volume (2023, 2024 -- 37 of the 41 trades) are BOTH
+negative; the two positive years are single-digit-trade noise.
+
+**Cost sensitivity, mean net R**: 7bps (floor) = -0.1488, 14bps (2x) =
+-0.1625, 28bps (4x) = -0.1901. Negative and worsening at every level --
+not a borderline result sensitive to the cost assumption.
+
+**TIMING null**: 1000 seeds (preflight projected 639.8s for the full
+1000, comfortably under the 1-hour budget, so no fallback to 500 was
+needed). Real strategy's mean sits at the **82.5th percentile** of
+1000 random-entry-timing draws on the same 41 listing-days -- better
+than most random draws, but well short of the 95th-percentile bar.
+
+**SELECTION null (the primary null, per instruction)**: built from
+entering ALL 296 DEV-window usable listings at the open of the candle
+after the first (regardless of colour; 299 - 296 = 3 lost to
+`NO_FILL_BAR`/`ZERO_QTY` under this alternate rule too), bootstrapped
+10,000 times. **That alternate's own mean net R is +0.0920 -- positive,
+while the real, green-filtered strategy's mean is -0.1488.** The real
+strategy's observed mean sits at the **0.0th percentile** of the
+alternate's bootstrap distribution: buying every listing indiscriminately
+beats being selective about the first candle's colour, in every one of
+10,000 resamples. **This is the single clearest, worst result in this
+study**: the green-candle filter this hypothesis is built around does
+not merely fail to add value over indiscriminate buying -- it actively
+subtracts value, in-sample, in DEV.
+
+**DEV_PASS = False. Per `PREREGISTRATION_IPO.md` Section 9, the study
+closes. The sealed TEST window (199 listings, from 2024-12-06) is never
+read.** No rule is retried at other values (Section 12) -- the 5% stop,
+12.5% target, and first-archived-candle entry interpretation are FIXED
+and this result stands as reported.
+
 ## Status
 
-**>>> STOPPING HERE, per the user's explicit instruction and
-`PREREGISTRATION_IPO.md` Process Step 3/4 boundary.** No hand-trace has
-been performed and no DEV backtest code exists yet. The final sample
-(498 usable, DEV 299 / TEST 199) is reported for review before anything
-further is built or run.
+**>>> STUDY CLOSED, per `PREREGISTRATION_IPO.md` Section 9/Process Step
+5.** DEV fails all five gate criteria; the sealed TEST window is never
+read. This is a genuine first-exposure holdout result (Section 0/
+Provenance) -- not a forward-discipline DEV pass/fail the way Fibo/Box/
+FVG's own re-exposed-data results are -- so this closure carries the
+same standing as any of this project's other NO-EDGE closures.
