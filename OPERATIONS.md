@@ -689,3 +689,26 @@ costs (`fibo_morning.py`'s own ETA section) and getMarketData limits,
 just not yet generalized to every long job. Neither fix would have
 been expensive to do first; both were expensive to discover by paying
 for their absence twice.
+
+## Running tally: intraday pattern studies (not an operational lesson -- kept here because no dedicated results ledger exists yet)
+
+Each of these is its own pre-registration, its own `src/<name>/`, its own
+`test_seal` with an independent sealed TEST window -- not one shared
+holdout ledger the way the fundamentals/factor system's sealed price
+holdout is (`README.md`'s own "Final project state" table, `FINDINGS.md`
+Section 7 -- RETIRED, unrelated to any of these). One line each, updated
+as studies close, most recent last:
+
+| Study | DEV result | TEST read? | Headline finding |
+|---|---|---|---|
+| Box Theory V1 (FAST/SLOW) | NO EDGE, both configs, 0th percentile vs SELECTION null | No | `BOX_FINDINGS.md` |
+| Box Theory V2 (FAST/SLOW retry) | NO EDGE, SELECTION null percentile 27.7 (still far short of 95th) | No | `BOX_V2_FINDINGS.md` |
+| Fibo (ORB/golden-zone breakout) | Mixed at DEV (passed SELECTION null at 100th, failed TIMING null at 8.9th) | **Yes** -- the only one of these that reached TEST; TIMING null replicated out of sample (2.3rd percentile), same NO-EDGE verdict | `FIBO_FINDINGS.md` |
+| FVG (Configs A/B, ICT-sourced) | NO EDGE, both configs (0th / 14.3th percentile vs SELECTION null) | No | `FVG_FINDINGS.md` |
+| IPO listing-day first-candle momentum | NO EDGE -- SELECTION null percentile 0.0 (unfiltered buying beat the filter in all 10,000 resamples); MDE=0.36R, too small a sample to have concluded much else; genuinely first-exposure data (not a re-exposed holdout the way the other four are) | No -- 199-listing sealed window remains the only untouched data in this project; stays sealed (`PREREGISTRATION_IPO.md` Section 12: this rule set is not retried) | `IPO_FINDINGS.md` |
+
+**Pattern worth naming**: four of these five studies failed on the
+SELECTION null specifically (Box V1, FVG, IPO at or near 0th percentile;
+Box V2 at 27.7th) -- a signal that beating "do the same thing on a random
+comparable day/entity" is the harder bar these retail-trading-style entry
+triggers keep missing, independent of which specific pattern was tried.

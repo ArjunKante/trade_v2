@@ -266,6 +266,45 @@ magnitude sizing error this fix specifically prevents.
 
 ## Process Step 5: DEV run -- NO EDGE, study closes
 
+**Four things to take from this study, in order of importance:**
+
+1. **The SELECTION null is the central finding.** Buying every DEV-window
+   listing indiscriminately averaged **+0.092** net R; filtering to only
+   green-first-candle listings averaged **-0.149**. The filtered strategy
+   lost to the unfiltered one in **zero of 10,000 bootstrap resamples**
+   (0.0th percentile). The green-first-candle filter this whole hypothesis
+   is built on was not merely useless -- it was **actively harmful**,
+   the same shape of result as Box Theory V1's own SELECTION-null
+   failure (0th percentile there too; `BOX_FINDINGS.md`).
+2. **MDE = 0.3599R is the limiting caveat on everything else.** Only 41
+   trades from 299 DEV listings -- this study could only have
+   distinguished a true effect of >=0.36R per trade from zero. The gate
+   failed on multiple, independent criteria (not just the borderline CI),
+   so the NO-EDGE verdict stands regardless -- but a modest edge, of
+   EITHER sign, was never detectable here, and that is worth remembering
+   before citing this result as strong evidence of anything beyond "this
+   specific rule, at this sample size, did not work."
+3. **The IEX scale case is the methodological finding worth carrying
+   forward independent of this study's own result.** Angel One returns
+   split-adjusted historical prices: a stock that listed in 2017 at
+   Rs 1,499.95 came back from `getCandleData` as Rs 150.00. Position
+   sizing off the unscaled price would have been wrong by a factor of
+   ~10 (qty 61 instead of the correct 6). This was caught only because
+   the bhavcopy mismatch rate was investigated rather than accepted at
+   face value when it first came back elevated -- any future study that
+   fetches a freshly-listed or since-split name from Angel's historical
+   API should check for this before trusting entry prices.
+4. **The sealed TEST window (199 listings, from 2024-12-06) remains
+   UNREAD and is the only untouched data in this project.** It stays
+   sealed. Per `PREREGISTRATION_IPO.md` Section 12, the 5% stop, 12.5%
+   target, and first-archived-candle entry rule are FIXED and not
+   retried at other values now that DEV has failed -- so there is no
+   path that uses this TEST window FOR THIS hypothesis; the rule set
+   that would have read it no longer exists as a live candidate. Using
+   it at all would require a genuinely new, separately pre-registered
+   hypothesis on IPO listing-day data (its own fresh trial-count
+   accounting, Section 0), not a retry or adjustment of this one.
+
 **Bad result, stated first, per discipline**: DEV fails EVERY gate
 criterion in `PREREGISTRATION_IPO.md` Section 9, and fails them
 decisively, not marginally. **The sample is also far too small to have
