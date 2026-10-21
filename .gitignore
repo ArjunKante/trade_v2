@@ -29,6 +29,21 @@
 !/data/raw
 /data/raw/*
 !/data/raw/nse_cm_holidays_fallback.json
+
+# Deliberate exception: data/ipo_listing/ipo_master_listings.csv is the
+# IPO listing-day study's committed input -- company name, listing date,
+# and listing-day-era NSE symbol for each of the 552 identified mainboard
+# IPOs (PREREGISTRATION_IPO.md Section 2), third-party-sourced (a GitHub
+# cohort export + a chittorgarh.com scrape) and cross-validated/corrected
+# against this project's own bhavcopy, not itself raw NSE price data.
+# ipo_listing.listings.load_master_listings reads it directly; without
+# it, a fresh checkout cannot reproduce the Phase 1 fetch at all. The
+# derived data/ipo_listing/ipo_intraday.duckdb (real Angel One 1-minute
+# bars) and phase1_fetch_summary.json stay un-committed, same reasoning
+# as fibo_intraday.duckdb/warehouse.duckdb above.
+!/data/ipo_listing
+/data/ipo_listing/*
+!/data/ipo_listing/ipo_master_listings.csv
 .pytest_cache/
 __pycache__/
 *.pyc
