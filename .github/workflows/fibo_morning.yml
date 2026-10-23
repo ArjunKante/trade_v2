@@ -4,22 +4,21 @@ name: Fibo morning job
 # to GitHub Actions" section for the three prerequisite fixes that had to
 # land first, and for why this must be the ONLY place
 # scripts/fibo_morning.py ever runs from here on (never also the laptop).
+#
+# NO schedule: trigger here, deliberately -- GitHub's own cron evaluator
+# fired this job 3-7+ hours late, every day, 2026-10-19 through
+# 2026-10-22 (see OPERATIONS.md's "GitHub Actions schedule fires hours
+# late" and "External pinger" sections for the evidence and the
+# decision). Triggering is now owned entirely by an external scheduler
+# (cron-job.org) calling this workflow's dispatch endpoint 4x/trading day
+# -- see OPERATIONS.md for the exact schedule, the heartbeat/dead-man's-
+# switch that watches for the pinger itself going silent, and the ONE
+# OWNER reasoning for why re-adding schedule: here would reintroduce the
+# exact double-trigger risk this file's own comments already warn about
+# elsewhere. workflow_dispatch stays so both cron-job.org and a human can
+# trigger this manually.
 on:
   workflow_dispatch:
-  schedule:
-    # All times UTC (IST = UTC+5:30, no DST). 09:30-11:30 IST entry
-    # window = 04:00-06:00 UTC; outcome resolution needs a pass after
-    # 15:15 IST = 09:45 UTC. A late or occasionally-skipped GitHub
-    # Actions trigger is safe here: every time-window decision in
-    # scripts/fibo_morning.py compares against the REAL wall-clock
-    # instant the run actually executes at, never the scheduled
-    # trigger time, and re-running is idempotent (already-logged
-    # setup/trigger/outcome events are skipped) -- a late run just
-    # detects things a little later, never incorrectly.
-    - cron: "*/15 4,5 * * 1-5"  # 04:00-05:45 UTC (09:30-11:15 IST): setup/trigger checks
-    - cron: "0 6 * * 1-5"       # 06:00 UTC (11:30 IST): final entry-window-close check
-    - cron: "45 9 * * 1-5"      # 09:45 UTC (15:15 IST): outcome resolution
-    - cron: "0 10 * * 1-5"      # 10:00 UTC: backup outcome-resolution pass
 
 # This job commits and pushes events.jsonl itself (fibo_live/
 # git_sync.py), the same as the laptop's evening job does -- needs write

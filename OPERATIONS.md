@@ -778,9 +778,11 @@ the same way a `schedule`-triggered run at the same real moment would;
 the trigger mechanism was already irrelevant to this logic, which is
 what makes swapping it safe.
 
-**Build status, 2026-10-23: piece 1 only.** The heartbeat step is in
-`fibo_morning.yml`; `HEALTHCHECKS_PING_URL` and the check itself are not
-yet created (user's step, in progress). Pieces 2 and 3 not started.
+**Build status, 2026-10-23: piece 1 built, not yet verified.** The
+heartbeat step is in `fibo_morning.yml`; `HEALTHCHECKS_PING_URL` and the
+check itself are not yet created (user's step, in progress). Pieces 2
+and 3 not started. (Superseded -- see "External pinger: LIVE" below,
+same date, once all three pieces were confirmed working.)
 
 **First real test already caught a second silent-failure shape, inside
 the heartbeat step itself.** The first version of the step was
@@ -813,6 +815,79 @@ the first property for free; `|| true` (or any swallowed exit code)
 buys silence along with it, which is exactly the thing a dead-man's-
 switch exists to detect in the OUTER system -- it shouldn't also exist,
 unexamined, in the monitoring step's own implementation.
+
+## External pinger: LIVE, 2026-10-23 -- schedule: deleted, workflow_dispatch is now the only trigger
+
+**All three pieces confirmed working, in build order, same day.** Piece
+1 (heartbeat) confirmed first -- run #22 showed the step, healthchecks.io
+went green with a received ping. Piece 2 (cron-job.org) confirmed next --
+its first scheduled call returned 204 No Content and GitHub accepted the
+dispatch. Piece 3 (delete `schedule:`) applied only after both of those
+held.
+
+**Why `schedule:` was removed, with the evidence, not just the
+decision**: GitHub's own cron evaluator fired this job 3-7+ hours late,
+every single day it was live under that trigger (2026-10-19 through
+2026-10-22) -- see "The morning job's GitHub Actions schedule fires hours
+late" above for the full timestamp evidence (`events.jsonl`'s own
+explicitly-computed IST clock, not a display artifact) and the AXISBANK
+`SETUP_ON` detected 3.5 hours after its entry window closed as the one
+real consequence. The cron math in that trigger was correct; GitHub's
+scheduler running it was not reliable at any timescale this job needs.
+Deleted outright on 2026-10-23, not commented out, per the ONE OWNER
+rule -- a disabled-but-present trigger is a future accidental double-fire
+waiting to happen the moment someone "just testing" uncomments it.
+`workflow_dispatch:` stays as the only trigger, so both cron-job.org and
+a human can still fire this job manually.
+
+**The four cron-job.org schedules, all calling this workflow's dispatch
+endpoint (`POST .../actions/workflows/fibo_morning.yml/dispatches`,
+`{"ref": "main"}`), weekdays only**:
+
+| Time (IST) | Purpose |
+|---|---|
+| 09:35 | setup/trigger pass |
+| 10:00 | setup/trigger pass |
+| 11:00 | setup/trigger pass |
+| 15:20 | outcome resolution |
+
+Deliberately 4/day, not a 1:1 mirror of the deleted cron's 11/day --
+recorded reasoning (the user's own, verbatim intent): the live-monitoring
+half of this job had never once run successfully before this fix, so
+fewer moving parts matters more right now than trigger-timing precision.
+If a real `SETUP_ON` appears and the gap between pings demonstrably costs
+a missed trigger (price crosses the ORB and reverses between two pings),
+add more pings then, on that evidence -- not pre-emptively now.
+
+**The fine-grained GitHub PAT cron-job.org holds, and what happens when
+it lapses**: scoped to `trade_v2` only, `Actions: Read and write`, no
+other permission -- **expires 2027-01-21.** When it expires,
+every cron-job.org dispatch call starts returning 401 -- no run happens
+on GitHub's side at all. That failure is NOT invisible: it resolves to
+exactly the same failure chain as every other silent-stop scenario this
+design was built around (next paragraph). Put a renewal reminder
+somewhere outside this repo too (a calendar, not just this file) --
+`OPERATIONS.md` being correct about the expiry date doesn't itself
+prevent the lapse.
+
+**The failure chain this whole design exists to make visible, stated
+end to end**: cron-job.org's scheduler goes silent (no SLA, a donation-
+funded hobby service -- always the most likely single point of failure
+in this chain) -> no `workflow_dispatch` call reaches GitHub -> no
+workflow run starts -> the heartbeat step (which is the run's own first
+line) never executes -> no ping reaches healthchecks.io -> healthchecks.io's
+own expected-check-in window elapses -> healthchecks.io alerts
+independently of cron-job.org's own health, because the two services
+share no infrastructure and one isn't asking the other "are you OK" --
+it's independently confirming a ping arrived. The same chain also
+catches a lapsed PAT, GitHub Actions itself being down, or this repo's
+Actions being disabled for any reason -- anything that results in zero
+runs looks identical from healthchecks.io's point of view: an overdue
+check. What it does NOT catch: a run that starts (heartbeat fires fine)
+but the actual trading logic fails later -- that failure path is
+`fibo_morning.py`'s own `log_refusal`/`session_status` durable-refusal
+logging (see "Durable refusal logging" above), a different, already-
+existing mechanism for a different failure shape.
 
 ## The Box Theory DEV run cost ~17 hours of wall clock for ~4 hours of actual work -- the lesson is about unattended jobs in general, not this study
 
