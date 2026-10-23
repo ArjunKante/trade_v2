@@ -50,7 +50,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from fibo.auth import login
 from options_depth.contracts import NIFTY_50_INDEX_TOKEN, contracts_for_snapshot
-from options_depth.quotes import parse_full_depth_row
+from options_depth.quotes import exch_feed_date, parse_full_depth_row
 from options_depth.scheduler_support import make_logger, run_unattended
 from options_depth.writer import append_rows
 from spread_monitor.market_hours import IST, check_market_hours
@@ -98,6 +98,17 @@ def main() -> None:
     log(f"Nifty spot: {nifty_spot} (exchFeedTime={nifty_spot_ts})")
 
     today = dt.datetime.now(IST).date()
+
+    feed_date = exch_feed_date(nifty_spot_ts)
+    if feed_date != today:
+        log(f"WARNING: STALE SESSION -- exchFeedTime={nifty_spot_ts!r} resolves to "
+            f"{feed_date}, not today ({today}). check_market_hours() passed (weekday, "
+            f"within session hours) but the feed itself is not live -- most likely an "
+            f"NSE holiday check_market_hours() cannot detect (spread_monitor.market_hours's "
+            f"documented gap). A stale tick must never be recorded as a snapshot. "
+            f"Nothing recorded.")
+        return
+
     contracts = contracts_for_snapshot(nifty_spot, today=today)
     if not contracts:
         log("No NIFTY option contracts resolved for today's nearest 2 expiries / +-5% band. Nothing recorded.")

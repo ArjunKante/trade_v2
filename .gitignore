@@ -44,6 +44,24 @@
 !/data/ipo_listing
 /data/ipo_listing/*
 !/data/ipo_listing/ipo_master_listings.csv
+
+# Deliberate exception: data/options_depth/v1/invalidated_snapshots.csv
+# is this project's OWN correction record (a snapshot timestamp, why it
+# was marked invalid, and when) for rows already written to
+# nifty_depth_log.csv -- not redistributed NSE market data itself, so
+# the licensing rationale for ignoring the rest of data/options_depth/
+# does not apply to it. The raw depth log it corrects (nifty_depth_log.csv)
+# stays un-committed, same NSE-licensing reasoning as every other price
+# table in data/ -- but this file's absence would be worse than silent:
+# the rows it invalidates would keep reading as valid observations in
+# every count, and the stale-tick problem it exists to document (see
+# OPERATIONS.md) would silently return the moment this laptop's local
+# copy is lost. See src/options_depth/writer.py's mark_invalid.
+!/data/options_depth
+/data/options_depth/*
+!/data/options_depth/v1
+/data/options_depth/v1/*
+!/data/options_depth/v1/invalidated_snapshots.csv
 .pytest_cache/
 __pycache__/
 *.pyc

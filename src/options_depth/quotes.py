@@ -8,9 +8,29 @@ network call, no login -- testable against synthetic response dicts.
 """
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass
 
 N_LEVELS = 5
+EXCH_FEED_TIME_FORMAT = "%d-%b-%Y %H:%M:%S"  # Angel's own format, e.g. "19-Oct-2026 16:08:11"
+
+
+def exch_feed_date(exch_feed_time: str | None) -> dt.date | None:
+    """Parses Angel's exchFeedTime into its calendar date, or None if
+    missing/unparseable. Used to catch a stale tick served when the
+    market is shut on a weekday check_market_hours() cannot detect on its
+    own (an NSE holiday -- no holiday calendar exists in this package,
+    see spread_monitor.market_hours's own documented gap): on a shut
+    market Angel's FULL-mode quote keeps returning the last real tick, so
+    the response succeeds and check_market_hours() passes, but the feed's
+    own exchFeedTime still carries the date of that last real session,
+    not today."""
+    if not exch_feed_time:
+        return None
+    try:
+        return dt.datetime.strptime(exch_feed_time, EXCH_FEED_TIME_FORMAT).date()
+    except ValueError:
+        return None
 
 
 @dataclass

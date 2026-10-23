@@ -612,6 +612,208 @@ present at all -- the actual runner path.
    expires; spot-check that the git-committed copy and the Actions run's
    own stdout agree.
 
+## Evening job and options collector: logon-mode fix attempted, blocked on elevation; wake-to-run stays off
+
+Both `FiboEvening` and `TradeNew_OptionsDepth` are `Logon Mode: Interactive
+only` (confirmed via `schtasks /query /v`) -- they only run while someone
+is logged on, which is one plausible contributor to the gaps recorded
+below (the options collector logged nothing at all for any of its three
+slots on 2026-10-19 and 2026-10-22). `schtasks /change /tn ... /RU SYSTEM`
+(no stored password needed -- credentials for both jobs load from
+`.env` via `fibo.auth.login`'s `load_dotenv(ENV_PATH)`, a file SYSTEM can
+read fine, not from the user's session environment) was attempted
+2026-10-23 and failed with `ERROR: Access is denied` -- this requires an
+elevated (Run as Administrator) shell, which this session does not have.
+**Not yet applied.** Needs to be run manually from an elevated prompt:
+
+```
+schtasks /change /tn "FiboEvening" /RU "SYSTEM"
+schtasks /change /tn "TradeNew_OptionsDepth" /RU "SYSTEM"
+```
+
+**Known risk once applied, not yet tested**: `fibo_evening.py`'s git
+push goes through `credential.helper = manager` (Git Credential Manager
+for Windows), which stores the GitHub credential in the CURRENT USER's
+Credential Manager vault, not SYSTEM's. SYSTEM has its own, separate,
+almost certainly empty credential store, so the push leg of the evening
+job may start failing silently once this change lands -- caught by the
+job's own best-effort/logged-not-fatal push handling (`git_sync.py`),
+so it won't crash the run, but it would mean no off-laptop backup of
+`events.jsonl` until someone provisions a credential SYSTEM can use
+(e.g. a PAT embedded in the remote URL, or a credential stored via
+`git credential-manager` run once as SYSTEM). Watch the next real
+evening run's log for `git sync: push failed` after this change is
+applied.
+
+**Wake-to-run: confirmed OFF for both tasks** (no `<WakeToRun>` element
+in either task's XML export) -- staying off deliberately, for now. The
+options collector's and evening job's missed runs during this
+investigation look more consistent with the laptop being asleep or
+offline than with the logon-mode setting alone (the 2026-10-19 10:30
+options-collector attempt failed with a DNS resolution error, "offline,
+Angel down, or bad credentials"; 2026-10-22 logged nothing for any of
+its three slots) -- waking the machine would address that failure mode
+but costs battery life on every scheduled slot whether or not a run was
+actually needed, a tradeoff not revisited here.
+
+## The morning job's GitHub Actions schedule fires hours late -- ZERO live trigger events collected, 2026-10-19 through 2026-10-23
+
+**Bottom line, stated first, per this project's own discipline**: between
+the schedule going fully live (2026-10-19) and 2026-10-23, the Fibo
+morning job logged **zero** `trigger`-kind events in `events.jsonl`. The
+live-monitoring half of this job -- watching price move during the
+09:30-11:30 IST entry window and catching a breakout as it happens -- has
+not run even once since the schedule was enabled. **The forward test was
+not collecting live evidence during this period.**
+
+**What happened**: `.github/workflows/fibo_morning.yml`'s cron math is
+correct (04:00-06:00 UTC = 09:30-11:30 IST, verified against the file's
+own comments) -- not our bug. GitHub's own scheduler fired hours late
+anyway: real runs landed at 14:31-14:59 IST and 16:59-17:00 IST across
+2026-10-19/21/22, confirmed by the job's own explicitly-computed IST
+timestamps in `events.jsonl` (not a display/timezone artifact -- the
+Actions tab and the job's own clock agree). This matches a widely
+reported, current GitHub Actions limitation: scheduled (`cron`) triggers
+are documented as best-effort, and multi-hour delays are commonly
+reported across many repositories in 2026, independent of anything in
+this project.
+
+**The one real signal this produced, and why it doesn't count as live
+evidence**: AXISBANK's ORB broke out and the job logged `SETUP_ON` at
+**14:59:12 IST on 2026-10-19 -- 3.5 hours after the 11:30 IST entry
+window had already closed**. Its outcome (`triggered: false`) was
+resolved in the SAME late run, two hours after that, under
+`run_mode=REPLAY` -- the code's own LIVE/REPLAY self-detection correctly
+flagged this as not-live (a safety net working exactly as designed), but
+a safety net catching the problem after the fact is a symptom, not a
+fix. No real order could ever have been placed against a signal detected
+3.5 hours after its own window closed.
+
+**Two trading days (2026-10-21, 2026-10-22) did complete a
+`run_mode=LIVE` setup pass for every qualifying watchlist stock** (13/13
+and 6/6 respectively) -- but only because nothing qualified `SETUP_ON` on
+either day. Neither is evidence the live half of this job actually
+works; both would have hit the exact same AXISBANK-shaped failure had
+anything actually triggered that morning.
+
+**Status, 2026-10-23: decided -- external pinger + `workflow_dispatch`,
+replacing the `schedule:` trigger.** See the next section for the full
+design, build order, and failure modes of each piece. This is the same
+job `OPERATIONS.md`'s "The morning job is moving to GitHub Actions"
+section above migrated off the laptop; that decision stands -- this is a
+fix to how the schedule gets triggered, not a reversal of running on
+GitHub Actions at all.
+
+## External pinger replacing `schedule:` -- design, build order, and per-piece failure modes
+
+**Why this shape, not a bigger rebuild**: `.github/workflows/
+fibo_morning.yml`'s cron math was already correct (previous section);
+only GitHub's own `schedule:` evaluator is unreliable, which matches
+widely reported 2026 community experience, not something specific to
+this repo. `workflow_dispatch` is a different, API-triggered code path
+GitHub itself recommends as the workaround -- so the fix is to replace
+only the thing that's broken (what triggers the job) and change nothing
+about where it runs, what secrets it reads, or how it pushes.
+
+**Three independent pieces, built and verified in this order (each
+stopped on deliberately, so a real test confirms it before the next
+piece depends on it):**
+
+1. **Heartbeat ping (healthchecks.io), first step of the job.** Answers
+   "did a run happen at all today" -- a different question from "did the
+   trading logic succeed," and the only one with no other durable signal
+   once `schedule:` is gone (if nothing triggers the workflow, nothing
+   gets committed to `events.jsonl` either, so the eventlog itself can't
+   tell you the pinger went quiet). Implemented as the literal first step
+   in `fibo_morning.yml`, before even `actions/checkout` -- fires even if
+   every later step fails. Reads the check URL from a new repository
+   secret, `HEALTHCHECKS_PING_URL` (created by the user, not committed).
+   **What its failure looks like**: healthchecks.io alerts (email/Slack,
+   per however it's configured there) when an EXPECTED ping doesn't
+   arrive within its grace window -- i.e. this piece's failure mode is
+   silence from a third-party inbox, not anything visible in this repo's
+   own logs. If that alert never arrives and the job also isn't running,
+   check healthchecks.io's own dashboard for the check's last-ping time
+   first, before assuming anything in this repo is wrong.
+2. **cron-job.org, calling `POST /repos/ArjunKante/trade_v2/actions/
+   workflows/fibo_morning.yml/dispatches`** with a fine-grained PAT
+   (scoped to `trade_v2` only, `Actions: Read and write`, no other
+   permission) in the `Authorization: Bearer` header and body `{"ref":
+   "main"}`. **4 pings/trading day, not the original cron's 11**:
+   09:35, 10:00, 11:00 IST for setup/trigger passes, 15:20 IST for
+   outcome resolution. Deliberately fewer moving parts than a 1:1 mirror
+   of the old cadence -- the live-monitoring half of this job has never
+   once run successfully (previous section), so the priority right now
+   is proving it works at all, not preserving 15-minute trigger-timing
+   precision for a capability not yet demonstrated. If a real `SETUP_ON`
+   appears and the gap between pings demonstrably costs a missed trigger
+   (price crosses the ORB and reverses between two pings), add more
+   pings then, on that evidence -- not pre-emptively now.
+   **What its failure looks like**: cron-job.org has no SLA (donation-
+   funded hobby service) -- a silently-stopped schedule here is exactly
+   what piece 1 exists to catch independently. A reachable-but-erroring
+   call (bad token, repo renamed, workflow file renamed) shows up in
+   cron-job.org's own execution history with a non-2xx response; piece 1
+   still alerts regardless, since no run means no ping either way.
+3. **`schedule:` block deleted from `fibo_morning.yml` (not commented
+   out)** only once a cron-job.org-triggered run is confirmed landing
+   inside the 09:30-11:30 IST window. A commented-out trigger is a future
+   accidental double-fire waiting to happen -- the exact failure mode the
+   ONE OWNER rule (see "The morning job is moving to GitHub Actions"
+   section) exists to prevent. **What getting this step wrong looks
+   like**: if `schedule:` is left in (commented or not) alongside the
+   external pinger, the morning job could fire twice for the same trade
+   date from two different triggers -- safe for data correctness (every
+   setup/trigger/outcome write is idempotent, already-logged events are
+   skipped) but wastes an Angel API quota window and muddies which run
+   produced which event's timing.
+
+**Confirmed, not assumed, before this was approved**:
+`src/fibo_live/clock.py::detect_run_mode` computes `run_mode` purely
+from the wall-clock instant the script executes (`dt.datetime.now(IST)`
+vs. `trade_date` and 15:15 IST) -- grepped `fibo_morning.py` for any
+reference to `GITHUB_EVENT_NAME`/`workflow_dispatch`/`GITHUB_ACTIONS`:
+zero hits. A `workflow_dispatch`-triggered run detects `LIVE` exactly
+the same way a `schedule`-triggered run at the same real moment would;
+the trigger mechanism was already irrelevant to this logic, which is
+what makes swapping it safe.
+
+**Build status, 2026-10-23: piece 1 only.** The heartbeat step is in
+`fibo_morning.yml`; `HEALTHCHECKS_PING_URL` and the check itself are not
+yet created (user's step, in progress). Pieces 2 and 3 not started.
+
+**First real test already caught a second silent-failure shape, inside
+the heartbeat step itself.** The first version of the step was
+`curl ... || true` -- after a manual `workflow_dispatch` run, healthchecks.io
+showed "Last Ping: Never," and `|| true` means the run log gave zero clue
+why: an empty `HEALTHCHECKS_PING_URL` secret, a bad URL, and a working
+ping all look IDENTICAL in that log (success, no output). No `gh` CLI or
+API token was available in the environment used to investigate this, so
+the actual run's log could not be pulled to confirm which case it was --
+flagged rather than guessed at. Rewritten to use `set +e` around the
+curl call instead of a trailing `|| true`, so the step's own script
+keeps running past a failed curl and can report what happened, while
+`continue-on-error: true` (kept) still guarantees this step can never
+block the real job:
+
+- prints whether `HEALTHCHECKS_PING_URL` resolved EMPTY (never prints
+  the secret's VALUE, only its length) -- this was the leading suspect
+  for "Last Ping: Never," and is now unambiguous in the log instead of
+  indistinguishable from success.
+- if present, prints curl's own exit code and the HTTP status code
+  curl got back (`000` means curl never got a response at all --
+  DNS/connect/timeout failure, distinct from a non-2xx from
+  healthchecks.io itself).
+
+**The meta-point, worth remembering for every future `|| true` in this
+project**: "a step that can't block the job" and "a step whose failure
+is invisible" are NOT the same requirement, and writing them with the
+same idiom conflates them. `continue-on-error` at the step level gives
+the first property for free; `|| true` (or any swallowed exit code)
+buys silence along with it, which is exactly the thing a dead-man's-
+switch exists to detect in the OUTER system -- it shouldn't also exist,
+unexamined, in the monitoring step's own implementation.
+
 ## The Box Theory DEV run cost ~17 hours of wall clock for ~4 hours of actual work -- the lesson is about unattended jobs in general, not this study
 
 **2026-10-16 evening through 2026-10-17 20:29.** `scripts/box_theory_

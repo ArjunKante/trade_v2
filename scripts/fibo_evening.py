@@ -267,8 +267,30 @@ def main() -> None:
     # later (the gap this job's own history, above, already demonstrates).
     today_ist = dt.datetime.now(IST).date()
     health = snapshot_health(today_ist)
-    log(f"Options depth health: {health['snapshots_today']} snapshot(s) recorded today ({today_ist}); "
-        f"most recent ever: {health['most_recent_ts'] or 'none recorded'}.")
+    invalid_note = f"; {health['invalid_today']} invalidated (stale-tick)" if health["invalid_today"] else ""
+    log(f"Options depth health: {health['snapshots_today']} valid snapshot(s) recorded today ({today_ist})"
+        f"{invalid_note}; most recent valid one ever: {health['most_recent_ts'] or 'none recorded'}.")
+
+    # Loud, not just informational: a trading day with fewer than 3 valid
+    # snapshots means the collector missed at least one of its 10:30/
+    # 12:30/14:30 scheduled runs (OPERATIONS.md). Judged against the same
+    # holiday calendar the watchlist computation already uses -- a
+    # weekend or confirmed NSE holiday expects 0, not 3, so it never
+    # warns there. An unconfirmed day (HolidayCalendarMissing) still
+    # warns -- same fail-safe stance as nse_holidays.py itself: never
+    # silently assume a holiday explains a gap.
+    is_trading_day = today_ist.weekday() < 5
+    holiday_note = ""
+    if is_trading_day:
+        try:
+            if is_nse_holiday(today_ist):
+                is_trading_day = False
+        except HolidayCalendarMissing:
+            holiday_note = " (holiday calendar unavailable -- could not confirm)"
+    if is_trading_day and health["snapshots_today"] < 3:
+        log(f"WARNING: options-depth collector recorded only {health['snapshots_today']} of 3 "
+            f"expected valid snapshots today ({today_ist}){holiday_note} -- "
+            f"at least one scheduled run was missed or failed.")
 
     con = get_connection(WAREHOUSE_DB)
 
