@@ -45,6 +45,43 @@ jobs:
     env:
       TZ: Asia/Kolkata
     steps:
+      # Dead-man's-switch heartbeat (healthchecks.io) -- FIRST step,
+      # before checkout, so it fires even if every later step fails.
+      # This answers a DIFFERENT question than the rest of the job: not
+      # "did the trading logic succeed" but "did a run happen at all
+      # today." That second question has no other durable signal once
+      # the schedule: trigger is gone (see OPERATIONS.md's "External
+      # pinger" section) -- if cron-job.org stops firing, or GitHub
+      # Actions itself is down, NOTHING runs, so nothing gets committed
+      # to events.jsonl either; this ping is the one thing that can still
+      # go missing and be independently noticed, because healthchecks.io
+      # alerts on an ABSENT ping, not a present one. continue-on-error:
+      # a flaky/unreachable monitoring endpoint must never block the
+      # actual job from running. `set +e` inside the script (rather than
+      # a trailing `|| true`) so the diagnostic echo lines below still
+      # run even when curl fails -- the first version of this step used
+      # `|| true` and swallowed a real failure (empty secret or a bad
+      # URL) with zero trace in the log, which is exactly the "silent
+      # failure" this whole mechanism exists to avoid. Never echoes the
+      # secret's VALUE (GitHub masks exact secret-string matches in logs
+      # anyway, but this doesn't rely on that) -- only whether it's set
+      # and how long it is, which is enough to tell "secret empty" apart
+      # from "secret present but curl/healthchecks.io failed."
+      - name: Heartbeat ping (healthchecks.io)
+        continue-on-error: true
+        env:
+          HC_URL: ${{ secrets.HEALTHCHECKS_PING_URL }}
+        run: |
+          set +e
+          if [ -z "$HC_URL" ]; then
+            echo "HEALTHCHECKS_PING_URL secret is EMPTY or not set -- no heartbeat was sent."
+          else
+            echo "HEALTHCHECKS_PING_URL secret is present (${#HC_URL} characters)."
+            http_code=$(curl -fsS -m 10 --retry 3 -o /dev/null -w '%{http_code}' "$HC_URL")
+            curl_exit=$?
+            echo "curl exit code: $curl_exit, HTTP status: ${http_code:-none}"
+          fi
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
