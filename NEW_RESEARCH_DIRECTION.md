@@ -796,3 +796,43 @@ monitor output, not recomputed.
 None triggered. This document is a design artifact only -- no code was
 written to implement any hypothesis, no parameter sweep was run, no
 holdout was touched.
+
+## Status update, 2026-10-24: Hypothesis C DEFERRED, not rejected
+
+Raised again as a candidate next study (prompted by the Darvas Box
+theory closure, `DARVAS_FINDINGS.md`) and explicitly not started now, for
+three reasons:
+
+1. **The Fibo forward test has produced ZERO live trigger events since
+   it went live.** Its infrastructure was broken for a week and was only
+   fixed on 2026-10-23 (`fibo_morning.yml`'s healthchecks.io heartbeat,
+   the options-collector stale-session guard, and the dead-schedule
+   deletion that made the external pinger the only trigger, all landed
+   that day). Monday 2026-10-26 is the first day it runs properly,
+   in-window, end to end.
+2. **Starting a second forward-only study before the first has collected
+   a single usable day** would mean two multi-year waits running in
+   parallel, neither yet demonstrated to be collecting anything. Phase
+   7's own table already states Hypothesis C's return-level claim is
+   forward-only at ~4 independent reads/year -- adding a second clock
+   like that before the first tick of the first one is confirmed is not
+   parallelism, it is compounding an unverified assumption.
+3. **Hypothesis C additionally depends on the fundamental screener being
+   point-in-time**, which it is not (Phase 5's own "Required data, and
+   what is missing" note, BUGS.md Bug #12, flagged for the second time
+   in this document already). Even Hypothesis C's cheap, development-
+   only, holdout-free concentration/HHI check (its own falsification
+   condition) could not be run honestly against this gap -- not just the
+   return-level claim, the WHOLE candidate's development half is blocked
+   on it.
+
+**Deferred, not rejected -- revisit when BOTH hold:**
+- the Fibo forward log is demonstrably collecting live events (not just
+  running without erroring -- actual trigger rows accumulating), and
+- a point-in-time-correct fundamental screener exists (closing BUGS.md
+  Bug #12, the same gap already blocking the swing decomposition's V5/V6
+  variants).
+
+**No new hypothesis is being started.** The next milestone for this
+project is Monday 2026-10-26's first in-window scheduled Fibo run, not a
+new candidate study.
