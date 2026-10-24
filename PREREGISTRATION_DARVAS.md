@@ -237,7 +237,22 @@ even if a later high exceeds it (that is the breakout condition, Section
 2, not a redraw). Bottom tracking continues exactly as above (still
 capable of resetting to a new, lower low) until it confirms.
 
-### 1d. Box resolution -- five mutually exclusive outcomes, all reported
+### 1d. Box resolution -- six mutually exclusive outcomes, all reported
+
+**AMENDMENT, recorded now, before any box has been detected or counted
+anywhere (found while writing `src/darvas/boxes.py`, the first code this
+study's build produced -- i.e. before any number this amendment could
+have been shaped by):** the original five outcomes below all implicitly
+presupposed that, once the top confirms and passes the trend filter, the
+bottom's own status (confirmed or not) is already known by the time
+resolution logic runs. That's false in one real case this document failed
+to name: **the top can confirm and pass the trend filter, and the window
+can then simply end before the bottom ever reaches its own 3 clean days**
+-- not "still rolling" (outcome 5, which is about the TOP never
+confirming) and not "bottom confirmed but no breakout/breakdown yet"
+(outcome 4, which requires the bottom to already be confirmed). A sixth
+outcome is added to name this case, and outcome 4's own wording is
+unchanged (it already correctly required a confirmed bottom):
 
 Once the top is confirmed and trend-filter-valid, each subsequent day is
 checked, in this order, until one of the following resolves the box (or
@@ -262,14 +277,21 @@ the available data window ends first):
 5. **`TOP_NEVER_CONFIRMED_AT_WINDOW_END`**: the top candidate is still
    rolling forward (or still within its own 3-day count) when the window
    ends -- no box ever resolves either way.
+6. **`BOTTOM_NEVER_CONFIRMED_AT_WINDOW_END`** (added by the amendment
+   above): the top confirmed and passed the trend filter, and the bottom
+   was still actively tracking (never breached long enough to confirm,
+   and no breakout closed above the top either) when the window ends.
 
 **"Boxes that never broke out"** (the report metric named explicitly in
 the task) = outcomes 3 + 4 combined (a complete box that either failed
 downward or simply ran out of data without ever closing above its own
 top) -- reported as that sum, with 3 and 4 also broken out separately so
-neither is hidden inside the other.
+neither is hidden inside the other. Outcome 6 is reported on its own,
+alongside outcome 5, as "box formation incomplete at window end" --
+neither is folded into "never broke out," since neither ever became a
+complete box in the first place.
 
-After ANY of outcomes 1/3/4/5, the scan resumes searching for the next
+After ANY of outcomes 1/3/4/5/6, the scan resumes searching for the next
 200-day-high trigger from the day after resolution, independent of
 whether a position happens to be open in this entity from an EARLIER,
 already-resolved box (Section 2's trailing-stop mechanism needs box
@@ -509,7 +531,7 @@ from the observed mean); all three null percentiles (with each null's own
 seed count, or "deterministic" for MOMENTUM); breakdown by calendar year;
 breakdown by rank band; holding-period distribution (mean, median, max --
 open-ended by construction, Section 2); exit-reason mix (STOP /
-FORCED_WINDOW_CLOSE); boxes found, split by Section 1d's five outcomes;
+FORCED_WINDOW_CLOSE); boxes found, split by Section 1d's six outcomes (per its own amendment);
 how often top and bottom confirmed the same day (Section 1c); boxes that
 never broke out (outcomes 3+4 combined, and separately); peak concurrent
 positions and peak deployed capital; the `ZERO_QTY_SKIP` and `TREND_
