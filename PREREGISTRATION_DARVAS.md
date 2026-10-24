@@ -327,6 +327,24 @@ through D-1):**
    breakout/breakdown -- "a new box forms above the current one" (the
    instruction's own words) reads as the box existing, not as it
    necessarily working out.
+
+   **AMENDMENT, recorded now, before any box or trade has been counted
+   (found while writing `src/darvas/resolution.py`): "later" is defined
+   precisely as a box whose bottom CONFIRMS STRICTLY AFTER THE CURRENT
+   POSITION'S OWN ENTRY DATE** -- not merely "any complete box other than
+   the entry box." The gap this closes: a box can confirm its bottom
+   while an EARLIER position (in the same entity) is still open, correctly
+   raising THAT position's stop at the time; if that earlier position
+   later exits and a fresh entry opens (from a different breakout), the
+   SAME already-confirmed box must not be replayed as a fresh "new box
+   above" for the new position just because it was never the new
+   position's own entry box -- it confirmed before the new position even
+   existed, so by the time of entry it is background price history, not
+   news. Concretely: each position's own Sub-rule 1 search starts only
+   from complete boxes whose `bottom_confirm_date` is after that
+   position's `entry_date`; a box confirming at or before entry never
+   raises that position's stop, regardless of which earlier position (if
+   any) it already raised.
 2. **Run well above, no new box yet**: OUR filled gap, stated as such --
    the book describes "trail the stop to maintain the initial risk
    percentage" once price has run "well above" the box top, without
