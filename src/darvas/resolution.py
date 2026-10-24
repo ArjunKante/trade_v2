@@ -5,7 +5,7 @@ itself has no notion of a position; this module is where "flat" vs. "long"
 state, entry/exit timing, and the two trailing-stop sub-rules actually
 live.
 
-`_run_position` is the one place the exit/trailing mechanics are written.
+`run_position` is the one place the exit/trailing mechanics are written.
 `simulate_entity` (the real strategy) and `darvas.nulls`'s TIMING null
 (Section "Nulls") both call it -- the TIMING null needs the IDENTICAL
 exit/trailing logic from a different entry point, per PREREGISTRATION_
@@ -45,7 +45,7 @@ def sorted_complete_boxes(boxes: list[dict]) -> list[dict]:
                   key=lambda b: b["bottom_confirm_idx"])
 
 
-def _run_position(dates, opens, closes, n, entity_id,
+def run_position(dates, opens, closes, n, entity_id,
                    entry_idx: int, entry_price: float, initial_stop: float, entry_box_top: float,
                    entry_box_ref, complete_boxes: list[dict], cb_ptr_start: int,
                    use_new_box_rule: bool) -> dict | None:
@@ -187,7 +187,7 @@ def simulate_entity(ohlc: pd.DataFrame, entity_id: str) -> dict:
                 t += 1
                 continue
             cb_ptr = bisect.bisect_right(complete_bottom_idxs, t)  # strictly after entry_idx == t
-            trade = _run_position(dates, opens, closes, n, entity_id, t, entry_price, initial_stop,
+            trade = run_position(dates, opens, closes, n, entity_id, t, entry_price, initial_stop,
                                    float(box["top_price"]), box, complete_boxes, cb_ptr, use_new_box_rule=True)
             if trade is None:
                 zero_qty_skips += 1
