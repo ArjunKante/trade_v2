@@ -346,7 +346,29 @@ inclusive, per instruction's "Window 09:45 to 14:30." Outside it --
 **`FILL_OUTSIDE_WINDOW`**.
 
 **STOP** = `POC_PRICE * (1 - 0.005)` (0.5% below POC, per instruction).
-**Risk-bound filter**: skip, counted **`STOP_TOO_WIDE`**, if
+
+**AMENDMENT, recorded now, before any trade has been computed anywhere in
+this study (found while running `src/poc/backtest.py` against real
+DEV-window data, the first real data this study's build touched -- i.e.
+before any number this amendment could have been shaped by):** neither
+GREEN nor HAMMER (Section 6) requires the confirming candle to trade
+anywhere near `POC_PRICE` -- a candle can be mechanically green (`close >
+open`) or a hammer while both its open and close sit well BELOW
+`POC_PRICE` (price kept falling after the touch, with only a small
+intra-candle uptick or lower-wick rejection). When that happens, the
+entry fill (Section 7, the NEXT bar's open after such a candle) can land
+at or below STOP itself -- a non-positive or even negative per-share
+risk, which the risk-bound filter below (written for "stop too WIDE")
+does not catch: `(entry_price - STOP) / entry_price` is <= 0 in this
+case, which is never `> 0.05`, so the check as originally written would
+pass this case through into the sizing formula, which then divides by a
+non-positive number. **New skip, checked FIRST, before the risk-bound
+filter**: if `entry_price <= STOP`, skip, counted **`ENTRY_BELOW_STOP`**
+-- a trade that would already be at or past its own stop at the moment of
+entry is not a trade this strategy's own rules intended to take.
+
+**Risk-bound filter**, now only ever reached with `entry_price > STOP`
+guaranteed: skip, counted **`STOP_TOO_WIDE`**, if
 `(entry_price - STOP) / entry_price > 0.05`.
 
 **TARGET** = `PREV_HIGH * (1 - 0.02)` (2% below PREV_HIGH, per
@@ -523,8 +545,8 @@ positions and peak deployed capital. **Skip/diagnostic breakdown**: days
 skipped for `LOOKBACK_INCOMPLETE` (with its own sub-breakdown by which of
 the six relative days and which underlying reason first failed),
 `TREND_FILTER_FAILED`, `NO_TOUCH`, `POC_FAILED`, `NO_CONFIRMATION`,
-`NO_FILL_BAR`, `FILL_OUTSIDE_WINDOW`, `STOP_TOO_WIDE`, `NO_ROOM`,
-`ZERO_QTY`. **The distribution of `(entry_price - POC_PRICE) / entry_
+`NO_FILL_BAR`, `FILL_OUTSIDE_WINDOW`, `ENTRY_BELOW_STOP`, `STOP_TOO_WIDE`,
+`NO_ROOM`, `ZERO_QTY`. **The distribution of `(entry_price - POC_PRICE) / entry_
 price`** across every real entry, per instruction, so how far above the
 POC entries actually land is visible. BASELINE, stated as reused, shown
 alongside but never contributing to `DEV_PASS`. **Bad results are
