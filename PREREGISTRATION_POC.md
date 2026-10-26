@@ -297,10 +297,22 @@ close(c))`, `full_range = high(c) - low(c)`.
      a hammer; instruction's own replacement is used as the COMPLETE test
      for this case (read as "only if X" meaning X alone decides it, not
      "X in addition to the general test's other half"): hammer iff
-     `lower_wick >= 2 * full_range * 0.1` (= `0.2 * full_range`). A
-     doji with `full_range == 0` (open=high=low=close) cannot pass this
-     either (`lower_wick` is also 0), so it is correctly never a hammer --
-     no separate zero-range guard is needed.
+     `lower_wick >= 2 * full_range * 0.1` (= `0.2 * full_range`) **AND
+     `full_range > 0`**.
+
+     **AMENDMENT, recorded now, before any POC bucket, touch, or trade has
+     been computed anywhere in this study (found while writing `src/poc/
+     resolution.py`, the first code this study's build produced -- i.e.
+     before any number this amendment could have been shaped by):** the
+     `full_range > 0` guard above was missing from the original text. A
+     truly FLAT bar (`open == high == low == close`, zero movement at
+     all) also has `lower_wick == 0` and `full_range == 0`, so the
+     doji-hammer test as originally written (`lower_wick >= 0.2 *
+     full_range`) reduces to `0 >= 0`, which is vacuously TRUE -- it would
+     classify a bar that did not move at all as a bullish hammer. That is
+     the opposite of what a hammer is supposed to signal (a rejection of
+     lower prices within the bar), so a zero-range bar is now explicitly
+     excluded, never counted as a hammer.
    - If hammer: **ENTER**, confirming candle = `c`.
 3. Else (not green, not a qualifying hammer): **our filled gap**, since
    instruction's remaining two branches are both phrased for a RED candle
