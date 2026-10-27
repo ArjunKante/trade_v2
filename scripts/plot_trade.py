@@ -72,7 +72,18 @@ def main() -> None:
     parser.add_argument("--csv", type=str, default=None, help="path to an exported trades CSV")
     parser.add_argument("--index", type=int, default=None, help="row index into --csv")
     parser.add_argument("--out", type=str, default=None, help="output PNG path (default: data/viz/<auto>.png)")
+    parser.add_argument("--window", type=str, default=None,
+                         help="zoom to a sub-window of the session, e.g. --window 09:30-10:30 "
+                              "(a marker outside the window is dropped, not relocated)")
     args = parser.parse_args()
+
+    window = None
+    if args.window:
+        try:
+            start_s, end_s = args.window.split("-")
+            window = (dt.time.fromisoformat(start_s.strip()), dt.time.fromisoformat(end_s.strip()))
+        except ValueError:
+            parser.error(f"--window must look like HH:MM-HH:MM, got {args.window!r}")
 
     if args.csv is not None:
         if args.index is None:
@@ -117,7 +128,8 @@ def main() -> None:
         suffix = f"_{status_note}" if status_note else ""
         out_path = OUT_DIR / f"{entity_id}_{trade_date}{suffix}.png"
 
-    saved = plot_trade_chart(bars_source, entity_id, trade_date, scale_label, overlay=overlay, out_path=out_path)
+    saved = plot_trade_chart(bars_source, entity_id, trade_date, scale_label, overlay=overlay, out_path=out_path,
+                              window=window)
     print(f"Saved: {saved}")
 
 

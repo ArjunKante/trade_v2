@@ -27,27 +27,47 @@ CANDLE_WIDTH = 0.6
 TICK_EVERY_MINUTES = 30
 
 
-def _nearest_index(ts_arr: np.ndarray, target_ts: pd.Timestamp) -> int:
+def _nearest_index(ts_arr: np.ndarray, target_ts: pd.Timestamp) -> int | None:
     """Index of the bar closest to `target_ts` -- used to place a
     vertical marker or a price marker even if `target_ts` does not land
-    exactly on a bar boundary (e.g. an exit between two 1-minute bars)."""
+    exactly on a bar boundary (e.g. an exit between two 1-minute bars).
+    None if `target_ts` is more than two bar-widths outside the plotted
+    range -- e.g. a marker whose own time falls outside an active zoom
+    `window` -- so a caller can drop it instead of drawing it at the
+    nearest visible edge, which would misrepresent where it happened."""
     target64 = np.datetime64(pd.Timestamp(target_ts))
     diffs = np.abs(ts_arr - target64)
-    return int(np.argmin(diffs))
+    idx = int(np.argmin(diffs))
+    bar_width = np.median(np.diff(ts_arr)) if len(ts_arr) > 1 else np.timedelta64(1, "m")
+    if diffs[idx] > 2 * bar_width:
+        return None
+    return idx
 
 
 def plot_trade_chart(
     bars: pd.DataFrame, entity_id: str, trade_date: dt.date, scale_label: str,
     overlay: Overlay | None = None, out_path: Path | None = None, dpi: int = 130,
+    window: tuple[dt.time, dt.time] | None = None,
 ) -> Path:
     """`bars`: [ts, open, high, low, close, volume], one trading day,
     already in whatever scale `scale_label` describes (this module does
     not resolve scale itself -- see `viz.data.fetch_raw_day_bars`).
+    `window`: optional (start_time, end_time) to zoom the plotted range
+    to a sub-window of the session (e.g. 09:30-10:30 to inspect a touch
+    closely) -- an overlay marker whose own timestamp falls OUTSIDE the
+    window is dropped, never silently relocated to the nearest visible
+    bar, which would misrepresent where it actually happened.
     Saves a PNG to `out_path` (created if missing) and returns it."""
     if bars.empty:
         raise ValueError(f"no bars to plot for {entity_id} on {trade_date}")
 
     bars = bars.sort_values("ts").reset_index(drop=True)
+    if window is not None:
+        start_t, end_t = window
+        times_of_day = pd.to_datetime(bars["ts"]).dt.time
+        bars = bars[(times_of_day >= start_t) & (times_of_day <= end_t)].reset_index(drop=True)
+        if bars.empty:
+            raise ValueError(f"window {window} excludes every bar for {entity_id} on {trade_date}")
     n = len(bars)
     x = np.arange(n)
     ts_arr = bars["ts"].to_numpy()
@@ -107,6 +127,8 @@ def plot_trade_chart(
 
         for vm in overlay.vmarkers:
             idx = _nearest_index(ts_arr, vm.ts)
+            if idx is None:
+                continue  # vm.ts falls outside the active zoom window -- dropped, not relocated
             for ax in (ax_price, ax_vol):
                 ax.axvline(idx, color=vm.color, linestyle=vm.linestyle, linewidth=1.0, zorder=1.2)
             ax_price.text(idx, highs.max() + price_range * 0.02, vm.label, color=vm.color,
@@ -114,6 +136,8 @@ def plot_trade_chart(
 
         for pm in overlay.price_markers:
             idx = _nearest_index(ts_arr, pm.ts)
+            if idx is None:
+                continue  # pm.ts falls outside the active zoom window -- dropped, not relocated
             marker = "^" if pm.kind == "entry" else "v"
             mcolor = "blue" if pm.kind == "entry" else "black"
             ax_price.scatter([idx], [pm.price], marker=marker, s=140, color=mcolor,
