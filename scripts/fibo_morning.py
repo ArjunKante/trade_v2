@@ -701,9 +701,22 @@ def main() -> None:
 
     is_trading, reason = confirm_trading_day(result.client)
     if not is_trading:
-        log_refusal(trade_date, run_mode,
-                    f"{reason} -- likely a weekend/NSE holiday the scheduler fired on anyway. "
-                    f"No per-stock events logged this run.")
+        # Only attribute this to a holiday/weekend when is_non_trading_day
+        # actually confirms it -- a refusal that GUESSES a cause it never
+        # checked is worse than one that says it doesn't know. Found live,
+        # 2026-10-26: this branch's own wording blamed "likely a weekend/
+        # NSE holiday" on a Monday that is_nse_holiday confirms is not one
+        # -- the real cause that day was a quote-fetch failure, which the
+        # reason string already names; it should never be overwritten by
+        # an unchecked guess.
+        if is_non_trading_day(trade_date):
+            log_refusal(trade_date, run_mode,
+                        f"{reason} -- confirmed weekend/NSE holiday. No per-stock events logged this run.")
+        else:
+            log_refusal(trade_date, run_mode,
+                        f"{reason} -- {trade_date} is NOT a weekend or a confirmed NSE holiday, so this is a "
+                        f"genuine quote-fetch/live-feed failure, not an expected non-trading day. "
+                        f"No per-stock events logged this run.")
         return
     log("Live trading-day check OK.")
 
