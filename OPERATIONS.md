@@ -889,6 +889,69 @@ but the actual trading logic fails later -- that failure path is
 logging (see "Durable refusal logging" above), a different, already-
 existing mechanism for a different failure shape.
 
+## FiboEvening's SYSTEM switch cost two forward-test days -- reverted 2026-10-27
+
+**2026-10-23: `FiboEvening` and `TradeNew_OptionsDepth` were changed to
+run as `NT AUTHORITY\SYSTEM`** (`/RU SYSTEM`, "Run whether user is logged
+on or not"), intended to let both local Task Scheduler jobs survive this
+laptop being logged out or locked -- a real gap, since both were
+previously "Run only when user is logged on."
+
+**Consequence, not caught until 2026-10-27**: `FiboEvening` did not
+launch at all on its very next scheduled fire, 2026-10-26 18:30 IST (the
+first weekday evening after the switch) -- `Last Result: 0x800710E0`
+(Win32 error 4320, "The operator or administrator has refused the
+request"), and `data/fibo_live/scheduler.log` has zero bytes written for
+that run, confirming this is a **launch-level refusal**: Task Scheduler
+never got as far as starting `python.exe`, let alone reaching the
+script's own first `log()` call. **File ACLs were checked and ruled out
+as the cause** -- `icacls` on every link in the path chain (`C:\projects`,
+`C:\projects\trade-new`, the user's `AppData\Local`, the Python
+installation directory, and `python.exe` itself) shows SYSTEM already
+has Full Control everywhere; this was not a permissions gap in the
+filesystem sense.
+
+**The real reason is unrecoverable, by construction, not just bad luck**:
+`Microsoft-Windows-TaskScheduler/Operational` -- the event log that would
+have recorded Task Scheduler's own specific refusal reason -- is
+**disabled** (`IsEnabled: False`) on this machine, and always has been.
+It was never recording, so there is no log to go back and read. **Action
+item, before any future scheduler change on this laptop: enable this log
+first** (`wevtutil sl Microsoft-Windows-TaskScheduler/Operational
+/e:true`, or via Event Viewer -> Applications and Services Logs ->
+Microsoft -> Windows -> TaskScheduler -> Operational -> "Enable Log") --
+so the NEXT scheduler-level failure, whatever it is, is diagnosable
+instead of reasoned about after the fact from indirect evidence.
+
+**Cost**: the evening job's failure meant no `watchlist_run` was ever
+logged targeting 2026-10-27, which cascaded into the 2026-10-27 09:35
+morning run refusing immediately (nothing to act on). **Two forward-test
+days lost** (2026-10-26 and 2026-10-27) -- not a data-quality problem,
+a availability one: the signal pipeline simply never had a watchlist to
+check against on either day.
+
+**Reverted 2026-10-27**, via the Task Scheduler GUI, both tasks back to
+running as the user's own account (`arjun kante`), "Run only when user is
+logged on" -- the configuration both jobs ran under successfully for
+weeks before 2026-10-23. Confirmed post-revert (`schtasks /query /v` and
+`Get-ScheduledTask`): `Run As User: arjun kante`, `LogonType: Interactive`
+for both tasks; triggers (`FiboEvening` weekdays 18:30 IST;
+`TradeNew_OptionsDepth` weekdays 10:30/12:30/14:30 IST), battery settings
+(`DisallowStartIfOnBatteries: False`, `StopIfGoingOnBatteries: False`),
+and working directory (`C:\projects\trade-new`) all survived the round
+trip unchanged. `TradeNew_OptionsDepth` had already fired successfully
+under the reverted account by the time this was checked (`Last Result:
+0`, its 14:30 run that same afternoon).
+
+**The logout/lock-screen problem this switch was trying to solve is
+UNSOLVED and deliberately left that way for now** -- revisiting it (most
+likely: "Run whether user is logged on or not" WITH a correctly stored
+password, rather than the SYSTEM account, which is what actually broke)
+should happen as its own deliberate, separately-tested change on top of
+this now-confirmed-working baseline, with the Operational log enabled
+first so a second failure -- if there is one -- is diagnosable the first
+time, not after another two lost days.
+
 ## The Box Theory DEV run cost ~17 hours of wall clock for ~4 hours of actual work -- the lesson is about unattended jobs in general, not this study
 
 **2026-10-16 evening through 2026-10-17 20:29.** `scripts/box_theory_
