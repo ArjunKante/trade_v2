@@ -29,7 +29,8 @@ import streamlit as st
 from data_layer.db import get_read_connection as get_warehouse_con
 from fibo.intraday_db import get_read_connection as get_intraday_con
 
-from viz.chart import plot_trade_chart
+from viz.chart_plotly import build_plotly_chart
+from viz.data import fetch_raw_multi_day_bars
 
 ROOT = Path(__file__).resolve().parents[1]
 WAREHOUSE_DB = ROOT / "data" / "warehouse.duckdb"
@@ -147,6 +148,7 @@ STUDIES: dict[str, dict] = {
         "dev_bounds": _poc_dev_bounds,
         "outcome_col": "outcome",
         "net_r_col": "net_r",
+        "lookback_days": 5,  # PREREGISTRATION_POC.md Section 4 -- the study's own POC lookback window
     },
     "fibo": {
         "label": "Fibo (ORB + golden zone)",
@@ -266,13 +268,20 @@ trade_date = st.sidebar.date_input(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Zoom window")
-zoom_on = st.sidebar.checkbox("Zoom to a sub-window of the session", value=False)
-window = None
-if zoom_on:
-    zoom_start = st.sidebar.time_input("From", value=dt.time(9, 15))
-    zoom_end = st.sidebar.time_input("To", value=dt.time(10, 30))
-    window = (zoom_start, zoom_end)
+st.sidebar.subheader("Lookback window")
+default_lookback = study.get("lookback_days", 0)
+show_lookback = st.sidebar.checkbox(
+    "Show the lookback window alongside the trade day", value=False,
+    help="For POC: the trading days the POC/PREV_HIGH levels were computed from.",
+)
+lookback_days = default_lookback
+if show_lookback:
+    lookback_days = st.sidebar.number_input(
+        "Lookback days (trading days before the trade day)", min_value=0, max_value=30,
+        value=default_lookback,
+        help=f"Defaults to this study's own window ({default_lookback} days) -- widen for more context.",
+    )
+st.sidebar.caption("Chart supports pan (click-drag) and zoom (scroll or the toolbar) natively.")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Filter trade table")
@@ -306,15 +315,23 @@ with col_chart:
         st.info(f"Nothing to plot for this entity-day. status={result['status']}  "
                 f"detail={result['detail']}")
     else:
-        bars = result["bars"][["ts", "open", "high", "low", "close", "volume"]]
-        scale_label = "RAW rupee scale (resolved via the study adapter's own Section-3 lookback chain)"
-        out_path = ROOT / "data" / "viz" / f"_app_{study_key}_{entity_id}_{trade_date}.png"
-        try:
-            saved = plot_trade_chart(
-                bars, entity_id, trade_date, scale_label, overlay=result["overlay"],
-                out_path=out_path, window=window,
+        if show_lookback and lookback_days > 0:
+            multi = fetch_raw_multi_day_bars(warehouse_con, intraday_con, entity_id, trade_date, lookback_days)
+            combined = multi["combined"]
+            scale_label = (
+                f"RAW rupee scale, {len(multi['days'])} day(s) shown "
+                f"({'; '.join(d['scale_label'] for d in multi['days'][-1:])})"
             )
-            st.image(str(saved), use_container_width=True)
+            if multi["missing_days"]:
+                st.caption(f"No archive data for: {', '.join(str(d) for d in multi['missing_days'])} -- skipped.")
+        else:
+            combined = result["bars"][["ts", "open", "high", "low", "close", "volume"]].copy()
+            combined["trade_date"] = trade_date
+            scale_label = "RAW rupee scale (resolved via the study adapter's own Section-3 lookback chain)"
+
+        try:
+            fig = build_plotly_chart(combined, entity_id, trade_date, scale_label, overlay=result["overlay"])
+            st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
         except ValueError as e:
             st.warning(str(e))
 

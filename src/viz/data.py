@@ -75,3 +75,44 @@ def fetch_raw_day_bars(
         out[c] = out[c] * scale
     label = f"RAW rupee scale (factor {scale:.6f} resolved from {prev_day}, decision={decision.value})"
     return {"bars": out, "decision": decision, "scale": scale, "scale_label": label}
+
+
+def fetch_raw_multi_day_bars(
+    warehouse_con: duckdb.DuckDBPyConnection, intraday_con: duckdb.DuckDBPyConnection,
+    entity_id: str, trade_date: dt.date, n_lookback_days: int,
+) -> dict:
+    """Study-agnostic multi-day view: `n_lookback_days` trading days
+    BEFORE `trade_date`, plus `trade_date` itself, each independently
+    RAW-scale-resolved via `fetch_raw_day_bars` (same per-day mechanism,
+    just called once per day instead of once). Each day keeps its OWN
+    scale resolution -- a stock whose scale changed partway through the
+    window is not silently forced onto one day's factor.
+
+    Returns {"days": [{"date": date, "bars": DataFrame, "scale_label":
+    str}, ...] in ascending order (oldest lookback day first, `trade_date`
+    last), "combined": one concatenated DataFrame with an added
+    `trade_date` column so a renderer can find day boundaries without
+    re-deriving them, "missing_days": [date, ...] for any day with no
+    bars_1min rows at all (skipped, not padded)}."""
+    dates = []
+    cur = trade_date
+    for _ in range(n_lookback_days):
+        cur = previous_nse_trading_day(cur)
+        dates.append(cur)
+    dates = list(reversed(dates)) + [trade_date]
+
+    days = []
+    missing_days = []
+    combined_frames = []
+    for day in dates:
+        res = fetch_raw_day_bars(warehouse_con, intraday_con, entity_id, day)
+        if res["bars"].empty:
+            missing_days.append(day)
+            continue
+        days.append({"date": day, "bars": res["bars"], "scale_label": res["scale_label"]})
+        tagged = res["bars"].copy()
+        tagged["trade_date"] = day
+        combined_frames.append(tagged)
+
+    combined = pd.concat(combined_frames, ignore_index=True) if combined_frames else pd.DataFrame()
+    return {"days": days, "combined": combined, "missing_days": missing_days}
