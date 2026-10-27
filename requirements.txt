@@ -16,3 +16,4 @@ pyotp
 logzero
 python-dotenv
 matplotlib
+streamlit

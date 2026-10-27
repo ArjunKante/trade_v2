@@ -39,6 +39,7 @@ LOOKBACK_FETCH_BUFFER_DAYS = 25  # calendar days of 1-min archive fetched before
 def build_poc_overlay(
     warehouse_con: duckdb.DuckDBPyConnection, intraday_con: duckdb.DuckDBPyConnection,
     entity_id: str, trade_date: dt.date,
+    jump_dates_by_entity: dict | None = None, rank_lookup: dict | None = None,
 ) -> dict:
     """Returns {"bars": today's RAW-scale 1-minute DataFrame (or None if
     nothing could be computed at all), "overlay": Overlay | None,
@@ -48,7 +49,19 @@ def build_poc_overlay(
     backtest.py` uses across a whole DEV run (per-entity-year fetch,
     shared caches across thousands of days) -- this is a one-chart tool,
     so a fresh, minimal per-entity setup scoped to just this one call is
-    the right tradeoff (seconds, not part of a multi-hour run)."""
+    the right tradeoff (seconds, not part of a multi-hour run).
+
+    `jump_dates_by_entity`/`rank_lookup`, if given, are used AS-IS instead
+    of being recomputed here -- both are whole-warehouse scans (a full
+    `combined_unexplained_jump_dates` pass, a full `reconstitute_
+    annually`) that are IDENTICAL for every (entity, date) call, so an
+    interactive caller that plots many entity-days in one session (e.g.
+    `scripts/research_app.py`) should fetch them ONCE, cache them itself,
+    and pass them through -- recomputing a ~20s whole-warehouse scan on
+    every single chart click is a real usability problem, found live
+    testing the research app. The CLI (`scripts/plot_trade.py`), which
+    only ever plots one chart per process, is unaffected either way and
+    is left computing them itself (omit both arguments)."""
     fetch_start = trade_date - dt.timedelta(days=LOOKBACK_FETCH_BUFFER_DAYS)
     block = fetch_bars_range(intraday_con, entity_id, fetch_start, trade_date)
     if block.empty:
@@ -65,11 +78,14 @@ def build_poc_overlay(
 
     bhav = fetch_bhav_daily(warehouse_con, entity_id, fetch_start - dt.timedelta(days=5), trade_date)
     ex_dates = fetch_ex_dates(warehouse_con, entity_id)
-    jump_dates = combined_unexplained_jump_dates(warehouse_con).get(entity_id, set())
+    if jump_dates_by_entity is None:
+        jump_dates_by_entity = combined_unexplained_jump_dates(warehouse_con)
+    jump_dates = jump_dates_by_entity.get(entity_id, set())
     trend_lookup = _build_trend_lookup_for_entity(warehouse_con, entity_id, jump_dates)
 
-    universe = effective_universe(reconstitute_annually(warehouse_con, top_n=TOP_N), stub_year=STUB_YEAR)
-    rank_lookup = {(r["year"], r["entity_id"]): r["rank"] for _, r in universe.iterrows()}
+    if rank_lookup is None:
+        universe = effective_universe(reconstitute_annually(warehouse_con, top_n=TOP_N), stub_year=STUB_YEAR)
+        rank_lookup = {(r["year"], r["entity_id"]): r["rank"] for _, r in universe.iterrows()}
 
     ctx = build_poc_context(
         intraday_con, entity_id, trade_date, day_groups, bhav, ex_dates, jump_dates,
