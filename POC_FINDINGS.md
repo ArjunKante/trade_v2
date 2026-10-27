@@ -105,6 +105,63 @@ This is the flagged observation from the hand-traced STOP example
   `ENTRY_BELOW_STOP` amendment, which found the adjacent half of the same
   gap).
 
+### Limitation: the headline -0.6733 is inflated by a sizing pathology, but the gate still fails without it
+
+**Stated as a limitation of this specific study, not a reason to revisit
+the verdict.** The mechanism above (STOP pinned to POC_PRICE, no minimum
+stop-distance floor, fixed-Rs-risk sizing with no ceiling on `qty`)
+produces a small number of catastrophic trades that pull the mean well
+below what the "ordinary" trade actually looks like. Quantified
+precisely, using `net_r < -5` as the threshold (a cost_rs/500 ratio of 10
+is already far outside anything a sane position size could produce):
+
+- **188 of 13,907 trades (1.35%) have net R below -5.** 48 (0.35%) are
+  below -20. 6 (0.04%) are below -100.
+- Full `net_r` distribution: p1 = -6.36, p5 = -2.07, p25 = -1.29,
+  **median = -1.18**, p75 = +0.13, p95 = +2.02, p99 = +5.55, min =
+  -480.74, max = +280.95.
+- Median stop distance for the 188 pathological trades is **0.0097% of
+  entry**; for the remaining 13,719 it is **0.566%** -- a 58x gap.
+  Spearman correlation between stop-distance-as-%-of-entry and net R is
+  **0.489** (a real, monotonic relationship; Pearson is only 0.063
+  because a handful of extreme outliers dominate a linear measure).
+- **Gap-through-stop was checked and ruled out as the cause**: for all 6
+  trades with net R < -100, `exit_price` equals `stop_price` EXACTLY (no
+  gap) -- gross R for these is -0.99999999, i.e. the stop was honored to
+  the fraction of a paisa. Across all 8,213 STOP exits project-wide, only
+  4.9% show any gap-through at all, and none of the worst 6 are among
+  them. This is purely a sizing/cost artifact, not an execution bug.
+- Full worked example, `INE124G01033` 2017-02-07: entry Rs 129.2500,
+  stop Rs 129.249505 (distance **Rs 0.000495, 0.000383% of entry**), qty
+  **1,010,101**, position value **Rs 130,555,554**, exit at stop exactly,
+  gross loss Rs 499.9999... (gross R -0.99999999), **cost Rs 137,450.65**,
+  **net R -275.9013**. This mechanism is now recorded as a standing rule
+  for every future study (`OPERATIONS.md`, "STANDING RULE: a stop pinned
+  to a price level other than entry MUST have a minimum stop-distance
+  floor") -- checked directly against box theory V1/V2, Darvas, and FVG's
+  own real DEV trade records, none of which are vulnerable to it (box
+  theory's stop is a fixed 3% of entry; Darvas's is bounded by its own
+  box construction; FVG's pre-registration already has the exact 0.5%
+  floor POC's own rules omitted).
+
+**Diagnostics below -- NOT a revised result, the gate was not re-run
+against them**:
+
+| | mean net R | n |
+|---|---|---|
+| Full DEV sample (the actual result) | **-0.6733** | 13,907 |
+| Excluding the worst 1% | -0.3718 | 13,768 |
+| Excluding trades with net R < -5 | -0.3528 | 13,719 |
+
+**Even with the entire pathological tail removed, mean net R stays
+decisively negative, and the gate's first condition (mean net R > 0)
+still fails.** The untailed sample's own median is still -1.18R with a
+28.5% win rate -- most trades lose close to a full risk unit regardless
+of the tail; the tail makes a bad headline number dramatically worse, but
+removing it does not produce a passing study. **DEV_PASS stays False.
+The verdict does not change. The sealed TEST window is still never
+read.**
+
 ### Family tally
 
 POC's **-0.6733** mean net R is markedly worse than either box theory

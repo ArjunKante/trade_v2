@@ -1052,3 +1052,60 @@ SELECTION null specifically (Box V1, FVG, IPO at or near 0th percentile;
 Box V2 at 27.7th) -- a signal that beating "do the same thing on a random
 comparable day/entity" is the harder bar these retail-trading-style entry
 triggers keep missing, independent of which specific pattern was tried.
+
+## STANDING RULE: a stop pinned to a price level other than entry MUST have a minimum stop-distance floor
+
+**Found 2026-10-27, investigating a single POC trade at net R -275.9**
+(`POC_FINDINGS.md`). This project's fixed-Rs-risk sizing formula,
+`qty = floor(500 / (entry_price - stop_price))`, used by every intraday
+study here, has no ceiling on `qty` -- if the per-share risk denominator
+is allowed to get arbitrarily small, `qty`, and with it `position_size_rs`
+and every bps-scaled cost component, grows without bound. This is not
+hypothetical: `INE124G01033` on 2017-02-07 had a stop distance of
+**Rs 0.000495 (0.000383% of entry)**, sized to `qty = 1,010,101`, a
+**Rs 130.5 million** position, and **Rs 137,450** of cost on a nominal
+Rs 500 risk unit -- gross R was a clean -0.99999999 (the stop itself was
+honored exactly, to the fraction of a paisa; no gap, no execution bug).
+Six trades in POC's own DEV sample exceeded net R of -100 this way.
+
+**The rule, stated for every future study using this sizing formula**:
+if a strategy's STOP is pinned to a price level that is NOT a fixed
+percentage of entry (a prior high/low, a volume node, a box edge, a gap
+boundary, a swing point -- anything computed independently of where
+entry happens to fill), that study's pre-registration MUST include an
+explicit MINIMUM stop-distance floor (as a percentage of entry), checked
+and skipped on, before sizing. A maximum-risk ceiling alone (every one of
+these studies already has one, e.g. POC's own 5% `STOP_TOO_WIDE`) does
+NOT protect against this -- it bounds the stop from being too FAR away,
+never too NEAR.
+
+**This is a gap the sizing CONVENTION allowed, not a defect discovered in
+any already-closed result.** Checked directly against every other
+intraday study's own real DEV trade records before writing this down,
+not assumed:
+
+| Study | Stop construction | Can it collapse toward zero? | Max `cost_rs` observed in real DEV trades |
+|---|---|---|---|
+| Box Theory V1 | fixed 3% of entry | No -- 3% of any positive price is never degenerate | Rs 56.87 |
+| Box Theory V2 | fixed 3% of entry | No -- same | Rs 56.87 |
+| Darvas | the box's own confirmed bottom price | No -- bounded by its own multi-week construction (2.3%-69.7% observed in practice) | Rs 145.45 |
+| FVG | `GAP_LOW`, **with an explicit 0.5% minimum-distance floor already in its own pre-registration** (`stop_too_tight` skip) | No -- the floor already does exactly what this rule asks for | Rs 152.45 |
+| **POC** | **0.5% below an independently-derived level (the POC), no minimum floor** | **Yes -- and did, live** | **Rs 239,868.84** |
+
+**FVG is the pattern to copy, not a coincidence to note**: its own
+pre-registration already states "0.5% floor, checked once the fill price
+is known: skip ... unless `(entry_price - GAP_LOW) / entry_price >=
+0.005`" -- written before FVG's own DEV run, for exactly this reason.
+POC's stop (`POC_PRICE x (1 - 0.005)`) is structurally the same shape of
+risk (a fixed level, not a fixed percentage of entry) and needed the
+identical floor, but POC's own pre-registration never added one -- found
+only after it fired twice (first as the `ENTRY_BELOW_STOP` skip, a
+one-paisa-away case caught before DEV scale; then again, worse, once the
+real 13,907-trade DEV sample made the tail visible).
+
+**Action for every future study**: before pre-registering a stop rule,
+ask explicitly "is this a fixed percentage of entry, or a level entry
+could land arbitrarily close to?" If the latter, the minimum-floor check
+is not optional and must be stated as a frozen parameter in Section
+6/7-equivalent of that study's own pre-registration, the same place the
+maximum-risk ceiling already lives.
