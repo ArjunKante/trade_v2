@@ -139,36 +139,78 @@ def timing_null_seed_mean(pool: list[dict], rng: np.random.Generator) -> float:
 # SELECTION null
 # ---------------------------------------------------------------------
 
+def get_or_build_entity_setup(
+    warehouse_con: duckdb.DuckDBPyConnection, entity_id: str, jump_dates: set,
+    full_start: dt.date, full_end: dt.date, setup_cache: dict,
+) -> dict:
+    """Memoized {"bhav", "ex_dates", "trend_lookup"} for one entity,
+    across the ENTIRE run (not per year, not per month) -- `setup_cache`
+    is a plain dict the caller keeps alive for the whole SELECTION null
+    build. These three are all O(entity's daily history), a few KB to a
+    few hundred KB each -- cheap to hold for every universe entity ever
+    needed simultaneously, unlike the INTRADAY 1-minute/5-minute data
+    (Section 3), which is NOT cached this broadly (see `build_month_
+    pool`'s own docstring for why).
+
+    PERFORMANCE NOTE, found live on the real archive: the original
+    per-(entity, month) design re-ran `fetch_bhav_daily`/`fetch_ex_dates`/
+    the full daily-OHLC-panel-plus-50-day-SMA computation from scratch
+    for every month -- measured at 45-100s per month for just 15
+    entities, projecting to low tens of hours at full universe x
+    75-month DEV scale. Caching just these three cheap artifacts across
+    the whole run removes that cost without holding a full year's worth
+    of INTRADAY bars in memory at once (which an earlier, since-reverted
+    per-year-cache design did, and which climbed to 3.5GB+ within one
+    year against ~5.5GB available RAM on this machine -- a real OOM
+    risk, not merely slow)."""
+    if entity_id in setup_cache:
+        return setup_cache[entity_id]
+    bhav = fetch_bhav_daily(warehouse_con, entity_id, dt.date(full_start.year - 1, 1, 1), full_end)
+    ex_dates = fetch_ex_dates(warehouse_con, entity_id)
+    trend_lookup = _build_trend_lookup_for_entity(warehouse_con, entity_id, jump_dates)
+    entry = {"bhav": bhav, "ex_dates": ex_dates, "trend_lookup": trend_lookup}
+    setup_cache[entity_id] = entry
+    return entry
+
+
 def build_month_pool(
     intraday_con: duckdb.DuckDBPyConnection, warehouse_con: duckdb.DuckDBPyConnection,
-    universe: pd.DataFrame, year: int, month: int, rank_lookup: dict,
-    jump_dates_by_entity: dict,
+    universe: pd.DataFrame, year: int, month: int, rank_lookup: dict, jump_dates_by_entity: dict,
+    entity_setup_cache: dict, full_start: dt.date, full_end: dt.date,
 ) -> list[dict]:
     """Every (entity, T) pair for EVERY universe member of `year`,
     restricted to calendar `month`, that passes Section 3's lookback-
     eligibility chain -- INCLUDING trend-filter failures and days that
     never touch the POC, per PREREGISTRATION_POC.md Section 10's own
-    SELECTION null population."""
+    SELECTION null population.
+
+    The cheap per-entity setup (bhav/ex_dates/trend_lookup) is memoized
+    across the WHOLE run via `entity_setup_cache` (see `get_or_build_
+    entity_setup`'s docstring). The INTRADAY data -- `day_groups`,
+    `single_day_cache`, and Section 3's own `eligible_ctx_cache` -- is
+    deliberately rebuilt FRESH for this one month and discarded when
+    this call returns (bounded memory: at most one month's worth of
+    1-minute/5-minute bars across the universe, at any time, not a
+    whole year's)."""
     month_start = dt.date(year, month, 1)
     month_end = (dt.date(year, month, 1) + pd.offsets.MonthEnd(0)).date()
     members = universe.loc[universe["year"] == year, "entity_id"].tolist()
 
     pool = []
     for entity_id in members:
-        bhav = fetch_bhav_daily(warehouse_con, entity_id, month_start - dt.timedelta(days=20), month_end)
-        ex_dates = fetch_ex_dates(warehouse_con, entity_id)
         jump_dates = jump_dates_by_entity.get(entity_id, set())
+        setup = get_or_build_entity_setup(warehouse_con, entity_id, jump_dates, full_start, full_end,
+                                           entity_setup_cache)
         single_day_cache: dict = {}
         eligible_ctx_cache: dict = {}
-        trend_lookup = _build_trend_lookup_for_entity(warehouse_con, entity_id, jump_dates)
         block = fetch_bars_range(intraday_con, entity_id, month_start, month_end)
         if block.empty:
             continue
         day_groups = group_by_day(block)
         for day in sorted(day_groups.keys()):
             ctx = build_poc_context(
-                intraday_con, entity_id, day, day_groups, bhav, ex_dates, jump_dates,
-                single_day_cache, rank_lookup, trend_lookup, eligible_ctx_cache,
+                intraday_con, entity_id, day, day_groups, setup["bhav"], setup["ex_dates"], jump_dates,
+                single_day_cache, rank_lookup, setup["trend_lookup"], eligible_ctx_cache,
             )
             if ctx["skip"] == "LOOKBACK_INCOMPLETE":
                 continue
