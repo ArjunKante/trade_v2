@@ -118,6 +118,50 @@ def fetch_raw_multi_day_bars(
     return {"days": days, "combined": combined, "missing_days": missing_days}
 
 
+def fetch_raw_hourly_bars(
+    warehouse_con: duckdb.DuckDBPyConnection, intraday_con: duckdb.DuckDBPyConnection,
+    entity_id: str, trade_date: dt.date, n_lookback_days: int,
+) -> dict:
+    """Hourly-candle view of the SAME window `fetch_raw_multi_day_bars`
+    fetches (`n_lookback_days` before `trade_date`, plus `trade_date`
+    itself) -- built ON TOP of it (same RAW-scale resolution, same
+    missing-day handling), then each day's own 1-minute bars aggregated
+    to 1-hour buckets via `fvg.bars.aggregate_to_1hour`: buckets anchored
+    at the 09:15 session open (not midnight), so a day's LAST bucket is
+    the PARTIAL 15:15-15:30 one (15 minutes, not 60) -- carried through
+    on every row as `bucket_end`, the bucket's own actual close
+    timestamp, rather than assuming a fixed 60-minute width. A caller
+    placing a marker inside a bucket (an entry/exit fill, which lands
+    partway through an hour, not on its boundary) needs this exact value
+    to find the right point inside a partial bucket too, not just full
+    ones.
+
+    Returns the same shape as `fetch_raw_multi_day_bars`: {"days":
+    [{"date": date, "bars": DataFrame[ts, bucket_end, open, high, low,
+    close, volume], "scale_label": str}, ...], "combined": one
+    concatenated DataFrame with the same columns plus `trade_date`,
+    "missing_days": [date, ...]} -- a day with no bars_1min rows at all
+    is skipped here exactly as it is upstream, never padded with an
+    empty hourly bucket."""
+    from fvg.bars import aggregate_to_1hour
+
+    multi = fetch_raw_multi_day_bars(warehouse_con, intraday_con, entity_id, trade_date, n_lookback_days)
+
+    hourly_days = []
+    combined_frames = []
+    for day in multi["days"]:
+        hourly = aggregate_to_1hour(day["bars"])
+        if hourly.empty:
+            continue
+        hourly = hourly.drop(columns=["is_green", "is_red"])
+        hourly["trade_date"] = day["date"]
+        hourly_days.append({"date": day["date"], "bars": hourly, "scale_label": day["scale_label"]})
+        combined_frames.append(hourly)
+
+    combined = pd.concat(combined_frames, ignore_index=True) if combined_frames else pd.DataFrame()
+    return {"days": hourly_days, "combined": combined, "missing_days": multi["missing_days"]}
+
+
 SMA_WINDOW = 50  # same as poc.trend.SMA_WINDOW -- the trend filter's own window
 
 

@@ -29,8 +29,10 @@ import streamlit as st
 from data_layer.db import get_read_connection as get_warehouse_con
 from fibo.intraday_db import get_read_connection as get_intraday_con
 
-from viz.chart_plotly import build_daily_chart, build_plotly_chart
-from viz.data import adjust_raw_level_for_daily_chart, fetch_daily_bars, fetch_raw_multi_day_bars
+from viz.chart_plotly import build_daily_chart, build_hourly_chart, build_plotly_chart
+from viz.data import (
+    adjust_raw_level_for_daily_chart, fetch_daily_bars, fetch_raw_hourly_bars, fetch_raw_multi_day_bars,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 WAREHOUSE_DB = ROOT / "data" / "warehouse.duckdb"
@@ -270,15 +272,17 @@ trade_date = st.sidebar.date_input(
 st.sidebar.markdown("---")
 st.sidebar.subheader("Chart mode")
 chart_mode = st.sidebar.radio(
-    "View", ["1-minute", "Daily (trend filter context)"], index=0,
-    help="Daily mode shows the 50-day moving average the trend filter actually used -- "
-         "invisible on the 1-minute view.",
+    "View", ["1-minute", "1-hour (POC window)", "Daily (trend filter context)"], index=0,
+    help="1-minute: the trade itself. 1-hour: the POC lookback window with its intraday shape "
+         "still visible. Daily: the 50-day moving average the trend filter actually used -- "
+         "invisible on both intraday views.",
 )
 st.sidebar.caption("Chart supports pan (click-drag) and zoom (scroll or the toolbar) natively.")
 
 default_lookback = study.get("lookback_days", 0)
 show_lookback = False
 lookback_days = default_lookback
+hourly_lookback_days = default_lookback
 daily_lookback_days = 80
 if chart_mode == "1-minute":
     st.sidebar.subheader("Lookback window (1-minute)")
@@ -292,6 +296,15 @@ if chart_mode == "1-minute":
             value=default_lookback,
             help=f"Defaults to this study's own window ({default_lookback} days) -- widen for more context.",
         )
+elif chart_mode == "1-hour (POC window)":
+    st.sidebar.subheader("Lookback window (1-hour)")
+    hourly_lookback_days = st.sidebar.number_input(
+        "Lookback days (trading days before the trade day)", min_value=0, max_value=11,
+        value=default_lookback,
+        help=f"Defaults to this study's own window ({default_lookback} days). Capped at 11 (12 days "
+             f"including the trade day) -- each day is ~7 hourly candles (6 full + 1 partial), so 12 "
+             f"days keeps the chart to roughly 80 candles.",
+    )
 else:
     st.sidebar.subheader("Lookback window (daily)")
     daily_lookback_days = st.sidebar.number_input(
@@ -354,6 +367,28 @@ with col_chart:
             st.caption(
                 f"Note: the 1-minute adapter has nothing for this entity-day (status={result['status']}) -- "
                 "the daily view above is fetched independently and may still show context."
+            )
+    elif chart_mode == "1-hour (POC window)":
+        hourly = fetch_raw_hourly_bars(warehouse_con, intraday_con, entity_id, trade_date, hourly_lookback_days)
+        combined = hourly["combined"]
+        if combined.empty:
+            st.info("Nothing to plot on the hourly view: no archive data in this window.")
+        else:
+            scale_label = (
+                f"RAW rupee scale, {len(hourly['days'])} day(s) shown "
+                f"({'; '.join(d['scale_label'] for d in hourly['days'][-1:])})"
+            )
+            if hourly["missing_days"]:
+                st.caption(f"No archive data for: {', '.join(str(d) for d in hourly['missing_days'])} -- skipped.")
+            try:
+                fig = build_hourly_chart(combined, entity_id, trade_date, scale_label, overlay=result["overlay"])
+                st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
+            except ValueError as e:
+                st.warning(str(e))
+        if bars_empty:
+            st.caption(
+                f"Note: the 1-minute adapter has nothing for this entity-day (status={result['status']}) -- "
+                "the hourly view above is fetched independently and may still show context."
             )
     elif bars_empty:
         st.info(f"Nothing to plot for this entity-day. status={result['status']}  "
