@@ -67,12 +67,20 @@ def _load_poc_verdict() -> dict:
     it. mean_net_r/CI come straight from data/poc/dev_inference.pkl
     (Stage 2 of scripts/poc_dev_run.py, produced before the run was
     stopped); the DEV_PASS/closure text is the same conclusion already
-    committed to POC_FINDINGS.md, not re-derived here."""
+    committed to POC_FINDINGS.md, not re-derived here.
+
+    `mean_label`/`mean_display`/`ci_display` are PRE-FORMATTED here (not
+    left to the render code to format generically) specifically so R
+    (V1) and percentage-of-position (V2/V3) can never be displayed with
+    each other's units by a shared formatting path -- found worth being
+    explicit about once a second, differently-united POC study existed."""
     with open(ROOT / "data" / "poc" / "dev_inference.pkl", "rb") as f:
         inf = pickle.load(f)
     return {
-        "headline": "CLOSED -- DEV FAILS (NO EDGE)",
-        "mean_net_r": inf["mean_net_r"], "ci_low": inf["ci_low"], "ci_high": inf["ci_high"],
+        "headline": "CLOSED -- DEV FAILS (NO EDGE) -- POC family trial 1 of 3",
+        "mean_label": "Mean net R",
+        "mean_display": f"{inf['mean_net_r']:+.4f}",
+        "ci_display": f"[{inf['ci_low']:+.4f}, {inf['ci_high']:+.4f}]",
         "n_trades": inf["n_trades"], "n_days": inf["n_days"],
         "summary": (
             "Mean net R is negative with a 97.5% bootstrap CI excluding zero on the "
@@ -87,6 +95,129 @@ def _load_poc_verdict() -> dict:
         ),
         "findings_doc": "POC_FINDINGS.md",
     }
+
+
+# ---------------------------------------------------------------------
+# POC V2 -- fixed-capital sizing, 5-day lookback-low stop, same 5-minute
+# touch/confirmation as V1 (PREREGISTRATION_POC_V2.md)
+# ---------------------------------------------------------------------
+
+@st.cache_data
+def _load_poc_v2_trades() -> pd.DataFrame:
+    """V2's trades were never exported to CSV the way V1's were -- loaded
+    straight from `data/poc/v2/dev_backtest.pkl`'s own `"trades"` key
+    (`scripts/poc_v2_dev_run.py` Stage 1's saved output), the real DEV
+    backtest result, not recomputed."""
+    with open(ROOT / "data" / "poc" / "v2" / "dev_backtest.pkl", "rb") as f:
+        res = pickle.load(f)
+    df = res["trades"].copy()
+    df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
+    return df
+
+
+@st.cache_data
+def _load_poc_v2_verdict() -> dict:
+    with open(ROOT / "data" / "poc" / "v2" / "dev_inference.pkl", "rb") as f:
+        inf = pickle.load(f)
+    return {
+        "headline": "CLOSED -- DEV FAILS (NO EDGE) -- POC family trial 2 of 3",
+        "mean_label": "Mean net return",
+        "mean_display": f"{inf['mean_net_r']*100:+.4f}%",
+        "ci_display": f"[{inf['ci_low']*100:+.4f}%, {inf['ci_high']*100:+.4f}%]",
+        "n_trades": inf["n_trades"], "n_days": inf["n_days"],
+        "summary": (
+            "**Percentage of Rs 25,000 position value -- NOT R, not comparable to V1.** "
+            "TWO changes from V1: fixed-capital sizing (`qty = floor(25000/entry)`, a "
+            "methodological fix that structurally removed V1's own sizing pathology -- qty "
+            "no longer depends on stop distance at all), and the stop moved from 0.5% below "
+            "POC to the same 5-day lookback window's own LOW (a tuned parameter, with a new "
+            "0.5% minimum stop-distance floor -- now a project-wide standing rule, "
+            "`OPERATIONS.md`). Mean net return is negative with the CI excluding zero on the "
+            "negative side -- the gate's first condition already fails. Neither null was run "
+            "(stopped once the gate was decided). **The sizing fix worked cleanly** (max "
+            "single-trade cost fell from V1's Rs 239,868 to Rs 143.72, a 1,669x reduction) "
+            "**but the strategy still has no edge.** Full detail: POC_V2_FINDINGS.md."
+        ),
+        "findings_doc": "POC_V2_FINDINGS.md",
+    }
+
+
+@st.cache_data
+def _poc_v2_adapter_cached(_warehouse_con, _intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    from viz.poc_v2_adapter import build_poc_v2_overlay
+    return build_poc_v2_overlay(
+        _warehouse_con, _intraday_con, entity_id, trade_date,
+        jump_dates_by_entity=_poc_jump_dates(), rank_lookup=_poc_rank_lookup(),
+    )
+
+
+def _poc_v2_adapter(warehouse_con, intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    return _poc_v2_adapter_cached(warehouse_con, intraday_con, entity_id, trade_date)
+
+
+def _poc_v2_dev_bounds() -> tuple[dt.date, dt.date]:
+    from poc.v2 import DEV_END, DEV_START
+    return DEV_START, DEV_END
+
+
+# ---------------------------------------------------------------------
+# POC V3 -- same fixed-capital sizing and lookback-low stop as V2, but
+# touch/confirmation move to 1-HOUR candles (PREREGISTRATION_POC_V3.md)
+# ---------------------------------------------------------------------
+
+@st.cache_data
+def _load_poc_v3_trades() -> pd.DataFrame:
+    with open(ROOT / "data" / "poc" / "v3" / "dev_backtest.pkl", "rb") as f:
+        res = pickle.load(f)
+    df = res["trades"].copy()
+    df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
+    return df
+
+
+@st.cache_data
+def _load_poc_v3_verdict() -> dict:
+    with open(ROOT / "data" / "poc" / "v3" / "dev_inference.pkl", "rb") as f:
+        inf = pickle.load(f)
+    return {
+        "headline": "CLOSED -- DEV FAILS (NO EDGE) -- POC family trial 3 of 3 -- FAMILY CLOSED, no V4",
+        "mean_label": "Mean net return",
+        "mean_display": f"{inf['mean_net_r']*100:+.4f}%",
+        "ci_display": f"[{inf['ci_low']*100:+.4f}%, {inf['ci_high']*100:+.4f}%]",
+        "n_trades": inf["n_trades"], "n_days": inf["n_days"],
+        "summary": (
+            "**Percentage of Rs 25,000 position value -- NOT R, not comparable to V1. "
+            "Directly comparable to V2.** ONE change from V2: touch/confirmation moves from "
+            "5-minute candles to 1-hour candles (anchored at the 09:15 session open; the "
+            "day's last bucket is a 15-minute partial, eligible like any other). Stop, "
+            "sizing, target, and both nulls are byte-identical to V2. Mean net return is "
+            "negative with the CI excluding zero on the negative side -- the gate's first "
+            "condition already fails. **The stated rationale was tested directly: hourly "
+            "confirmation DID move entries further from the POC in magnitude (mean "
+            "-1.27% -> -1.38%), but further BELOW the POC, not above it** -- the magnitude "
+            "prediction held, the implicit directional framing didn't, and it produced no "
+            "edge either way. **POC family trial count is now 3. Per Section 15: no V4 -- "
+            "the POC family is closed.** Full detail: POC_V3_FINDINGS.md."
+        ),
+        "findings_doc": "POC_V3_FINDINGS.md",
+    }
+
+
+@st.cache_data
+def _poc_v3_adapter_cached(_warehouse_con, _intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    from viz.poc_v3_adapter import build_poc_v3_overlay
+    return build_poc_v3_overlay(
+        _warehouse_con, _intraday_con, entity_id, trade_date,
+        jump_dates_by_entity=_poc_jump_dates(), rank_lookup=_poc_rank_lookup(),
+    )
+
+
+def _poc_v3_adapter(warehouse_con, intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    return _poc_v3_adapter_cached(warehouse_con, intraday_con, entity_id, trade_date)
+
+
+def _poc_v3_dev_bounds() -> tuple[dt.date, dt.date]:
+    from poc.v3 import DEV_END, DEV_START
+    return DEV_START, DEV_END
 
 
 @st.cache_data
@@ -142,7 +273,7 @@ def _poc_dev_bounds() -> tuple[dt.date, dt.date]:
 
 STUDIES: dict[str, dict] = {
     "poc": {
-        "label": "POC (point of control) bounce",
+        "label": "POC V1 -- fixed-risk sizing, 5-min confirm",
         "available": True,
         "trades_loader": _load_poc_trades,
         "verdict_loader": _load_poc_verdict,
@@ -151,6 +282,29 @@ STUDIES: dict[str, dict] = {
         "outcome_col": "outcome",
         "net_r_col": "net_r",
         "lookback_days": 5,  # PREREGISTRATION_POC.md Section 4 -- the study's own POC lookback window
+    },
+    "poc_v2": {
+        "label": "POC V2 -- fixed-capital sizing, 5-min confirm",
+        "available": True,
+        "trades_loader": _load_poc_v2_trades,
+        "verdict_loader": _load_poc_v2_verdict,
+        "adapter": _poc_v2_adapter,
+        "dev_bounds": _poc_v2_dev_bounds,
+        "outcome_col": "outcome",
+        "net_r_col": "net_return_pct",
+        "lookback_days": 5,  # PREREGISTRATION_POC_V2.md -- same window as V1
+    },
+    "poc_v3": {
+        "label": "POC V3 -- fixed-capital sizing, HOURLY confirm",
+        "available": True,
+        "trades_loader": _load_poc_v3_trades,
+        "verdict_loader": _load_poc_v3_verdict,
+        "adapter": _poc_v3_adapter,
+        "dev_bounds": _poc_v3_dev_bounds,
+        "outcome_col": "outcome",
+        "net_r_col": "net_return_pct",
+        "lookback_days": 5,  # PREREGISTRATION_POC_V3.md -- same window as V1/V2
+        "default_chart_mode": "1-hour (POC window)",  # the timeframe V3's own strategy actually traded on
     },
     "fibo": {
         "label": "Fibo (ORB + golden zone)",
@@ -223,10 +377,31 @@ dev_start, dev_end = study["dev_bounds"]()
 
 st.title(study["label"])
 st.error(f"### {verdict['headline']}\n\n"
-         f"**Mean net R** = {verdict['mean_net_r']:+.4f}  "
-         f"**97.5% CI** = [{verdict['ci_low']:+.4f}, {verdict['ci_high']:+.4f}]  "
+         f"**{verdict['mean_label']}** = {verdict['mean_display']}  "
+         f"**97.5% CI** = {verdict['ci_display']}  "
          f"({verdict['n_trades']:,} trades, {verdict['n_days']:,} distinct days)\n\n"
          f"{verdict['summary']}")
+
+if study_key in ("poc", "poc_v2", "poc_v3"):
+    _POC_ROWS = [
+        ("poc", "V1", "fixed-risk (Rs 500/trade)", "0.5% below POC", "5-min", "-0.6733 R"),
+        ("poc_v2", "V2", "fixed-capital (Rs 25,000)", "5-day lookback low", "5-min", "-0.4077%"),
+        ("poc_v3", "V3", "fixed-capital (Rs 25,000)", "5-day lookback low", "1-hour", "-0.3176%"),
+    ]
+    _table_lines = [
+        "| Trial | Sizing | Stop | Confirmation | Result (DEV) |",
+        "|---|---|---|---|---|",
+    ]
+    for key, trial, sizing, stop, confirm, result in _POC_ROWS:
+        marker = " <-- selected" if key == study_key else ""
+        label = f"**{trial}**" if key == study_key else trial
+        _table_lines.append(f"| {label} | {sizing} | {stop} | {confirm} | {result}{marker} |")
+    st.markdown("**POC family -- all three trials closed, NO EDGE. No V4.**")
+    st.markdown("\n".join(_table_lines))
+    st.caption(
+        "V1's result is R (fixed-risk units); V2/V3's are % of position value -- "
+        "the two units are not interchangeable, only V2 and V3 compare directly to each other."
+    )
 
 entities = sorted(trades["entity_id"].unique())
 # Pre-seed the WIDGETS' OWN session_state keys, once, before they ever
@@ -271,11 +446,20 @@ trade_date = st.sidebar.date_input(
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Chart mode")
+_CHART_MODES = ["1-minute", "1-hour (POC window)", "Daily (trend filter context)"]
+_default_chart_mode = study.get("default_chart_mode", "1-minute")
+if study_key == "poc_v3":
+    st.sidebar.caption(
+        "V3's own strategy confirmed on HOURLY candles -- defaulting to the 1-hour view so the "
+        "chart shows the actual signal traded, not a finer timeframe the strategy never looked at."
+    )
 chart_mode = st.sidebar.radio(
-    "View", ["1-minute", "1-hour (POC window)", "Daily (trend filter context)"], index=0,
+    "View", _CHART_MODES, index=_CHART_MODES.index(_default_chart_mode),
+    key=f"chart_mode_{study_key}",  # per-study widget identity -- switching studies must not carry
+                                     # one study's remembered choice onto another's different default
     help="1-minute: the trade itself. 1-hour: the POC lookback window with its intraday shape "
-         "still visible. Daily: the 50-day moving average the trend filter actually used -- "
-         "invisible on both intraday views.",
+         "still visible (for V3, this is the EXACT candles the strategy confirmed on). Daily: the "
+         "50-day moving average the trend filter actually used -- invisible on both intraday views.",
 )
 st.sidebar.caption("Chart supports pan (click-drag) and zoom (scroll or the toolbar) natively.")
 
