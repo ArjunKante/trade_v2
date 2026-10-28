@@ -182,3 +182,73 @@ def build_plotly_chart(
                   else "gray"),
     )
     return fig
+
+
+def build_daily_chart(
+    daily_bars: pd.DataFrame, entity_id: str, trade_date: dt.date, scale_note: str,
+    poc_price_adjusted: float | None = None, prev_high_adjusted: float | None = None,
+) -> go.Figure:
+    """Daily-candle view for seeing the context a daily-timeframe
+    condition (the 50-day trend filter, in particular) actually used --
+    invisible on a 1-minute chart. `daily_bars`: `viz.data.
+    fetch_daily_bars`'s own output (`trade_date`, `adjusted_open/high/
+    low/close`, `sma`), ENTITY-ADJUSTED scale throughout. `poc_price_
+    adjusted`/`prev_high_adjusted` must ALREADY be converted to this
+    same adjusted scale (`viz.data.adjust_raw_level_for_daily_chart`) --
+    this function does not convert anything itself, so a caller cannot
+    accidentally pass a RAW-scale level through unconverted and have it
+    silently plot at the wrong level."""
+    if daily_bars.empty:
+        raise ValueError(f"no daily bars to plot for {entity_id} ending {trade_date}")
+
+    bars = daily_bars.sort_values("trade_date").reset_index(drop=True)
+    n = len(bars)
+    x = np.arange(n)
+    dates = pd.to_datetime(bars["trade_date"])
+
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(
+        x=x, open=bars["adjusted_open"], high=bars["adjusted_high"], low=bars["adjusted_low"],
+        close=bars["adjusted_close"], increasing_line_color=UP_COLOR, decreasing_line_color=DOWN_COLOR,
+        increasing_fillcolor=UP_COLOR, decreasing_fillcolor=DOWN_COLOR, name="price", showlegend=False,
+    ))
+    fig.add_trace(go.Scatter(
+        x=x, y=bars["sma"], mode="lines", line=dict(color="#e8a33d", width=1.6),
+        name="50-day MA (trend filter)",
+    ))
+
+    if poc_price_adjusted is not None:
+        fig.add_hline(y=poc_price_adjusted, line_color=_color("tab:blue"), line_dash="dash", line_width=1.3,
+                       annotation_text=f"POC {poc_price_adjusted:.2f}", annotation_position="right",
+                       annotation_font_color=_color("tab:blue"), annotation_font_size=10)
+    if prev_high_adjusted is not None:
+        fig.add_hline(y=prev_high_adjusted, line_color=_color("tab:purple"), line_dash="dash", line_width=1.3,
+                       annotation_text=f"PREV_HIGH {prev_high_adjusted:.2f}", annotation_position="right",
+                       annotation_font_color=_color("tab:purple"), annotation_font_size=10)
+
+    trade_rows = bars.index[dates.dt.date == trade_date]
+    if len(trade_rows):
+        idx = int(trade_rows[0])
+        fig.add_vline(x=idx, line_color="black", line_dash="dot", line_width=1.3)
+        fig.add_annotation(x=idx, y=1.0, yref="y domain", yanchor="bottom", text=f"<b>{trade_date}</b>",
+                            showarrow=False, font=dict(size=10, color="black"))
+
+    tick_every = max(1, n // 20)
+    tick_idx = list(range(0, n, tick_every))
+    tick_text = [dates.iloc[i].strftime("%Y-%m-%d") for i in tick_idx]
+
+    fig.update_layout(
+        title=dict(text=f"{entity_id} -- daily, {n} trading days ending {trade_date}", x=0.01, xanchor="left"),
+        dragmode="pan",
+        xaxis=dict(tickmode="array", tickvals=tick_idx, ticktext=tick_text, rangeslider=dict(visible=False)),
+        yaxis=dict(title="Price (entity-adjusted)"),
+        height=550,
+        margin=dict(t=60, b=40, l=50, r=130),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    fig.add_annotation(
+        text=scale_note, xref="paper", yref="paper", x=0.5, y=-0.16, showarrow=False,
+        font=dict(size=10, color="gray"),
+    )
+    return fig

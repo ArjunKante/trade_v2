@@ -29,8 +29,8 @@ import streamlit as st
 from data_layer.db import get_read_connection as get_warehouse_con
 from fibo.intraday_db import get_read_connection as get_intraday_con
 
-from viz.chart_plotly import build_plotly_chart
-from viz.data import fetch_raw_multi_day_bars
+from viz.chart_plotly import build_daily_chart, build_plotly_chart
+from viz.data import adjust_raw_level_for_daily_chart, fetch_daily_bars, fetch_raw_multi_day_bars
 
 ROOT = Path(__file__).resolve().parents[1]
 WAREHOUSE_DB = ROOT / "data" / "warehouse.duckdb"
@@ -268,20 +268,36 @@ trade_date = st.sidebar.date_input(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Lookback window")
-default_lookback = study.get("lookback_days", 0)
-show_lookback = st.sidebar.checkbox(
-    "Show the lookback window alongside the trade day", value=False,
-    help="For POC: the trading days the POC/PREV_HIGH levels were computed from.",
+st.sidebar.subheader("Chart mode")
+chart_mode = st.sidebar.radio(
+    "View", ["1-minute", "Daily (trend filter context)"], index=0,
+    help="Daily mode shows the 50-day moving average the trend filter actually used -- "
+         "invisible on the 1-minute view.",
 )
-lookback_days = default_lookback
-if show_lookback:
-    lookback_days = st.sidebar.number_input(
-        "Lookback days (trading days before the trade day)", min_value=0, max_value=30,
-        value=default_lookback,
-        help=f"Defaults to this study's own window ({default_lookback} days) -- widen for more context.",
-    )
 st.sidebar.caption("Chart supports pan (click-drag) and zoom (scroll or the toolbar) natively.")
+
+default_lookback = study.get("lookback_days", 0)
+show_lookback = False
+lookback_days = default_lookback
+daily_lookback_days = 80
+if chart_mode == "1-minute":
+    st.sidebar.subheader("Lookback window (1-minute)")
+    show_lookback = st.sidebar.checkbox(
+        "Show the lookback window alongside the trade day", value=False,
+        help="For POC: the trading days the POC/PREV_HIGH levels were computed from.",
+    )
+    if show_lookback:
+        lookback_days = st.sidebar.number_input(
+            "Lookback days (trading days before the trade day)", min_value=0, max_value=30,
+            value=default_lookback,
+            help=f"Defaults to this study's own window ({default_lookback} days) -- widen for more context.",
+        )
+else:
+    st.sidebar.subheader("Lookback window (daily)")
+    daily_lookback_days = st.sidebar.number_input(
+        "Trading days ending on the trade day", min_value=10, max_value=250, value=80,
+        help="Entity-adjusted scale -- the same scale the 50-day trend filter itself uses.",
+    )
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Filter trade table")
@@ -311,7 +327,35 @@ result = study["adapter"](warehouse_con, intraday_con, entity_id, trade_date)
 
 with col_chart:
     st.subheader(f"{entity_id} -- {trade_date}")
-    if result["bars"] is None or (hasattr(result["bars"], "empty") and result["bars"].empty):
+
+    bars_empty = result["bars"] is None or (hasattr(result["bars"], "empty") and result["bars"].empty)
+
+    if chart_mode == "Daily (trend filter context)":
+        daily = fetch_daily_bars(warehouse_con, entity_id, trade_date, n_days=daily_lookback_days)
+        if daily["bars"].empty:
+            st.info(f"Nothing to plot on the daily view: {daily['scale_note']}")
+        else:
+            detail = result.get("detail") or {}
+            poc_adj = prev_high_adj = None
+            if detail.get("poc_price") is not None:
+                poc_adj = adjust_raw_level_for_daily_chart(warehouse_con, entity_id, trade_date, detail["poc_price"])
+            if detail.get("prev_high") is not None:
+                prev_high_adj = adjust_raw_level_for_daily_chart(
+                    warehouse_con, entity_id, trade_date, detail["prev_high"])
+            try:
+                fig = build_daily_chart(
+                    daily["bars"], entity_id, trade_date, daily["scale_note"],
+                    poc_price_adjusted=poc_adj, prev_high_adjusted=prev_high_adj,
+                )
+                st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
+            except ValueError as e:
+                st.warning(str(e))
+        if bars_empty:
+            st.caption(
+                f"Note: the 1-minute adapter has nothing for this entity-day (status={result['status']}) -- "
+                "the daily view above is fetched independently and may still show context."
+            )
+    elif bars_empty:
         st.info(f"Nothing to plot for this entity-day. status={result['status']}  "
                 f"detail={result['detail']}")
     else:

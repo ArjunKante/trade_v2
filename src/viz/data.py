@@ -116,3 +116,74 @@ def fetch_raw_multi_day_bars(
 
     combined = pd.concat(combined_frames, ignore_index=True) if combined_frames else pd.DataFrame()
     return {"days": days, "combined": combined, "missing_days": missing_days}
+
+
+SMA_WINDOW = 50  # same as poc.trend.SMA_WINDOW -- the trend filter's own window
+
+
+def fetch_daily_bars(
+    warehouse_con: duckdb.DuckDBPyConnection, entity_id: str, trade_date: dt.date, n_days: int = 80,
+) -> dict:
+    """Study-agnostic daily-candle view: up to `n_days` trading days
+    ending on (and including) `trade_date`, ENTITY-ADJUSTED scale --
+    deliberately NOT RAW scale, because the 50-day moving average shown
+    alongside it is the exact line a daily-timeframe trend filter (e.g.
+    `poc.trend.build_trend_lookup`) computes, and that filter compares
+    against `fibo.daily_ohlc`'s own adjusted close, never RAW intraday
+    prices. Jump-guard-flagged days are dropped before the rolling mean
+    is computed, the identical convention `poc.backtest._build_trend_
+    lookup_for_entity` already uses, so this IS the real trend filter's
+    own line, not a visually-similar recomputation.
+
+    Returns {"bars": DataFrame[trade_date, adjusted_open/high/low/close,
+    sma] trimmed to the last `n_days` rows, "scale_note": str}. The
+    `sma` column is computed over the ENTITY'S FULL fetched history
+    (not just the displayed window) so the line is correct from the
+    first displayed candle, not NaN-truncated at the left edge.
+    `fetch_adjustment_factor_for_overlay` (below) is what a caller uses
+    to bring a RAW-scale level (POC_PRICE, PREV_HIGH) onto this same
+    adjusted scale for overlay -- never compare a RAW level to these
+    candles directly."""
+    from fibo.daily_ohlc import build_daily_ohlc_panel
+    from fibo.jump_guard import combined_unexplained_jump_dates
+
+    panel = build_daily_ohlc_panel(warehouse_con, entity_ids=[entity_id])
+    if panel.empty:
+        return {"bars": pd.DataFrame(), "scale_note": f"NO DATA -- {entity_id} has no daily history"}
+
+    jump_dates = combined_unexplained_jump_dates(warehouse_con).get(entity_id, set())
+    if jump_dates:
+        flagged = pd.to_datetime(pd.Series(sorted(jump_dates)))
+        panel = panel[~panel["trade_date"].isin(flagged)]
+
+    panel = panel.sort_values("trade_date").reset_index(drop=True)
+    panel["sma"] = panel["adjusted_close"].rolling(window=SMA_WINDOW, min_periods=SMA_WINDOW).mean()
+
+    panel = panel[panel["trade_date"] <= pd.Timestamp(trade_date)]
+    if panel.empty:
+        return {"bars": pd.DataFrame(), "scale_note": f"NO DATA -- {entity_id} has no daily history on or before {trade_date}"}
+
+    display = panel.tail(n_days).reset_index(drop=True)
+    scale_note = (
+        f"Entity-adjusted daily scale (fibo.daily_ohlc) -- NOT the same scale as the 1-minute RAW view. "
+        f"50-day MA is the trend filter's own line (jump-guard-flagged days already excluded)."
+    )
+    return {"bars": display, "scale_note": scale_note}
+
+
+def adjust_raw_level_for_daily_chart(
+    warehouse_con: duckdb.DuckDBPyConnection, entity_id: str, trade_date: dt.date, raw_price: float,
+) -> float:
+    """Converts a RAW-scale price level (e.g. POC_PRICE/PREV_HIGH,
+    resolved for `trade_date`'s own intraday scale) onto the SAME
+    entity-adjusted scale `fetch_daily_bars` plots -- using `fibo.
+    price_scale`'s own factor lookup, inverted (that module converts
+    adjusted -> raw; `adjusted = raw * factor(trade_date)` is the same
+    relationship run the other way). Comparing a RAW level directly
+    against adjusted daily candles would be silently wrong by whatever
+    split/bonus ratio occurred between `trade_date` and today -- the
+    exact pitfall `fibo.price_scale`'s own docstring names."""
+    from fibo.price_scale import get_adjustment_factor
+
+    factor = get_adjustment_factor(warehouse_con, entity_id, trade_date)
+    return raw_price * factor
