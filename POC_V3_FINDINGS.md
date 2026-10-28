@@ -8,6 +8,176 @@ is the LEAST informative of the three trials per the preregistration's
 own Provenance section. Records what was actually run and found, per
 that document's Process section.
 
+**Bottom line, stated first per this project's "bad results first"
+discipline: DEV FAILS.** Mean net return = **-0.3176%** of position
+value, 97.5% CI **[-0.3634%, -0.2718%]** -- excludes zero on the
+NEGATIVE side, so the gate's first condition already fails, and the gate
+requires ALL conditions. **Neither null was run to completion** -- the
+TIMING null's pool had been built and its 20-seed timing probe had
+already run (sized to 500 seeds) when the run was killed, but zero of
+those 500 seeds had executed; the SELECTION null never started. The
+sealed TEST window is never read. **POC family trial count is now 3 --
+V1, V2, and V3 are all closed, all NO EDGE. Per `PREREGISTRATION_
+POC_V3.md` Section 15: no V4 will be proposed. The POC family is
+closed.**
+
+## DEV result (partial -- nulls not run to completion)
+
+18,121 trades, 1,451 distinct entry days, full top-200-by-turnover
+universe, real DEV window 2016-10-04 to 2022-12-31. Runtime: 41.5 min
+for the real backtest; stopped during Stage 3 (TIMING null pool built,
+20-seed timing probe run to decide seed count, zero of the resulting 500
+seeds executed) once the gate's primary condition was already decided.
+
+| | |
+|---|---|
+| Trades / distinct entry days | 18,121 / 1,451 |
+| Win rate | 34.4% |
+| Mean net return (97.5% CI) | **-0.3176%** [-0.3634%, -0.2718%] |
+| Median net return (descriptive) | -0.2680% |
+| MDE | 0.0464% |
+| TIMING null | **not run** -- gate already failed |
+| SELECTION null | **not run** -- gate already failed |
+| Exit mix | TIME_EXIT 12,400 / TARGET 3,702 / STOP 2,019 |
+| By year | 2016 -0.283% (324) / 2017 -0.299% (2,639) / 2018 -0.310% (2,324) / 2019 -0.295% (2,808) / 2020 -0.279% (3,308) / 2021 -0.362% (3,589) / 2022 -0.353% (3,129) |
+| By band | 1-50: -0.251% (4,775) / 51-100: -0.297% (5,128) / 101-200: -0.369% (8,218) |
+| Ex-best-year (2020 excluded) mean | -0.326% |
+| Bands 1-100 mean | -0.275% (9,903 trades) |
+| Peak concurrent positions | 67 |
+| Peak deployed capital | Rs 1,678,679 |
+| **DEV_PASS** | **False** |
+
+**Reminder, every time this figure is shown**: this is a PERCENTAGE OF
+POSITION VALUE, not R. Not comparable to V1. Directly comparable to V2.
+
+### THE MEASUREMENT THAT MATTERED: did hourly confirmation move entries further from the POC?
+
+This was the study's entire stated rationale, so it is answered directly,
+whether or not it helped:
+
+| `(entry_price - POC_PRICE) / entry_price` | V2 (5-min confirm) | V3 (1-hour confirm) |
+|---|---|---|
+| Mean | -1.269% | **-1.380%** |
+| Median | -0.689% | **-0.917%** |
+| Min (furthest below POC) | -24.697% | **-37.224%** |
+| Max (furthest above POC) | +2.541% | **+3.157%** |
+
+**Yes -- entries moved further from the POC in magnitude, on every
+statistic measured (mean, median, and both tails).** But the direction is
+the opposite of the implicit picture in the rationale ("entries landed a
+fraction above it"): **both V2 and V3 entries land BELOW the POC on
+average, not above it, and hourly confirmation pushed them further
+below, not further above.** A GREEN or HAMMER confirmation candle only
+requires closing above its own open (or showing a hammer shape) -- it
+says nothing about the candle's relationship to the POC level itself, so
+there was never a mechanical reason to expect entries to land above POC
+specifically; a wider candle simply has more room to move in either
+direction before it confirms, and the data shows that room was used
+mostly to the downside. **The rationale's directional premise (further
+movement before confirmation) is confirmed. Its implicit framing (that
+this movement would be upward, away from the level in the direction of
+the bounce) is not -- and this did not produce an edge either way.**
+
+### Realised stop distance (% of entry) -- unchanged from V2, as expected
+
+| | min | median | max |
+|---|---|---|---|
+| V2 | 0.500% | 2.126% | 5.000% |
+| V3 | 0.500% | **2.209%** | 5.000% |
+
+Both guards still hold exactly at their frozen boundaries. The small
+median shift (2.126% -> 2.209%) is consistent with slightly different
+entry prices under hourly confirmation shifting which setups clear the
+`STOP_TOO_WIDE`/`STOP_TOO_TIGHT` checks -- not a change to how STOP
+itself is computed, which is byte-identical to V2 (the same 5-day
+lookback low).
+
+### Cost distribution
+
+| | min | median | max |
+|---|---|---|---|
+| Cost (Rs) | 37.38 | 65.97 | 140.92 |
+| Cost (% of position value) | 0.158% | 0.271% | 0.341% |
+| Position value (Rs) | 12,590.03 | 24,786.65 | 89,048.90 |
+
+Total costs: **Rs 1,226,649** across 18,121 trades. Same bounded shape as
+V2 (fixed-capital sizing is unchanged), confirming costs are not what
+shifted between V2 and V3.
+
+### Trade count against V2's 22,959: WHERE the 4,838 fewer trades went
+
+**18,121 trades, down 4,838 (-21.1%) from V2's 22,959.** The
+preregistration's own stated expectation was that this gap would be
+driven mainly by `FILL_OUTSIDE_WINDOW` (the 14:30 cutoff). **That
+expectation was WRONG, stated plainly**: `fill_outside_window` actually
+FELL slightly, from 1,800 (V2) to 1,542 (V3) -- 0.646% to 0.553% of all
+setups checked. The shared, upstream stages (`lookback_incomplete`
+42,802 and `trend_filter_failed` 108,905, both byte-identical to V2,
+confirming neither is affected by the confirmation-timeframe change)
+funnel into touch/confirmation/fill, where the REAL divergence happens:
+
+| Skip reason (delta from V2) | V2 | V3 | Delta |
+|---|---|---|---|
+| `no_touch` | 47,425 | 49,061 | **+1,636** |
+| `poc_failed` | 31,754 | 33,645 | **+1,891** |
+| `no_confirmation` | 1,059 | 2,473 | **+1,414** |
+| `no_fill_bar` | 551 | 2,709 | **+2,158** |
+| `fill_outside_window` | 1,800 | 1,542 | -258 |
+| `entry_below_stop` | 2,578 | 2,917 | +339 |
+| `stop_too_wide` | 9,489 | 8,380 | -1,109 |
+| `stop_too_tight` | 1,959 | 1,692 | -267 |
+| `no_room` | 7,414 | 6,448 | -966 |
+| **entered (trades)** | **22,959** | **18,121** | **-4,838** |
+
+(Deltas sum to exactly zero against the trade-count delta -- 278,695
+total setups checked is identical between V2 and V3, as it must be: same
+universe, same dates, same lookback/trend-filter stages.)
+
+**The dominant driver is `no_fill_bar` (+2,158, the single largest
+delta)**: the exact 1-minute bar at the confirming hourly candle's own
+`bucket_end` is missing from the archive meaningfully more often than
+V2's 5-minute equivalent -- not yet explained by anything in this
+study's own mechanics, reported honestly as observed rather than
+guessed at. **`poc_failed` (+1,891) and `no_touch` (+1,636)** are both
+plausibly explained by coarser granularity: a full hour gives more time
+for a confirmation candle to decisively close red-and-below-POC than a
+5-minute snapshot does, and the touch rule's own "first candle AT OR
+AFTER 09:45" boundary discards the ENTIRE `[09:15,10:15)` hour (not just
+the `[09:15,09:45)` portion a 5-minute grid would have excluded),
+pushing some touches that 5-minute candles would have caught into
+`no_touch` instead. **`no_confirmation` (+1,414)** more than doubled.
+Partially offsetting, `stop_too_wide` (-1,109), `no_room` (-966), and
+`stop_too_tight` (-267) all fell, consistent with the entry-POC-distance
+finding above (different entry prices shift some setups across these
+guards in both directions). **The 14:30 entry cutoff, the consequence
+the preregistration specifically flagged in advance, turned out to be
+the SMALLEST and only negative-signed term in this table** -- the real
+cost of hourly confirmation is attrition at touch/confirmation/fill,
+well before entry timing ever becomes the limiting factor.
+
+## POC family: three trials, three failures -- closed
+
+| Trial | Result | What changed |
+|---|---|---|
+| V1 | **-0.6733 R** | original design -- contaminated by a sizing pathology (`OPERATIONS.md` standing rule) |
+| V2 | **-0.4077%** | pathology removed (fixed-capital sizing); stop moved to the 5-day lookback low; still loses |
+| V3 | **-0.3176%** | confirmation timeframe moved to hourly; still loses |
+
+Three trials, each a revision proposed after watching the one before it
+fail, each measured loss smaller than the last -- **and not one of the
+three ever crossed zero.** The signal does not work under any sizing
+convention, stop definition, or confirmation timeframe tested here. Per
+`PREREGISTRATION_POC_V3.md` Section 15, this is as far as the family
+goes: **no V4. The POC family is closed.**
+
+**The transferable finding, separate from whether POC itself works**:
+POC's lasting contribution to this project is not a working strategy --
+it is the **minimum-stop-distance-floor standing rule** (`OPERATIONS.md`),
+found while diagnosing V1's own sizing pathology and now a project-wide
+requirement for every future study whose stop is pinned to a price level
+other than entry itself. Three trials of a strategy that never worked
+still produced one piece of infrastructure the rest of this project keeps.
+
 ## Hand-traced examples (Process Step 2)
 
 All 5 required shapes found on the FIRST entity scanned, `INE002A01018`
