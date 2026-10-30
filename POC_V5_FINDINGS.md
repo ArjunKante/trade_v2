@@ -139,3 +139,107 @@ gap-through-costs-more-than-the-stop-distance consequence, and the
 DEV-boundary truncation's own SQL-level safety (verified directly, not
 assumed) were each exercised and independently re-verified by hand
 before any aggregate number was computed.
+
+## DEV result: FAILS. POC family closed permanently.
+
+**V4 intraday: -0.2862% &nbsp;&nbsp;vs.&nbsp;&nbsp; V5 10-day hold: -0.6302%**
+(bootstrap mean on the real gate population, midpoint cost; CI
+`[-0.8029%, -0.4055%]`, `n_trades=3255`, `n_days=946`, both bounds
+negative). The longer hold did not let the selection edge clear costs --
+it made the result **more than twice as bad**.
+
+This refutes the structural hypothesis V5 was built to test. V4's own
+Section 15 argument (quoted in the preregistration's mandatory
+fifth-trial section) was that the selection edge found in V1-V4 was
+real but smaller than intraday friction, and that giving it more time
+to develop would let it grow past costs. It did not: giving the trade
+more time made the loss larger, not smaller. The edge was not being
+suppressed by the horizon -- there is no evidence the horizon was ever
+the constraint. Reaching for a longer hold did not uncover a
+previously-hidden edge; it replaced a small, cost-bound loss (V4) with
+a larger one (V5), while adding delivery costs, overnight gap risk, and
+a structural inflation of the entry population as the price of testing
+it.
+
+Claude's own pre-committed prediction (DEV result in [-1.5%, +0.5%],
+"meaningfully better chance than V1-V4") was numerically inside the
+stated range, but directionally wrong about the mechanism: the
+prediction's premise was that extending the horizon had a meaningfully
+better chance of clearing costs than V1-V4 did. It did not clear costs
+at all, and did worse than V4, the trial it was extending. A prediction
+landing inside its own numeric band is not the same as being right
+about the cause -- recorded here plainly rather than claimed as a
+partial win.
+
+**Gap-through-stop cost.** 173 of 3,255 gate trades (5.31%) exited
+via a gap-through stop -- the entity's next trading day opened already
+past the stop level, so the exit price was the open, not the stop.
+Total extra loss attributable to gaps beyond what the stop distance
+alone would have cost: **Rs 30,547.82**. This is the direct, measured
+price of the preregistration's own deliberate choice not to widen the
+stop for overnight risk (stated explicitly in the prereg's Overnight
+Mechanics section as a design decision, not an oversight) -- holding
+positions overnight and across weekends/holidays without a wider stop
+cost real money beyond the stop's own stated risk, on about one trade
+in nineteen.
+
+**Capital was never realistic.** Peak concurrent open positions: **43**.
+Peak deployed capital: **Rs 1,049,399.21** -- roughly **42x** the size
+of a single ~Rs 25,000 position. This is a finding in its own right,
+independent of the return result: a strategy that needs to simultaneously
+hold 43 open multi-day positions, sized against a Rs 25,000-per-trade
+risk model, was never runnable at the capital base that model implies.
+Even had the return gate passed, the capital-concurrency profile alone
+would have been a serious practicality problem.
+
+**Population check: confirmed.** V5's total entries (gate population +
+boundary-truncated) = 3,256, matching the preregistration's own
+pre-stated prediction of 3,256 (V4's 3,225 `ENTERED` + V4's own 31
+`NO_ROOM` skips, since a risk-multiple target computed from entry can
+never sit at or below entry, making `NO_ROOM` structurally unreachable
+under V5's rules -- confirmed exactly, `no_room: 0` in the real skip
+breakdown). Entry and stop are byte-identical to V4's; only the exit
+mechanics changed. This confirms the two trials are testing the single
+variable they were designed to isolate -- the horizon -- and nothing
+else.
+
+Supplementary detail (not part of the user's required structure above,
+included because it was already computed and costs nothing to report):
+exit mix across the 3,255 gate trades was `STOP: 2449, TARGET: 791,
+TIME_LIMIT: 15`; holding-period distribution (`trading_days_held`,
+entry day = day 1) was heavily front-loaded -- 1,521 trades (46.7%)
+resolved on the entry day itself, with a long thin tail out to the
+11-day maximum (20 trades hit `TIME_LIMIT`'s own day-11 ceiling exactly,
+3 more hit it in combination with the boundary); mean holding period
+2.0 days, median 2.0 days. The TIMING null's pool (3,255 entries, 500/500
+seeds) finished and was saved before the run was stopped; the SELECTION
+null was still mid-build (57-59/75 months) when stopped. Neither null
+was carried to a final percentile: DEV's own primary return condition
+had already failed decisively (both CI bounds negative, more than twice
+V4's own loss), and per the user's explicit instruction the run was
+killed rather than let finish, since no null result could change a
+verdict that had already failed on its first and most important
+condition.
+
+### POC family closure summary
+
+| Trial | Result (DEV, net of costs) | Passed both nulls? |
+|---|---|---|
+| V1 | -0.6733R | No |
+| V2 | -0.4077% | No |
+| V3 | -0.3176% | No |
+| V4 | -0.2862% | **Yes** |
+| V5 | -0.6302% | Not reached -- failed its own primary return condition before nulls mattered |
+
+Five trials, five failed-to-ship results. V4 was the only trial to pass
+both nulls, and it was still a net loss after costs -- V4 was never
+actionable on its own terms, only statistically distinguishable from
+the null. Extending V4's own horizon, the one lever V4's Section 15
+argued might still let the edge clear costs, made the result worse, not
+better. There is no remaining, previously-unexamined lever this family's
+own preregistration process has not already tried: entry definition
+(V1-V2), stop/target placement and sizing (V2-V4), and now holding
+horizon (V5).
+
+**The POC family is closed permanently, per `PREREGISTRATION_POC_V5.md`
+Section 14: no V6 under any argument.**
