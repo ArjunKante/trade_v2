@@ -252,10 +252,9 @@ if outcome in ("STOP", "TARGET"):
     -> exit here, trading_days_held = 1
 
 else:  # neither hit on the entry day
-    for day in entity's own next up to 10 trading days (prices_eod order):
-        if day > DEV_END:
-            -> DEV_BOUNDARY_TRUNCATED: close at the last trading day's own
-               close at or before DEV_END; counted SEPARATELY (Section 9)
+    # the subsequent-day query is itself scoped to trade_date <= DEV_END
+    # at the SQL level -- never fetches a sealed-window row at all
+    for day in entity's own next up to 10 trading days within [entry_date+1, DEV_END]:
         if day.low <= stop_price:
             exit_price = day.open if day.open <= stop_price else stop_price
             -> STOP (gap_through = day.open <= stop_price)
@@ -263,8 +262,12 @@ else:  # neither hit on the entry day
             exit_price = day.open if day.open >= target_price else target_price
             -> TARGET
         # neither -> continue to the next day
-    # loop exhausted all 10 days with neither hit:
+    # loop exhausted all 10 in-bounds days with neither hit:
     -> TIME_LIMIT, exit at the 10th day's own close
+    # fewer than 10 in-bounds days existed at all (DEV_END or a genuine
+    # data gap, not distinguished -- see "Windows and the DEV-boundary
+    # rule" above):
+    -> DEV_BOUNDARY_TRUNCATED, exit at the last in-bounds day's own close
 ```
 
 ## 7. KEPT FROM V4, unchanged: universe, guards, trend filter, ATR, cost-model STRUCTURE
@@ -306,13 +309,23 @@ mean/CI/null comparisons** (a policy-forced truncation is not a trade
 the strategy's own rule would have produced in live trading, and mixing
 it into the real distribution would contaminate the gate with an
 artifact of the backtest's own window edge), but its own count and
-descriptive stats are reported in full, not hidden. The identical
-treatment applies to the rare case where the entity's own archive simply
-runs out of subsequent rows before 10 trading days or before DEV_END
-(delisting, a long halt) -- flagged as a DISTINCT category
-(`INSUFFICIENT_DATA`) from the boundary case, since one is a backtest-
-window policy and the other is a real data-availability gap, and
-conflating them would hide which is which.
+descriptive stats are reported in full, not hidden.
+
+**Amendment, found while building, before any result existed**: the
+original plan was to flag a genuine mid-window data gap (delisting, a
+long halt) as a category DISTINCT from the boundary case. Dropped:
+telling the two apart requires checking whether MORE data exists for
+that entity past `DEV_END` -- which means querying past `DEV_END`, i.e.
+touching the sealed TEST window, even if only to confirm a row's
+EXISTENCE and never its price. Not worth that risk for what is almost
+always the same boundary case in practice (a genuine mid-window
+delisting within 10 trading days of a real entry is rare). **Both cases
+are now one category, `DEV_BOUNDARY_TRUNCATED`**, exit price the last
+available in-bounds day's own close, `trading_days_held` whatever was
+actually observed -- the subsequent-daily-bars query itself is scoped to
+`trade_date <= DEV_END` at the SQL level (never fetches a sealed-window
+row at all, regardless of outcome), so this category is reached exactly
+when fewer than 10 in-bounds rows exist, for whatever reason.
 
 ## 10. Nulls -- same structure as V4, rebuilt on the 10-day resolution
 
@@ -368,9 +381,9 @@ distribution, total costs.
   exit price vs. what the stop price alone would have given).
 - **Peak concurrent positions and peak deployed capital**, reported
   prominently per instruction, not as a footnote.
-- **`DEV_BOUNDARY_TRUNCATED` and `INSUFFICIENT_DATA` counts**, reported
-  separately from the gate population, with their own descriptive mean
-  return (excluded from the gate itself, per Section 9).
+- **`DEV_BOUNDARY_TRUNCATED` count**, reported separately from the gate
+  population, with its own descriptive mean return (excluded from the
+  gate itself, per Section 9).
 - **Population check against V4**: confirm 3,256 entries (V4's 3,225
   ENTERED + its own 31 `NO_ROOM`, per this document's own stated
   prediction above) -- reported as PASS/FAIL against that specific
