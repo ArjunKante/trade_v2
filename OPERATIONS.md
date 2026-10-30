@@ -1109,3 +1109,67 @@ could land arbitrarily close to?" If the latter, the minimum-floor check
 is not optional and must be stated as a frozen parameter in Section
 6/7-equivalent of that study's own pre-registration, the same place the
 maximum-risk ceiling already lives.
+
+## Momentum basket snapshot, `monitor_logs/momentum_basket_log.jsonl` -- what this is and is not
+
+**What it is: one basket, one window.** `scripts/run_momentum_basket_
+snapshot.py` freezes the top-decile `momentum_12_1` names, by the exact
+universe/selection methodology `scripts/run_momentum_backtest.py`
+already reported, on one dated snapshot (first recorded 2026-10-26,
+check-in 2027-01-26, `REBALANCE_DAYS=63` -- momentum's own tested
+holding horizon, not an arbitrary interval), before any outcome is
+known. Appended to `monitor_logs/momentum_basket_log.jsonl`, written
+once per snapshot and never edited -- a second run for a date already
+recorded refuses rather than overwriting. Each holding carries entity_id,
+symbol, isin, rank, momentum_12_1 value, RAW close price at the snapshot
+date, and liquidity tercile.
+
+**What it is NOT: not a validated result, not a backtest, not a signal.**
+When the check-in date arrives and a basket return is finally computed,
+**that is a single descriptive data point** -- the same "n=1 is
+descriptive, not a significance claim" standard this project already
+applies elsewhere (`experiments.csv`'s `mechanical_drawdown_descriptive`
+entry). One basket resolving positive or negative proves nothing on its
+own about momentum as a forward signal; it is one more trial toward
+whatever evidence eventually accumulates, not a conclusion in itself.
+Never treat a single basket's resolved return as grounds to size,
+fund, or act on a live position, and never let it substitute for the
+actual backtest/holdout evidence already on record (`experiments.csv`,
+`FINDINGS.md`).
+
+**Cost model to apply at check-in: the existing tercile model, not a
+cost-free number.** `COST_BY_TERCILE_BPS = {"high_liq": 23.0, "mid_liq":
+32.5, "low_liq": 118.0}` (round-trip, unchanged from `scripts/run_
+momentum_backtest.py`'s own calibration -- see that script's own
+comment for the Corwin-Schultz/ground-truth provenance of these three
+numbers). Each basket holding's own `liquidity_tercile` field was
+recorded specifically so the correct per-stock rate can be applied at
+check-in, not a single blended guess across the whole basket. A reported
+return that does not state which of these three numbers (or the
+cost-free gross return, labeled as such) it used should not be trusted
+at face value.
+
+**Known limitation, stated plainly, not discovered later**: the
+check-in date (2027-01-26) is calculated by stepping forward 63 NSE
+trading days from the snapshot date, skipping weekends and every
+confirmed holiday -- but `data_layer.nse_holidays`' calendar only
+covers 2016-2026 (see "Holiday calendar now reaches the runner" above);
+part of this stretch falls in 2027, where an unconfirmed day is treated
+as an ordinary trading day (`HolidayCalendarMissing`, same fail-safe
+stance `box_theory.holiday.previous_nse_trading_day` already takes).
+The calculated date lands on 2027-01-26 -- Republic Day, a fixed-date
+national holiday every year -- which the uncovered calendar could not
+catch; the true 63rd NSE trading day is very likely 2027-01-27, one day
+later. The record's own `check_in_date_calendar_uncertain` field is
+`true` for exactly this reason. **At check-in, verify the actual NSE
+trading-day count against the real calendar rather than trusting the
+recorded `check_in_date` blindly** -- recorded here so that correction
+is expected, not a surprise.
+
+**Holdout note**: reads today's price via `read_full_entity_panel_
+authorized(con, authorize_holdout=True)`, same bypass and same
+justification `scripts/run_momentum_persistence_monitor.py` already
+uses (the historical holdout is retired per `FINDINGS.md` Section 7;
+there is no slot left to spend). Logged to `data/holdout_access_log.txt`
+on every run, as an audit trail, not a charge against a resource that
+still exists.
