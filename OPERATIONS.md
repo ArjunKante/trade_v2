@@ -1277,3 +1277,39 @@ rewrite). Captured on 2026-10-31, before the 2027-01-26/27 check-in and
 before any return exists -- fetching this later, at check-in, would be
 reconstruction after the fact, not a benchmark level known at snapshot
 time.
+
+## `index_eod` now backfilled with the evening job, not a one-off script
+
+**The staleness above was a scheduling gap, not a broken script.**
+`src/data_layer/index_nse.py` / `scripts/backfill_nifty_index.py` worked
+correctly when run -- it just had no recurring job of its own, unlike
+`prices_eod` (`fibo_morning`/`fibo_evening`) or the options-depth
+collector. Written and run once, 2026-09-23; never run again until
+2026-10-31, by which point it was over a month stale.
+
+**Fixed by adding the backfill to `scripts/fibo_evening.py`'s own run,
+not a new scheduled task** -- the reasoning: `index_eod` and `prices_eod`
+need the same fresh-data window (NIFTY50's close for the same trading
+day the bhavcopy fetch just confirmed), so piggybacking on the job that
+already runs nightly and already resolves that date (`data_date`) is
+simpler and more reliable than standing up a second cron/Task Scheduler
+entry that could itself drift out of sync. Inserted right after
+`data_date` is resolved, BEFORE the watchlist-idempotency early return
+(same placement principle as the options-depth health line already
+there -- a maintenance/health step should fire on every run, not only
+on runs that go on to compute a new watchlist). Calls `backfill_index_
+range(con, date(2016,1,1), data_date, RAW_INDEX_DIR)` every run -- the
+same unbounded-start convention `backfill_nifty_index.py` already uses,
+cheap even run nightly because `fetch_log` makes every already-covered
+date an instant skip (no network call), and bounded to `data_date`
+(never `date.today()`) so this job never reaches for an index date ahead
+of the equity data it just confirmed exists.
+
+**Logs one line every run, the same way the options-depth health check
+does** (`scheduler.log`, via `make_logger()`): `"NIFTY50 index backfill:
+N new date(s) loaded, M no_data this run; index_eod {has|MISSING} a row
+for <data_date>."`, plus a loud `WARNING` line if `index_eod` still has
+no row for `data_date` after the backfill (NSE's index file not yet
+published, or a genuine fetch failure) -- visible in `scheduler.log`
+going forward instead of silently drifting stale again, unnoticed, the
+way it did for five weeks before this was added.

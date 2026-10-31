@@ -59,12 +59,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.adjustment import materialize_adjustment_factors
 from data_layer.db import get_connection
+from data_layer.index_nse import backfill_index_range
 from data_layer.nse_holidays import HolidayCalendarMissing, is_nse_holiday
 from data_layer.prices_nse import load_bhavcopy_to_duckdb
 from data_layer.staleness import assert_data_current, latest_trade_date, StaleDataError
 
 from fibo_live.clock import detect_run_mode
-from fibo_live.config import EVENTS_LOG, RAW_PRICES_DIR, TOP_N, WAREHOUSE_DB
+from fibo_live.config import EVENTS_LOG, RAW_INDEX_DIR, RAW_PRICES_DIR, TOP_N, WAREHOUSE_DB
 from fibo_live.eventlog import append_event, read_events
 from fibo_live.git_sync import pull_before_appending, sync_events_log_to_git
 from fibo_live.notify import already_notified, record_notification, send_email
@@ -356,6 +357,29 @@ def main() -> None:
                                 f"{MAX_LOOKBACK_DAYS} days of {requested_date}.")
         con.close()
         return
+
+    # NIFTY50 index backfill (index_eod) -- runs here, with the evening
+    # job, because both need the same fresh-data window: data_date, the
+    # trading day the bhavcopy fetch above just confirmed has real
+    # equity data. index_eod had been run exactly once, on 2026-09-23,
+    # and never scheduled since -- found stale by over a month before
+    # this was added (OPERATIONS.md). backfill_index_range is idempotent
+    # per (source, trade_date) via fetch_log, so starting from
+    # 2016-01-01 every run costs nothing beyond a handful of local DB
+    # lookups once history is already cached -- same unbounded-start
+    # convention scripts/backfill_nifty_index.py already uses, just
+    # bounded to data_date instead of dt.date.today() so this job never
+    # reaches for index dates ahead of the equity data it just confirmed.
+    index_stats = backfill_index_range(con, dt.date(2016, 1, 1), data_date, RAW_INDEX_DIR)
+    index_has_data_date = con.execute(
+        "SELECT COUNT(*) FROM index_eod WHERE index_name = 'NIFTY50' AND trade_date = ?", [data_date]
+    ).fetchone()[0] > 0
+    log(f"NIFTY50 index backfill: {index_stats['ok']} new date(s) loaded, {index_stats['no_data']} "
+        f"no_data this run; index_eod {'has' if index_has_data_date else 'MISSING'} a row for {data_date}.")
+    if not index_has_data_date:
+        log(f"WARNING: index_eod has no NIFTY50 row for {data_date} even though prices_eod does -- "
+            f"NSE's index-close file may not be published yet, or the fetch failed as no_data. "
+            f"Anything reading index_eod for {data_date} right now would see stale/missing data.")
 
     target_trade_date = next_trading_day(con, data_date, known_through=requested_date)
     # Detected once, from the clock (src/fibo_live/clock.py), against the

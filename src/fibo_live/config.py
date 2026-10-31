@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 WAREHOUSE_DB = ROOT / "data" / "warehouse.duckdb"
 INTRADAY_DB = ROOT / "data" / "fibo_intraday.duckdb"  # unused here (live path never touches the historical archive)
 RAW_PRICES_DIR = ROOT / "data" / "raw" / "prices"
+RAW_INDEX_DIR = ROOT / "data" / "raw" / "index"  # NIFTY50 daily-close cache, src/data_layer/index_nse.py
 
 PAPER_VERSION = "v1"
 LIVE_DIR = ROOT / "data" / "fibo_live" / PAPER_VERSION
