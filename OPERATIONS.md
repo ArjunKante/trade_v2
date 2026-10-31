@@ -1253,3 +1253,27 @@ into `data_layer.nse_holidays` and this date re-verified before
 check-in is acted on**. `check_in_date_calendar_uncertain: true` is the
 machine-readable flag; `check_in_date_note` is why, so a reader of the
 record alone -- without this doc -- still gets the full warning.
+
+**Benchmark correction, appended 2026-10-31 (line 2 of the file, the
+original line 1 untouched)**: the original snapshot captured no
+benchmark level -- `index_eod` was stale (last date 2026-09-18) at write
+time. `index_eod` was backfilled the same day via `scripts/
+backfill_nifty_index.py` (the project's existing, previously-unscheduled
+NSE index-close ingestion path, `src/data_layer/index_nse.py` -- it has
+no cron/dead-man's-switch of its own, unlike `fibo_morning`/`fibo_
+evening`; its own `fetch_log` had not been touched since the module was
+written on 2026-09-23, which is why the table was stale in the first
+place). The backfill is now current through 2026-10-30 (28 new dates
+`ok`, one `no_data` on 2026-10-20 -- a real NSE holiday, not a fetch
+failure). A new JSON line, `schema: "momentum_basket_correction_v1"`,
+was appended with NIFTY50's OHLC for 2026-10-26 (close **22753.20**),
+referencing the original row by its own natural key
+(`corrects_snapshot_date: "2026-10-26"`, `corrects_recorded_at`) rather
+than editing it -- the same append-a-new-row-referencing-the-original
+convention `src/fibo_live/eventlog.py`'s own correction events use
+(`data_correction`/`watchlist_run_correction` in `events.jsonl`:
+a new row with a foreign key back to the thing being corrected, never a
+rewrite). Captured on 2026-10-31, before the 2027-01-26/27 check-in and
+before any return exists -- fetching this later, at check-in, would be
+reconstruction after the fact, not a benchmark level known at snapshot
+time.
