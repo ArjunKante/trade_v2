@@ -155,6 +155,80 @@ re-verified by hand before any aggregate number was computed.
 
 ## DEV result: FAILS. No edge -- trial 1 of a new family.
 
+**Three findings recorded prominently, before the detail below, because
+each one changes how this result should be read -- not just what the
+number was.**
+
+### Finding 1: the cost hypothesis was wrong here
+
+Claude's pre-committed prediction was that intraday friction -- the same
+force that has defeated every prior sweep-and-reclaim or POC-family
+variant in this project -- would be what consumed the edge again here.
+**It was not.** The three-order scaled-exit structure cost Rs 10,095.30
+total across all 8,131 trades -- a mean of **Rs 1.24/trade, 0.0050% of
+position value**. That is negligible next to the gap between -0.2841%
+and the zero line the gate needed. **77% of trades never even reached
+the half-target level** (`STOP_NO_HALF` + `TIME_EXIT_FULL`, Section
+below) -- the entry fired, and then nothing happened, or the stop hit
+immediately. This failed on **signal follow-through**, not friction.
+The verdict (DEV fails) matches what was predicted; the MECHANISM the
+prediction assumed was wrong. This is the first intraday study in this
+project's history where the failure is not primarily cost-driven -- V1-
+V5's own POC-family losses, and V4's own sweep-and-reclaim loss
+specifically, were each substantially a cost story (fixed fees, spread,
+or in V5's case delivery STT and gap-through slippage, eating a gross
+return close to zero or a modest real edge). Study A's own gross-vs-net
+gap is small; the signal itself simply does not produce enough
+follow-through to be profitable before or after costs. Recorded
+plainly because it changes what a future revision of this entry would
+need to fix: not a cheaper exit structure, but a better filter for
+WHICH sweeps actually continue.
+
+### Finding 2: the confluence filter was largely definitional, not a genuine multi-timeframe-agreement signal
+
+**78.6% of all zones (6,389 of 8,131 trades) clustered on the 1-day and
+1-week lows together** (Section below, confluence breakdown). This is
+not a coincidence worth celebrating as "multi-timeframe agreement" --
+**a weekly low is, by construction, usually one of that week's own
+daily lows.** The 1-week window is only 5 trading days; its own minimum
+is frequently SET by the previous day, or by a day inside the same
+short window the 1-day level is drawn from. The two levels were never
+independent measurements of "where liquidity sits" at two genuinely
+different time horizons -- they overlap by the arithmetic of how a
+rolling 5-day minimum is built from daily data in the first place. The
+filter therefore selected far more days than the hypothesis intended
+(as the trade-count miss below shows directly: 8,131 actual vs. "under
+1,000" predicted), and was not measuring the thing the hypothesis was
+actually about -- genuine agreement BETWEEN windows that don't trivially
+share data. **Any future version of this hypothesis would need
+non-overlapping timeframes** (for example, a window that excludes the
+most recent N days already covered by the shorter window) for
+"confluence" to mean what it was supposed to mean, rather than measuring
+how often a 5-day minimum happens to equal yesterday's low.
+
+### Finding 3: a real bug in the peak-capital calculation, found and fixed before being reported
+
+The first run of `_peak_concurrent_and_capital` produced
+`peak_concurrent_positions=6` alongside `peak_deployed_capital_rs=
+1,124,725` -- an internally impossible pair (6 positions at ~Rs 25,000
+each cannot deploy over Rs 1.1M; the capital figure on its own implies
+roughly 45 concurrent positions, not 6). The bug: the position-count
+event sweep recorded a half-exited trade's own exit TWICE (once at the
+half exit, once at the final exit) as a `-1`, when a half-exited trade
+is still exactly ONE open position -- not two, and not zero -- until
+its OWN final exit closes it. That extra `-1` per half-exited trade
+drifted the running counter negative over the course of the run,
+silently understating the true peak by roughly **7x** (6 reported vs.
+46 actual). Caught by the pair's own internal inconsistency before it
+was ever reported to the user, fixed in `scripts/liquidity_a_dev_run.py`
+by splitting position-count and capital into two separate event sweeps,
+and recomputed directly from the already-saved `dev_backtest.pkl` trade
+list rather than rerunning the full 5-hour pipeline. **The figure
+actually reported below is the corrected one: 46 peak concurrent
+positions, Rs 1,124,725.31 peak deployed capital.** Had this not been
+caught, the findings would have understated how undeployable this
+strategy is at its own stated capital by a factor of seven.
+
 **Mean net return: -0.2841%** (percentage of position value), 97.5%
 day-clustered bootstrap CI **[-0.3535%, -0.2090%]** -- both bounds
 negative. `n_trades=8131`, `n_distinct_entry_days=1310`, median
