@@ -1,0 +1,66 @@
+# Stratified sample for SPREAD_ESTIMATOR_VALIDATION.md -- built by
+# scripts/build_spread_validation_sample.py, read-only against the
+# warehouse, NO live data collected to produce this list. Consumed by
+# src/spread_monitor/config.py::load_symbols(path=...), same format as
+# config/spread_monitor_symbols.txt (one symbol per line, no -EQ suffix).
+#
+# 18 EQ names across 3 turnover bands (band=1-50/51-100/101-200,
+# 6 per band: 2 highest-vol, 2 lowest-vol, 2 price-extreme within band)
+# plus 6 BE/T2T names (turnover-percentile-spread within the active
+# BE population). See SPREAD_ESTIMATOR_VALIDATION.md Section on SAMPLE.
+#
+# Band 1-50:
+KOTAKBANK
+#   entity_id=INE237A01028 rank=16 close=440.75 vol=163.7% reason=high_vol
+MARUTI
+#   entity_id=INE585B01010 rank=24 close=11220.00 vol=23.9% reason=price_extreme
+IDEA
+#   entity_id=INE669E01016 rank=28 close=11.95 vol=44.5% reason=price_extreme
+SUNPHARMA
+#   entity_id=INE044A01036 rank=37 close=1740.00 vol=19.3% reason=low_vol
+MCX
+#   entity_id=INE745G01035 rank=40 close=3111.80 vol=164.8% reason=high_vol
+NTPC
+#   entity_id=INE733E01010 rank=44 close=300.00 vol=19.3% reason=low_vol
+#
+# Band 101-200:
+POWERINDIA
+#   entity_id=INE07Y701011 rank=102 close=26850.00 vol=44.1% reason=price_extreme
+YESBANK
+#   entity_id=INE528G01019 rank=106 close=15.86 vol=32.3% reason=price_extreme
+BRITANNIA
+#   entity_id=INE216A01022 rank=119 close=4580.00 vol=19.9% reason=low_vol
+HINDCOPPER
+#   entity_id=INE531E01026 rank=139 close=407.55 vol=53.2% reason=high_vol
+MARICO
+#   entity_id=INE196A01026 rank=150 close=775.15 vol=18.6% reason=low_vol
+APOLLO
+#   entity_id=INE713T01010 rank=192 close=410.90 vol=54.9% reason=high_vol
+#
+# Band 51-100:
+ULTRACEMCO
+#   entity_id=INE481G01011 rank=52 close=11180.00 vol=23.5% reason=price_extreme
+CANBK
+#   entity_id=INE476A01014 rank=56 close=116.71 vol=29.2% reason=price_extreme
+APOLLOHOSP
+#   entity_id=INE437A01024 rank=64 close=7844.00 vol=20.5% reason=low_vol
+ANGELONE
+#   entity_id=INE732I01013 rank=71 close=282.60 vol=234.9% reason=high_vol
+POLICYBZR
+#   entity_id=INE417T01026 rank=74 close=1023.00 vol=57.7% reason=high_vol
+LUPIN
+#   entity_id=INE326A01037 rank=99 close=1959.90 vol=19.6% reason=low_vol
+#
+# BE / T2T (trade-to-trade):
+BNALTD
+#   entity_id=INE489D01011 close=360.05 median_turnover=54525 active_days=48 reason=be_turnover_percentile_spread
+ALKALI
+#   entity_id=INE773I01017 close=77.63 median_turnover=336977 active_days=52 reason=be_turnover_percentile_spread
+SUPTANERY
+#   entity_id=INE460D01038 close=7.28 median_turnover=887006 active_days=40 reason=be_turnover_percentile_spread
+KALYANIFRG
+#   entity_id=INE314G01014 close=756.15 median_turnover=1991675 active_days=35 reason=be_turnover_percentile_spread
+AARTISURF
+#   entity_id=INE09EO01013 close=453.45 median_turnover=5364486 active_days=48 reason=be_turnover_percentile_spread
+BIRLACABLE
+#   entity_id=INE800A01015 close=376.55 median_turnover=27886693 active_days=32 reason=be_turnover_percentile_spread
