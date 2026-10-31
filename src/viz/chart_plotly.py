@@ -22,7 +22,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from viz.overlay import Overlay
+from viz.overlay import Band, Level, Overlay
 
 UP_COLOR = "#2a9d4a"
 DOWN_COLOR = "#d6392b"
@@ -99,6 +99,25 @@ def _bucket_fraction_index(starts: np.ndarray, ends: np.ndarray, target_ts: pd.T
         return float(i)
     frac = (target64 - starts[i]).astype("timedelta64[s]").astype(float) / width
     return i - 0.5 + min(max(frac, 0.0), 1.0)
+
+
+def _price_marker_style(pm) -> tuple[str, str]:
+    """(symbol, color) for one PriceMarker, direction-aware (see
+    `PriceMarker.direction`'s own docstring): a LONG entry (buy) and a
+    SHORT exit (buy-to-cover) both render as the same "buying" shape
+    (triangle-up, bright); a LONG exit (sell) and a SHORT entry (sell-
+    to-open) both render as the same "selling" shape (triangle-down,
+    dark) -- so the marker shape always tracks which side of the market
+    the order was on, not just whether it was this trade's first or
+    last fill."""
+    is_short = pm.direction == "short"
+    is_buy_action = (pm.kind == "entry") != is_short  # XOR: long-entry or short-exit = buying
+    symbol = "triangle-up" if is_buy_action else "triangle-down"
+    if is_buy_action:
+        color = "teal" if is_short else "blue"
+    else:
+        color = "darkorange" if is_short else "black"
+    return symbol, color
 
 
 def build_plotly_chart(
@@ -184,8 +203,7 @@ def build_plotly_chart(
             idx = _nearest_index(ts_arr, pm.ts)
             if idx is None:
                 continue
-            symbol = "triangle-up" if pm.kind == "entry" else "triangle-down"
-            color = "blue" if pm.kind == "entry" else "black"
+            symbol, color = _price_marker_style(pm)
             label = pm.label or f"{pm.kind.upper()} {pm.price:.2f}"
             fig.add_trace(
                 go.Scatter(
@@ -328,8 +346,7 @@ def build_hourly_chart(
             xpos = _bucket_fraction_index(starts, ends, pm.ts)
             if xpos is None:
                 continue
-            symbol = "triangle-up" if pm.kind == "entry" else "triangle-down"
-            color = "blue" if pm.kind == "entry" else "black"
+            symbol, color = _price_marker_style(pm)
             label = pm.label or f"{pm.kind.upper()} {pm.price:.2f}"
             fig.add_trace(
                 go.Scatter(
@@ -386,17 +403,22 @@ def build_hourly_chart(
 def build_daily_chart(
     daily_bars: pd.DataFrame, entity_id: str, trade_date: dt.date, scale_note: str,
     poc_price_adjusted: float | None = None, prev_high_adjusted: float | None = None,
+    levels: list[Level] | None = None, bands: list[Band] | None = None,
 ) -> go.Figure:
     """Daily-candle view for seeing the context a daily-timeframe
-    condition (the 50-day trend filter, in particular) actually used --
-    invisible on a 1-minute chart. `daily_bars`: `viz.data.
+    condition (the 50-day trend filter, in particular; or, for the
+    liquidity studies, the multi-month level construction) actually
+    used -- invisible on a 1-minute chart. `daily_bars`: `viz.data.
     fetch_daily_bars`'s own output (`trade_date`, `adjusted_open/high/
     low/close`, `sma`), ENTITY-ADJUSTED scale throughout. `poc_price_
-    adjusted`/`prev_high_adjusted` must ALREADY be converted to this
-    same adjusted scale (`viz.data.adjust_raw_level_for_daily_chart`) --
-    this function does not convert anything itself, so a caller cannot
-    accidentally pass a RAW-scale level through unconverted and have it
-    silently plot at the wrong level."""
+    adjusted`/`prev_high_adjusted` (POC's own two-level convention) and
+    the generic `levels`/`bands` lists (any study) must ALL already be
+    converted to this same adjusted scale (`viz.data.
+    adjust_raw_level_for_daily_chart`) -- this function does not convert
+    anything itself, so a caller cannot accidentally pass a RAW-scale
+    level through unconverted and have it silently plot at the wrong
+    level. The two legacy params and the generic lists are additive, not
+    exclusive -- a caller may use either or both."""
     if daily_bars.empty:
         raise ValueError(f"no daily bars to plot for {entity_id} ending {trade_date}")
 
@@ -424,6 +446,13 @@ def build_daily_chart(
         fig.add_hline(y=prev_high_adjusted, line_color=_color("tab:purple"), line_dash="dash", line_width=1.3,
                        annotation_text=f"PREV_HIGH {prev_high_adjusted:.2f}", annotation_position="right",
                        annotation_font_color=_color("tab:purple"), annotation_font_size=10)
+    for band in (bands or []):
+        fig.add_hrect(y0=band.low, y1=band.high, fillcolor=_color(band.color), opacity=band.alpha, line_width=0)
+    for lvl in (levels or []):
+        dash = "dash" if lvl.linestyle in ("--", "dashed", "dash") else "dot"
+        fig.add_hline(y=lvl.price, line_color=_color(lvl.color), line_dash=dash, line_width=1.3,
+                       annotation_text=f"{lvl.label} {lvl.price:.2f}", annotation_position="right",
+                       annotation_font_color=_color(lvl.color), annotation_font_size=10)
 
     trade_rows = bars.index[dates.dt.date == trade_date]
     if len(trade_rows):

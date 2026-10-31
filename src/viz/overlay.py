@@ -45,11 +45,22 @@ class VMarker:
 @dataclass
 class PriceMarker:
     """A marker on the price axis at (ts, price) -- an entry or exit
-    fill, drawn as a triangle pointing in the trade's own direction."""
+    fill, drawn as a triangle pointing in the trade's own direction.
+
+    `direction` defaults to "long" so every existing adapter (all
+    long-only so far) renders exactly as before. For a SHORT trade
+    (`direction="short"`), the renderer flips which `kind` points up vs
+    down: a short's "entry" is a SELL (opening the position) so it
+    renders like a long's "exit" (down, dark); a short's "exit" is a BUY
+    (covering) so it renders like a long's "entry" (up, bright) -- this
+    is deliberate, so a short trade reads as structurally different from
+    a long one at a glance, not just as a long trade sitting upside down
+    at different price levels."""
     ts: pd.Timestamp
     price: float
     kind: str  # "entry" | "exit"
     label: str = ""
+    direction: str = "long"  # "long" | "short"
 
 
 @dataclass

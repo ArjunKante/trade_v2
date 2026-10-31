@@ -33,6 +33,7 @@ from viz.chart_plotly import build_daily_chart, build_hourly_chart, build_plotly
 from viz.data import (
     adjust_raw_level_for_daily_chart, fetch_daily_bars, fetch_raw_hourly_bars, fetch_raw_multi_day_bars,
 )
+from viz.overlay import Band, Level
 
 ROOT = Path(__file__).resolve().parents[1]
 WAREHOUSE_DB = ROOT / "data" / "warehouse.duckdb"
@@ -220,6 +221,126 @@ def _poc_v3_dev_bounds() -> tuple[dt.date, dt.date]:
     return DEV_START, DEV_END
 
 
+# ---------------------------------------------------------------------
+# Liquidity Study A -- new family trial 1, long, LOW-side confluence
+# (PREREGISTRATION_LIQUIDITY_A.md). Not part of the POC family.
+# ---------------------------------------------------------------------
+
+@st.cache_data
+def _load_liquidity_a_trades() -> pd.DataFrame:
+    with open(ROOT / "data" / "liquidity" / "a" / "dev_backtest.pkl", "rb") as f:
+        res = pickle.load(f)
+    df = res["trades"].copy()
+    df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
+    return df
+
+
+@st.cache_data
+def _load_liquidity_a_verdict() -> dict:
+    with open(ROOT / "data" / "liquidity" / "a" / "dev_inference.pkl", "rb") as f:
+        inf = pickle.load(f)
+    return {
+        "headline": "CLOSED -- DEV FAILS (NO EDGE) -- Liquidity family trial 1 of 2 (long side)",
+        "mean_label": "Mean net return",
+        "mean_display": f"{inf['mean_net_r']*100:+.4f}%",
+        "ci_display": f"[{inf['ci_low']*100:+.4f}%, {inf['ci_high']*100:+.4f}%]",
+        "n_trades": inf["n_trades"], "n_days": inf["n_days"],
+        "summary": (
+            "**Percentage of position value (qty x entry_price) -- not R.** New family, trial 1: "
+            "multi-timeframe LOW-level confluence (3-month/1-week/1-day, 0.5xATR tolerance) feeding "
+            "`poc.v4`'s own sweep-and-reclaim entry, with a SCALED exit (half the position at "
+            "entry+1.5R, remainder at entry+3.0R). Mean net return is negative with the CI excluding "
+            "zero on the negative side -- the gate's first condition already fails. **Both nulls "
+            "passed at the 100th percentile** (the entry carries real, non-random selection value) "
+            "**but 78.6% of zones clustered on the 1-day+1-week LOW pair alone** -- largely "
+            "definitional (a weekly low is usually one of that week's own daily lows), not genuine "
+            "multi-timeframe agreement. Full detail: LIQUIDITY_A_FINDINGS.md."
+        ),
+        "findings_doc": "LIQUIDITY_A_FINDINGS.md",
+    }
+
+
+@st.cache_data
+def _liquidity_a_adapter_cached(_warehouse_con, _intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    from viz.liquidity_a_adapter import build_liquidity_a_overlay
+    return build_liquidity_a_overlay(
+        _warehouse_con, _intraday_con, entity_id, trade_date,
+        jump_dates_by_entity=_poc_jump_dates(), rank_lookup=_poc_rank_lookup(),
+    )
+
+
+def _liquidity_a_adapter(warehouse_con, intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    return _liquidity_a_adapter_cached(warehouse_con, intraday_con, entity_id, trade_date)
+
+
+def _liquidity_a_dev_bounds() -> tuple[dt.date, dt.date]:
+    from liquidity.a import DEV_END, DEV_START
+    return DEV_START, DEV_END
+
+
+# ---------------------------------------------------------------------
+# Liquidity Study B -- trial 2 of the same family, SHORT, HIGH-side
+# confluence, exact mirror of Study A (PREREGISTRATION_LIQUIDITY_B.md).
+# NOT YET CLOSED -- the user is reviewing trades in this browser before
+# confirming closure; the verdict headline below says so explicitly and
+# must not be changed to "CLOSED" until that confirmation happens.
+# ---------------------------------------------------------------------
+
+@st.cache_data
+def _load_liquidity_b_trades() -> pd.DataFrame:
+    with open(ROOT / "data" / "liquidity" / "b" / "dev_backtest.pkl", "rb") as f:
+        res = pickle.load(f)
+    df = res["trades"].copy()
+    df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
+    return df
+
+
+@st.cache_data
+def _load_liquidity_b_verdict() -> dict:
+    with open(ROOT / "data" / "liquidity" / "b" / "dev_inference.pkl", "rb") as f:
+        inf = pickle.load(f)
+    return {
+        "headline": (
+            "DEV FAILS (NO EDGE) -- Liquidity family trial 2 of 2 (short side, exact mirror of Study A) "
+            "-- CLOSURE PENDING USER REVIEW, not yet finalized"
+        ),
+        "mean_label": "Mean net return",
+        "mean_display": f"{inf['mean_net_r']*100:+.4f}%",
+        "ci_display": f"[{inf['ci_low']*100:+.4f}%, {inf['ci_high']*100:+.4f}%]",
+        "n_trades": inf["n_trades"], "n_days": inf["n_days"],
+        "summary": (
+            "**Percentage of position value -- not R. SHORT side, exact mirror of Study A** (same six "
+            "levels, same 0.5xATR tolerance, same 1.5R/3.0R scaled exit), deliberately preserving Study "
+            "A's own confluence-overlap flaw for a clean direction comparison. Mean net return is "
+            "negative with the CI excluding zero -- same gate condition fails as Study A, and both "
+            "nulls again pass at the 100th percentile. **The loss is well under half Study A's own "
+            "size** (better signal follow-through than predicted going in), and the confluence overlap "
+            "recurs at a different rate (65.6% pure 1d+1w vs. Study A's 78.6%), traced to the DEV "
+            "window's own upward price drift. Full detail: LIQUIDITY_B_FINDINGS.md. **This study has "
+            "not been closed yet -- pending the user's own review of trades in this browser.**"
+        ),
+        "findings_doc": "LIQUIDITY_B_FINDINGS.md",
+    }
+
+
+@st.cache_data
+def _liquidity_b_adapter_cached(_warehouse_con, _intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    from viz.liquidity_b_adapter import build_liquidity_b_overlay
+    return build_liquidity_b_overlay(
+        _warehouse_con, _intraday_con, entity_id, trade_date,
+        jump_dates_by_entity=_poc_jump_dates(), rank_lookup=_poc_rank_lookup(),
+    )
+
+
+def _liquidity_b_adapter(warehouse_con, intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    return _liquidity_b_adapter_cached(warehouse_con, intraday_con, entity_id, trade_date)
+
+
+def _liquidity_b_dev_bounds() -> tuple[dt.date, dt.date]:
+    from liquidity.b import DEV_END, DEV_START
+    return DEV_START, DEV_END
+
+
 @st.cache_data
 def _poc_jump_dates() -> dict:
     """Whole-warehouse scan, identical for every (entity, date) call --
@@ -305,6 +426,29 @@ STUDIES: dict[str, dict] = {
         "net_r_col": "net_return_pct",
         "lookback_days": 5,  # PREREGISTRATION_POC_V3.md -- same window as V1/V2
         "default_chart_mode": "1-hour (POC window)",  # the timeframe V3's own strategy actually traded on
+    },
+    "liquidity_a": {
+        "label": "Liquidity Study A -- LONG, LOW-side confluence",
+        "available": True,
+        "trades_loader": _load_liquidity_a_trades,
+        "verdict_loader": _load_liquidity_a_verdict,
+        "adapter": _liquidity_a_adapter,
+        "dev_bounds": _liquidity_a_dev_bounds,
+        "outcome_col": "outcome",
+        "net_r_col": "net_return_pct",
+        "lookback_days": 0,  # levels come from the full daily-OHLC panel (build_daily_ohlc_panel), not
+                              # an intraday lookback window the way POC's own POC_PRICE/PREV_HIGH do
+    },
+    "liquidity_b": {
+        "label": "Liquidity Study B -- SHORT, HIGH-side confluence",
+        "available": True,
+        "trades_loader": _load_liquidity_b_trades,
+        "verdict_loader": _load_liquidity_b_verdict,
+        "adapter": _liquidity_b_adapter,
+        "dev_bounds": _liquidity_b_dev_bounds,
+        "outcome_col": "outcome",
+        "net_r_col": "net_return_pct",
+        "lookback_days": 0,
     },
     "fibo": {
         "label": "Fibo (ORB + golden zone)",
@@ -539,10 +683,27 @@ with col_chart:
             if detail.get("prev_high") is not None:
                 prev_high_adj = adjust_raw_level_for_daily_chart(
                     warehouse_con, entity_id, trade_date, detail["prev_high"])
+
+            # Generic hook any adapter may populate (currently: liquidity_a/b's
+            # own six levels + confluence zone) -- additive to POC's own two
+            # hardcoded levels above, never required.
+            levels_for_daily = [
+                Level(adjust_raw_level_for_daily_chart(warehouse_con, entity_id, trade_date, raw_price),
+                      lbl, color=color, linestyle="dash")
+                for lbl, raw_price, color in detail.get("daily_levels", [])
+            ]
+            bands_for_daily = []
+            if "daily_zone" in detail:
+                lo_raw, hi_raw, zlabel = detail["daily_zone"]
+                lo_adj = adjust_raw_level_for_daily_chart(warehouse_con, entity_id, trade_date, lo_raw)
+                hi_adj = adjust_raw_level_for_daily_chart(warehouse_con, entity_id, trade_date, hi_raw)
+                bands_for_daily.append(Band(lo_adj, hi_adj, zlabel, color="gold", alpha=0.18))
+
             try:
                 fig = build_daily_chart(
                     daily["bars"], entity_id, trade_date, daily["scale_note"],
                     poc_price_adjusted=poc_adj, prev_high_adjusted=prev_high_adj,
+                    levels=levels_for_daily or None, bands=bands_for_daily or None,
                 )
                 st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
             except ValueError as e:
