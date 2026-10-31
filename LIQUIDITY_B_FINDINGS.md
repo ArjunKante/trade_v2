@@ -335,26 +335,137 @@ year, still negative) to -0.17% (2022, the worst) -- no year ever
 crossed zero. **By band**: all three rank bands lost similarly (-0.09%
 to -0.14%), no band showing a materially different result.
 
-### Base rate, updated
+## Post-DEV diagnostics, requested by the user after reviewing trades in the research browser
 
-Fourteen prior strategies in this project have now closed with no edge
-(the thirteen implied by Study A's own updated count, plus this one).
-The liquidity-confluence family has now failed on BOTH sides it was
-tested on, with the same root cause each time (real, non-random
-selection value from the sweep-and-reclaim entry; insufficient
-follow-through to clear costs) and the same specific definitional flaw
-(1-day/1-week overlap by construction) recurring on both the LOW and
-HIGH side, at different but comparably material rates.
+Before closing Study B, the user built a research-browser view for both
+studies (overlaying all six levels, the confluence zone, sweep/reclaim/
+entry/exit markers, and -- for Study B -- a direction-aware marker
+convention so a short trade reads as structurally different from a long
+one, not an upside-down long) and inspected individual trades directly.
+Two hypotheses formed from that visual inspection were then tested
+against the full real trade population of BOTH studies (`scripts/
+liquidity_ab_diagnostics.py`, read-only, recomputes each trade's own
+level values live from each study's own unchanged pure functions --
+no rule changed, no study reopened). **Both are recorded here as USER
+OBSERVATIONS FROM CHARTS, TESTED AND NOT SUPPORTED** -- real, specific,
+and worth keeping on record precisely because they looked plausible on a
+chart and did not hold up against the full population.
 
-**Study B (short only) is closed: NO EDGE on DEV, TEST not read.** Per
-`PREREGISTRATION_LIQUIDITY_B.md` Section 14, these exact parameters are
-not retried at other values. A corrected, non-nesting-timeframe
-confluence definition (Study C) remains a separate, not-yet-undertaken
-trial of this same family.
+### Diagnostic 1 -- degenerate confluence (USER OBSERVATION FROM CHARTS, TESTED AND NOT SUPPORTED)
+
+Looking at individual charts (e.g. `INE019A01020`, 2020-03-23 -- Study
+A's own real trade, `confluence_members=('1w','3m')`, both raw LOW
+levels at exactly **151.7000**, 0.0000% apart) raised the question of
+whether "confluence" was often not two independent timeframes agreeing
+at all, but two windows collapsing onto the literal same number --
+degenerate agreement, not genuine agreement, and whether that degenerate
+subset performed differently from trades where the levels genuinely
+differed while still clustering within 0.5xATR.
+
+**Tested against all 8,131 + 9,222 = 17,353 real DEV trades across both
+studies** (a trade flagged degenerate if ANY pair among its own
+`confluence_members` sits within 0.1% of each other, recomputed live
+from each study's own level lookup):
+
+| | Study A (long) | Study B (short) |
+|---|---|---|
+| Degenerate trades | 5,275 / 8,131 (**64.9%**) | 6,582 / 9,222 (**71.4%**) |
+| Mean net return, degenerate | -0.2414% | -0.1233% |
+| Mean net return, non-degenerate | -0.3630% | -0.1159% |
+| Win rate, degenerate / non-degenerate | 37.7% / 32.5% | 44.3% / 44.7% |
+
+Degenerate collapse is overwhelmingly the `1d+1w` pair (4,833 of
+Study A's 5,275; 5,709 of Study B's 6,582), with the remainder
+`1w+3m` (`1d+3m` never collapses alone, the same structural fact
+already established for the un-degenerate population -- `1w` is always
+present in any cluster larger than 2).
+
+**Not supported, in the direction that matters**: in Study A, degenerate
+trades lost LESS (-0.2414%) than non-degenerate ones (-0.3630%) -- the
+opposite of what the hypothesis would predict if genuine, non-degenerate
+multi-timeframe agreement carried the real signal. In Study B the two
+are within 0.01% of each other, i.e. no difference. **The hypothesis
+that multi-timeframe agreement carries signal is not supported: where
+the timeframes genuinely agreed independently (non-degenerate) rather
+than collapsing onto the same number, results were no better** -- worse,
+in Study A's own case. The user's own named example (`INE019A01020`,
+2020-03-23) is confirmed degenerate exactly as read off the chart;
+checking it against the full population is what shows the pattern it
+suggested does not generalize.
+
+### Diagnostic 2 -- turnover relationship (USER OBSERVATION FROM CHARTS, TESTED AND NOT SUPPORTED)
+
+Both studies' own Section 11 "by band" breakdown (3 bands: 1-50/51-100/
+101-200) showed no band standing out, but a 3-bucket split is coarse --
+the user asked whether a finer split would reveal a liquidity gradient
+the band split was too coarse to show.
+
+**Tested by splitting each study's own real trades into quintiles by
+the stock's own median daily turnover in that trade's own ranking year**
+(`prices_eod.turnover`, the exact quantity `fibo.universe.
+reconstitute_annually` already ranks `rank`/`band` from -- not a
+separately-invented definition; 278 Study A and 211 Study B trades, all
+in the 2016 stub year with no prior-year turnover basis, excluded):
+
+| Study A | Q1 (lowest) | Q2 | Q3 | Q4 | Q5 (highest) |
+|---|---|---|---|---|---|
+| n | 1,576 | 1,566 | 1,574 | 1,567 | 1,570 |
+| Mean net return | -0.3149% | -0.3195% | -0.2305% | -0.2901% | -0.2490% |
+| Half-target reach | 20.9% | 21.3% | 23.3% | 20.8% | 22.0% |
+
+| Study B | Q1 (lowest) | Q2 | Q3 | Q4 | Q5 (highest) |
+|---|---|---|---|---|---|
+| n | 1,809 | 1,799 | 1,802 | 1,804 | 1,797 |
+| Mean net return | -0.0913% | -0.1026% | -0.1463% | -0.1574% | -0.1068% |
+| Half-target reach | 27.0% | 26.7% | 26.6% | 25.4% | 27.1% |
+
+Monotonicity was checked numerically, not eyeballed: neither study's
+quintile sequence is monotonic (Study A: Q2->Q3 improves sharply then
+Q3->Q4 reverses; Study B: declines Q1->Q4 then reverses at Q5). Half-
+target reach rate is flat within a ~2.5-point band in both studies,
+showing no liquidity-driven follow-through gradient either.
+
+**Not supported**: **turnover shows no monotonic relationship in either
+study. The observation that these work better on higher-turnover names
+was tested across 17,353 trades and does not hold.** The existing
+3-band split was not hiding a cleaner gradient a finer split would
+reveal -- performance is flat-to-noisy across the turnover spectrum in
+both studies, the same conclusion at finer resolution.
+
+## Liquidity family tally -- CLOSED, both trials
+
+**The Liquidity family now stands at 2 trials, 2 failures.** Study A
+(long, LOW-side) and Study B (short, HIGH-side) are both closed, no
+edge on DEV, TEST never read on either. **Both trials share the exact
+same shape**: both nulls (TIMING, SELECTION) passed at the **100th
+percentile** against 500 seeds each -- the entry mechanism carries real,
+non-random selection value on both sides of the market -- **while the
+mean net return stayed negative** on both (-0.2841% for A, -0.1212% for
+B), meaning the gate's own first condition (mean > 0, CI excludes zero)
+failed on both despite that non-random edge, not because the entry
+signal was noise. Fourteen prior strategies in this project have now
+closed with no edge in total (the thirteen implied by Study A's own
+updated count, plus this one).
+
+The two post-DEV diagnostics above (degenerate confluence, turnover)
+were run on both studies' own full trade populations specifically to
+check whether either study's own closure was concealing a usable subset
+-- neither was: degenerate trades performed no worse (better, in Study
+A), and no turnover quintile stood out. Nothing found in either
+diagnostic reopens either study or changes either verdict.
+
+A corrected, non-nesting-timeframe confluence definition (**Study C**,
+named in both preregistrations but not undertaken by either) remains
+the one identified, untried fix to the shared 1-day/1-week overlap flaw
+that recurred -- at different but comparably material rates -- on both
+sides of this family.
 
 ## Status
 
-DEV run complete and reported above. **Stopping here for approval before
-TEST**, per the preregistration's own Section 12/Process -- TEST has not
-been read and `liquidity.b.guard_date_range` has not been called with
-`authorize_test=True` anywhere in this study.
+**CLOSED.** DEV failed (`mean net return -0.1212%, CI fully negative,
+3 of 4 gate conditions fail`), TEST stays sealed (never read --
+`liquidity.b.guard_date_range` was never called with
+`authorize_test=True` anywhere in this study), no retry at other
+parameter values, per `PREREGISTRATION_LIQUIDITY_B.md` Section 14. The
+two post-DEV diagnostics above were run and recorded before this
+closure, at the user's own request, and do not change this verdict.

@@ -281,9 +281,12 @@ def _liquidity_a_dev_bounds() -> tuple[dt.date, dt.date]:
 # ---------------------------------------------------------------------
 # Liquidity Study B -- trial 2 of the same family, SHORT, HIGH-side
 # confluence, exact mirror of Study A (PREREGISTRATION_LIQUIDITY_B.md).
-# NOT YET CLOSED -- the user is reviewing trades in this browser before
-# confirming closure; the verdict headline below says so explicitly and
-# must not be changed to "CLOSED" until that confirmation happens.
+# CLOSED -- the user reviewed trades in this browser, two hypotheses
+# formed from that review (degenerate confluence, turnover) were tested
+# across both studies' full trade populations and did not change the
+# verdict (LIQUIDITY_B_FINDINGS.md's own "Post-DEV diagnostics" /
+# "Liquidity family tally" sections), and the user then confirmed
+# closure. Liquidity family: 2 trials, 2 failures.
 # ---------------------------------------------------------------------
 
 @st.cache_data
@@ -301,8 +304,8 @@ def _load_liquidity_b_verdict() -> dict:
         inf = pickle.load(f)
     return {
         "headline": (
-            "DEV FAILS (NO EDGE) -- Liquidity family trial 2 of 2 (short side, exact mirror of Study A) "
-            "-- CLOSURE PENDING USER REVIEW, not yet finalized"
+            "CLOSED -- DEV FAILS (NO EDGE) -- Liquidity family trial 2 of 2 (short side, exact mirror "
+            "of Study A) -- family tally: 2 trials, 2 failures"
         ),
         "mean_label": "Mean net return",
         "mean_display": f"{inf['mean_net_r']*100:+.4f}%",
@@ -316,8 +319,10 @@ def _load_liquidity_b_verdict() -> dict:
             "nulls again pass at the 100th percentile. **The loss is well under half Study A's own "
             "size** (better signal follow-through than predicted going in), and the confluence overlap "
             "recurs at a different rate (65.6% pure 1d+1w vs. Study A's 78.6%), traced to the DEV "
-            "window's own upward price drift. Full detail: LIQUIDITY_B_FINDINGS.md. **This study has "
-            "not been closed yet -- pending the user's own review of trades in this browser.**"
+            "window's own upward price drift. **Two post-DEV diagnostics requested after reviewing "
+            "trades here (degenerate confluence, turnover quintiles) were tested against both studies' "
+            "full trade populations and did not change the verdict -- both recorded as USER "
+            "OBSERVATIONS FROM CHARTS, TESTED AND NOT SUPPORTED.** Full detail: LIQUIDITY_B_FINDINGS.md."
         ),
         "findings_doc": "LIQUIDITY_B_FINDINGS.md",
     }

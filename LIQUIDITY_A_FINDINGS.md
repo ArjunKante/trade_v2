@@ -386,3 +386,38 @@ not retried at other values. This governs Study A only -- the user's own
 separately-planned Study B (short side, high-level confluence) is a
 different trial of the same new family and is unaffected by this
 result.
+
+### Update -- Study B closed, family tally, and two post-DEV diagnostics
+
+Study B (short, HIGH-side confluence, exact mirror of this study) has
+since run DEV and closed the same way: NO EDGE, TEST not read, 3 of 4
+gate conditions fail, both nulls again passing at the 100th percentile
+while the mean stayed negative (-0.1212%, less than half this study's
+own -0.2841%). **The Liquidity family now stands at 2 trials, 2
+failures** -- full detail and the side-by-side comparison numbers are in
+`LIQUIDITY_B_FINDINGS.md`, not duplicated here.
+
+Before Study B's closure, the user reviewed individual trades from both
+studies in a new research-browser view (all six levels, the confluence
+zone, and every sweep/reclaim/entry/exit marker drawn per trade) and
+raised two hypotheses from what the charts showed, both tested against
+the full real trade population of BOTH studies and recorded in full in
+`LIQUIDITY_B_FINDINGS.md`'s own "Post-DEV diagnostics" section as **USER
+OBSERVATIONS FROM CHARTS, TESTED AND NOT SUPPORTED**:
+
+- **Degenerate confluence** (two or more clustered levels equal or
+  within 0.1% of each other, not just within the 0.5xATR tolerance that
+  formed the cluster): affects 64.9% of this study's own trades (5,275
+  of 8,131) and 71.4% of Study B's. Degenerate trades performed **no
+  worse than non-degenerate ones in either study -- BETTER in this
+  study's own case** (-0.2414% degenerate vs. -0.3630% non-degenerate).
+  The hypothesis that genuine (non-degenerate) multi-timeframe agreement
+  carries the real signal is not supported.
+- **Turnover**: splitting both studies' own trades into quintiles by the
+  stock's own median daily turnover (the same quantity this study's own
+  `rank`/`band` were already built from) showed no monotonic
+  relationship in either study, across all 17,353 real trades between
+  the two. The existing 3-band split (Section 11, "by band") was not
+  hiding a cleaner gradient a finer split would reveal.
+
+Neither diagnostic reopens this study or changes its own verdict above.
