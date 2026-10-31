@@ -1313,3 +1313,40 @@ no row for `data_date` after the backfill (NSE's index file not yet
 published, or a genuine fetch failure) -- visible in `scheduler.log`
 going forward instead of silently drifting stale again, unnoticed, the
 way it did for five weeks before this was added.
+
+## STANDING RULE: any study comparing two or more configurations must compute the minimum detectable difference BEFORE the preregistration is finalized
+
+**This is the second time, not the first, that a fully-specified
+comparison study turned out to be unanswerable by its own data --
+discovered only after the full design was already locked.**
+`FINDINGS.md` Section 12 (momentum + earnings-yield combination): a
+plausible effect needed 8-72 years of data to distinguish from noise,
+depending on which metric and which assumed true effect size, found
+only after `PREREGISTRATION_COMBINATION.md` was drafted in full.
+`PORTFOLIO_FINDINGS.md` (momentum portfolio construction, 24-
+configuration grid): plausible effects needed to be 10-20x larger than
+anything concentration/weighting/rebalance could realistically produce,
+found only because this study's OWN preregistration happened to require
+the power calculation as an explicit, separate step before the grid --
+which is what caught it before 23 configurations' worth of compute (and,
+worse, 23 uninterpretable p-values) were spent on a comparison that
+could never have resolved anything.
+
+**The rule, going forward, for any future study in this project whose
+verdict rests on configuration A beating configuration B (or a null, or
+a prior finding) by some margin**: compute the minimum detectable
+difference from the DATA'S OWN OBSERVED VARIANCE first -- before the set
+of configurations to test, the significance threshold, or the decision
+rule is finalized in the preregistration, not after. Per `FINDINGS.md`
+Section 12's own discipline (still the right discipline, restated here
+as a standing rule rather than a one-off practice): compute this from
+VARIANCE ONLY, never from a mean or an already-observed effect -- sizing
+a test's power using a result you have already seen is the same
+post-hoc reasoning this project's whole preregistration discipline
+exists to prevent. If the minimum detectable difference is implausibly
+large relative to any real-world effect the comparison could plausibly
+produce, that is itself the finding, reported as such, and the full
+comparison is not run -- exactly what `PREREGISTRATION_PORTFOLIO.md`'s
+own Section 7/Section 11 Step 2 structure already enforced, and why it
+is now the template for every future comparison study, not just this
+one.
