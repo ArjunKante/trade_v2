@@ -152,3 +152,163 @@ outcome shapes, and the three-order cost model's own extra-cost
 comparison (observed both positive and slightly negative, each for a
 specific, understood reason) were each exercised and independently
 re-verified by hand before any aggregate number was computed.
+
+## DEV result: FAILS. No edge -- trial 1 of a new family.
+
+**Mean net return: -0.2841%** (percentage of position value), 97.5%
+day-clustered bootstrap CI **[-0.3535%, -0.2090%]** -- both bounds
+negative. `n_trades=8131`, `n_distinct_entry_days=1310`, median
+-0.5651%, win rate 35.9%. Claude's pre-committed prediction (-0.6% to
++0.2%) correctly bracketed the result in both sign and rough magnitude.
+
+**Gate: 3 of 4 conditions fail.**
+
+| Condition | Result | Verdict |
+|---|---|---|
+| Mean > 0, CI excludes zero | mean -0.2841%, CI fully negative | FAIL |
+| >= 95th percentile vs. BOTH nulls | TIMING 100.0, SELECTION 100.0 | **PASS** |
+| Positive after dropping the best year | -0.3121% (2020 excluded) | FAIL |
+| Positive within bands 1-100 | -0.2408% | FAIL |
+
+The gate requires all four; 3 failures is NO EDGE regardless of the one
+pass. TEST is not read, per the preregistration's own Section 10.
+
+**The null comparison is the one genuinely positive finding, and it is
+not nothing**: the real strategy's mean beat BOTH the TIMING null (same
+stock-days, random entry) and the SELECTION null (random stock-days,
+matched count per month) at the 100th percentile out of 500 seeds each
+-- not merely >=95th, but above every single seed drawn. The confluence-
+plus-sweep-plus-reclaim entry is measurably better than random timing or
+random selection on the same population. It is simply not good enough,
+after costs, to turn a net loss into a net gain -- the same shape POC
+V4 found with its own sweep-and-reclaim entry (both nulls passed, still
+a net loss), now repeated under a different, multi-timeframe level
+definition. The mechanism carries real, non-random selection value; that
+value does not clear costs.
+
+**Claude's trade-count prediction was wrong, and the reason is
+instructive**: "far fewer and better-selected trades than V4's 3,225 --
+possibly under 1,000" was the stated expectation. The real count is
+**8,131** -- more than 2.5x V4's own count, not a fraction of it. The
+confluence pair breakdown explains why: of 8,131 trades, **6,389
+(78.6%)** clustered on `1d+1w` alone, and only **146 (1.8%)** needed
+`1w+3m` without `1d` involved at all. The 1-day and 1-week lows coincide
+or sit within 0.5xATR of each other on the large majority of trading
+days -- unsurprising once stated plainly: the 1-week low is very often
+SET by one of the days inside that same week, including the previous
+day itself, in anything other than a strongly one-directional 5-day
+stretch. The "confluence" requirement, built on the hypothesis that
+multi-timeframe agreement would be a RARE, selective signal, instead
+turned out to be satisfied on most candidate days -- it filtered far
+less than expected, which is why the trade count went up relative to
+V4, not down, despite stacking an additional gate on top of V4's own
+sweep-and-reclaim mechanism.
+
+```
+1d+1w       6,389 trades   mean -0.2883%   win rate 35.6%
+1d+1w+3m    1,596 trades   mean -0.2600%   win rate 36.9%
+1w+3m         146 trades   mean -0.3647%   win rate 35.6%
+```
+
+All three combinations lose, with no combination standing out as
+meaningfully different from the pooled result -- the confluence
+breadth (how many timeframes agree) does not itself distinguish a
+better or worse trade here, another way of saying the filter carried
+less information than hypothesized. (A pure `3m` or `1d`-only pair that
+excludes `1w` never occurs in this population: `1w`'s own 5-day window
+always overlaps enough with `1d` or shares enough history with `3m`
+that one of the other two pairs forms first whenever `3m` and `1d` are
+both near -- not separately verified by proof the way the no-multi-
+cluster claim was, just an empirical fact of this run.)
+
+**Scaled-exit mechanics.** Exit mix across all 8,131 trades:
+
+```
+STOP_NO_HALF          3,279  (40.3%)  -- stopped before any half exit
+TIME_EXIT_FULL         2,994  (36.8%)  -- nothing hit all day, full qty at 15:15
+HALF_THEN_TIME_EXIT    1,237  (15.2%)  -- half exited, remainder timed out
+FULL_EXIT                397  (4.9%)   -- both legs hit their own target
+HALF_THEN_STOP             91  (1.1%)  -- half exited, remainder stopped
+TIME_EXIT_QTY1             76  (0.9%)  -- qty=1, no half possible, timed out
+STOP_QTY1                  49  (0.6%)  -- qty=1, stopped
+TARGET_QTY1                  5  (0.1%)  -- qty=1, hit 3R directly
+FULL_EXIT_SAME_BAR           3  (0.0%)  -- half and full both hit in one bar
+```
+
+**77.1% of all trades (`STOP_NO_HALF` + `TIME_EXIT_FULL`) never even
+reach the half-target level.** Of the 8,001 trades with enough shares
+for a half exit, only **21.6%** (1,728) ever reach it; of those, only
+**23.1%** (400) go on to the full 3R target, and **5.3%** (91) give back
+the position on the remainder after already banking the half's own
+profit. This is the clearest evidence that the shortfall is not
+primarily a cost-structure problem: most trades go nowhere (an
+immediate stop or a full day of chop into the close), not "a good move
+that the extra order ate into."
+
+**Extra cost of the three-order structure vs. a hypothetical single
+exit at 3R**: **Rs 10,095.30 total**, mean **Rs 1.24/trade**, averaging
+**0.0050% of position value** -- real, and directionally as expected
+(an extra order costs something), but two orders of magnitude too small
+to be the deciding factor between this result and a passing one. The
+gap between -0.2841% and the zero line this gate needed is driven by
+the signal's own low follow-through rate, not by the scaled-exit
+structure's extra fees.
+
+**Peak concurrent positions and capital, corrected**: an initial
+computation gave `peak_concurrent_positions=6` alongside
+`peak_deployed_capital_rs=1,124,725` -- an internally inconsistent pair
+(6 positions at ~Rs 25,000 each cannot plausibly deploy over Rs 1.1M).
+The bug: the position-count event sweep recorded BOTH a half-exit and a
+final-exit as a `-1` for the same trade, when a half-exited trade is
+still exactly one open position (not two, and not zero) until its own
+final exit closes it -- the counter drifted negative over the run and
+silently understated the true peak. Caught by the inconsistency itself
+before being reported, fixed in `scripts/liquidity_a_dev_run.py`'s
+`_peak_concurrent_and_capital` (position count and capital are now two
+separate event sweeps), and recomputed directly from the already-saved
+`dev_backtest.pkl` trade list rather than rerunning the full pipeline.
+**Corrected: 46 peak concurrent positions, Rs 1,124,725.31 peak deployed
+capital** (~45x a single ~Rs 25,000 position) -- consistent with each
+other, and with the same "never runnable at this capital" finding
+POC V5 made under its own multi-day hold.
+
+**Skip counts** (278,695 total candidate-days checked): `no_confluence`
+105,437 (the single largest skip reason, as expected for a selection
+filter -- 37.8% of all checked days); `no_sweep` 102,433; `not_reclaimed`
+33,769; `bad_previous_session` 16,301 (single-day eligibility, scale
+resolution); `touch_too_shallow` 8,231; `breakdown_not_sweep` 1,240;
+`level_insufficient_history` 1,024 (early-history days before 63
+trading days of panel exist); `fill_outside_window` 1,278; `no_fill_bar`
+404; `stop_too_tight` 265; `ex_date` 70; `stop_too_wide` 63; `zero_qty`
+49 (confirming the Section 5 guard was necessary -- entries above Rs
+25,000 do occur in this universe); `atr_unavailable` 0, `jump_guard` 0,
+`entry_below_stop` 0. `multi_cluster_count` across all 8,131 trades:
+**0**, confirming the Section 2 proof empirically -- the "multiple
+separate clusters" branch never executed, as it mathematically cannot
+with exactly three candidate LOW levels.
+
+**By year**: every year 2016-2022 lost, ranging from -0.11% (2020, the
+best year, still negative) to -0.38% (2022, the worst) -- no year ever
+crossed zero, consistent with gate condition 3's own failure. **By
+band**: all three rank bands lost similarly (-0.25% to -0.33%), no band
+showing a materially different result -- the loss is not concentrated
+in illiquid names.
+
+### Base rate, updated
+
+Twelve prior strategies in this project have now closed with no edge
+(the eleven named in this study's own Provenance section, plus this
+one) -- POC V4's own shape (both nulls passed, net loss after costs)
+has now recurred under a structurally different entry definition. The
+multi-timeframe confluence hypothesis, specifically, did not produce a
+more selective or more profitable filter than V2-V4's own single-level
+lookback-low -- if anything, it produced MORE trades, not fewer, because
+multi-timeframe agreement on the LOW side turned out to be common
+rather than rare in this universe.
+
+**Study A (long only) is closed: NO EDGE on DEV, TEST not read.** Per
+`PREREGISTRATION_LIQUIDITY_A.md` Section 14, these exact parameters are
+not retried at other values. This governs Study A only -- the user's own
+separately-planned Study B (short side, high-level confluence) is a
+different trial of the same new family and is unaffected by this
+result.
