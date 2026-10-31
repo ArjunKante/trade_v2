@@ -1110,7 +1110,22 @@ is not optional and must be stated as a frozen parameter in Section
 6/7-equivalent of that study's own pre-registration, the same place the
 maximum-risk ceiling already lives.
 
-## Momentum basket snapshot, `monitor_logs/momentum_basket_log.jsonl` -- what this is and is not
+## Momentum basket snapshot, `monitor_logs/momentum_basket_log.jsonl` -- SUPERSEDED, see below
+
+**SUPERSEDED.** This file's own one row (`snapshot_date=2026-10-26`) has
+been migrated verbatim to `data/momentum_live/v1/baskets.jsonl` (see the
+new section immediately below this one), which is now the canonical
+record. This file is kept, untouched, as the original -- not deleted --
+but is no longer where new basket rows are written or where this record
+should be read from. The reason for the move: this file sits in a
+plainly git-tracked directory (`monitor_logs/`, no special carve-out),
+while the momentum basket is this laptop's own dated evidence in exactly
+the sense `data/fibo_live/v1/events.jsonl` already is -- it deserved the
+same deliberate `.gitignore` carve-out and the same explicit "append-
+only, never edited" treatment that file gets, not an ordinary tracked
+file that happens to hold evidence. Everything below this annotation
+describes the ORIGINAL write and is left as-is for the historical
+record; read the new section for the current state.
 
 **What it is: one basket, one window.** `scripts/run_momentum_basket_
 snapshot.py` freezes the top-decile `momentum_12_1` names, by the exact
@@ -1173,3 +1188,68 @@ uses (the historical holdout is retired per `FINDINGS.md` Section 7;
 there is no slot left to spend). Logged to `data/holdout_access_log.txt`
 on every run, as an audit trail, not a charge against a resource that
 still exists.
+
+## `data/momentum_live/v1/baskets.jsonl` -- the canonical momentum basket record (migrated from `monitor_logs/`)
+
+**This file, not `monitor_logs/momentum_basket_log.jsonl` (see the
+section above, now annotated superseded), is where the momentum
+strategy's forward record lives.** One row so far, migrated verbatim
+from the original (byte-identical on every pre-existing field; two
+fields added, `migrated_from` and `check_in_date_note`, documented
+below) -- no value was re-derived or recomputed in the move. `entity_id`,
+`symbol`, `rank`, and RAW close for each of 147 holdings, `snapshot_date
+2026-10-26`, `check_in_date 2027-01-26` (see the uncertainty note
+below), `rebalance_horizon_trading_days 63`.
+
+**Tracked in git -- a deliberate `.gitignore` exception, same reasoning
+as `data/fibo_live/v1/events.jsonl`** (see that file's own `OPERATIONS.md`
+section above for the full argument; restated here, not duplicated at
+length): this is this laptop's own dated decision record, not
+redistributed NSE data, so the licensing rationale for ignoring the rest
+of `data/` does not apply to it. Its evidentiary value depends entirely
+on the write having happened BEFORE the check-in outcome exists --
+exactly the same "git commit timestamp as independent, third-party-
+dated proof" argument `events.jsonl` relies on. The `.gitignore` chain
+(`/data/*` -> `!/data/momentum_live` -> `/data/momentum_live/*` ->
+`!/data/momentum_live/v1` -> `/data/momentum_live/v1/*` ->
+`!/data/momentum_live/v1/baskets.jsonl`) walks back down through every
+parent directory per gitignore(5), identical mechanics to the
+`fibo_live` chain, confirmed with `git check-ignore -v` and `git add
+--dry-run` against only this one path before committing.
+
+**APPEND-ONLY. NEVER EDITED AFTER WRITING.** A basket row, once written,
+is not corrected, reformatted, or touched again for any reason --
+editing it after the fact would destroy the only thing that makes it
+evidence: a dated record that existed before its own outcome did. If a
+field is later found wrong, the fix is a NEW row (or a dated correction
+note elsewhere), never a rewrite of the original bytes. This is the
+same discipline `events.jsonl` already follows.
+
+**What this is: one basket, one window, a single descriptive observation
+when it resolves.** Not a validated result and not a second sealed test.
+The strategy already passed its one sealed TEST (`FINDINGS.md` Section
+2, Study 1) -- this basket does not re-test that, re-open the holdout,
+or add statistical weight to it. When `check_in_date` arrives and a
+return is finally computable, that return is a single `n=1` descriptive
+data point, nothing more -- it does not confirm, refute, or move the
+confidence of the sealed-test result either way. Never size, fund, or
+act on a live position because of how this one basket resolves.
+
+**Cost model to apply at check-in: the existing tercile model, not a
+cost-free number.** `COST_BY_TERCILE_BPS = {"high_liq": 23.0, "mid_liq":
+32.5, "low_liq": 118.0}` (round-trip bps), applied per holding using
+that holding's own already-recorded `liquidity_tercile` field -- not a
+single blended guess across the whole basket. Same model, same
+provenance, as the section above.
+
+**Check-in date uncertainty, now recorded IN the record itself, not only
+in this doc**: the migrated row's own `check_in_date_note` field spells
+out, in the JSON itself, that `check_in_date=2027-01-26` was computed
+against a holiday calendar covering 2016-2026 only, that 2027-01-26 is
+Republic Day (a fixed national holiday the uncovered calendar could not
+catch), that the true 63rd NSE trading day is very likely 2027-01-27 but
+NOT confirmed, and that **the 2027 NSE holiday calendar must be loaded
+into `data_layer.nse_holidays` and this date re-verified before
+check-in is acted on**. `check_in_date_calendar_uncertain: true` is the
+machine-readable flag; `check_in_date_note` is why, so a reader of the
+record alone -- without this doc -- still gets the full warning.

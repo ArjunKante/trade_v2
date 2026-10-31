@@ -15,6 +15,27 @@
 /data/fibo_live/v1/*
 !/data/fibo_live/v1/events.jsonl
 
+# Deliberate exception: data/momentum_live/v1/baskets.jsonl is our own
+# dated decision record for the momentum_12_1 strategy's forward
+# tracking -- the one strategy in this project that passed a sealed
+# TEST and had never been run -- not redistributed NSE data, so the
+# licensing rationale for ignoring the rest of data/ does not apply to
+# it, same reasoning as data/fibo_live/v1/events.jsonl above. It is
+# append-only and never edited after a basket is written: editing it
+# would destroy the only thing that makes it evidence (a commit
+# timestamp proving the basket was recorded before its own outcome
+# existed), and it cannot be reconstructed later without hindsight --
+# a "basket" written after the check-in date, from data the write
+# could have seen by then, proves nothing about what would have been
+# selected on the day. See OPERATIONS.md. Migrated from
+# monitor_logs/momentum_basket_log.jsonl (commit 3ffaf60, a plain
+# tracked file, not under data/) -- this is now the canonical path.
+!/data/momentum_live
+/data/momentum_live/*
+!/data/momentum_live/v1
+/data/momentum_live/v1/*
+!/data/momentum_live/v1/baskets.jsonl
+
 # Deliberate exception: data/raw/nse_cm_holidays_fallback.json is a
 # trimmed copy (dates only, no names -- the source pickle carries none
 # either) of data_layer/nse_holidays.py's own NSE holiday calendar,
