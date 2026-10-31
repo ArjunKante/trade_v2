@@ -166,8 +166,195 @@ leg, never on either cover/buy leg -- the Section 6 prediction, verified
 by hand on example 2 above) were each exercised and independently
 re-verified by hand before any aggregate number was computed.
 
+## DEV result: FAILS. No edge -- same gate shape as Study A, different magnitude.
+
+**Three findings recorded prominently, before the detail below, because
+each one changes how this result should be read.**
+
+### Finding 1: the cost asymmetry was confirmed exactly as predicted, and, as with Study A, costs are not the deciding factor
+
+The entry (sell-to-open) leg's STT is a genuinely FIXED 0.025% of
+position value on every single one of the 9,222 trades -- mean
+Rs 6.11/trade, **standard deviation of the percentage across trades:
+5.8e-20, i.e. zero to floating-point precision**. This is the structural
+difference Section 6 of the preregistration predicted: Study A's own
+exit-leg STT varies trade-by-trade with the realised exit price (a
+winning trade's exit leg has a larger trade value than a losing one's,
+so pays slightly more STT); Study B's entry-leg STT cannot vary at all,
+since it is computed once, at entry, before anything else happens.
+
+**This did not translate into a materially different COST figure in
+aggregate, exactly as it should not have** -- the extra three-order cost
+vs. the hypothetical single-exit-at-3R comparison totalled **Rs
+11,693.01** across all trades, a mean of **Rs 1.27/trade, 0.0051% of
+position value** -- essentially identical in magnitude to Study A's own
+**Rs 10,095.30 total, Rs 1.24/trade, 0.0050%**. Both studies lose for the
+same underlying reason (Finding 3 below, not cost), and the STT
+asymmetry, while real and precisely confirmed, is two orders of
+magnitude too small on both sides of this family to be the deciding
+factor between a passing and failing result.
+
+### Finding 2: the preserved confluence flaw recurs, but is quantitatively DIFFERENT, not identical, between sides
+
+**65.6% of zones (6,052 of 9,222 trades) clustered on the 1-day and
+1-week HIGH alone** -- lower than Study A's own **78.6%** on the LOW
+side, not the same number. The gap is explained by the THREE-way cluster
+rate, which runs the other way: **31.3% of Study B's trades (2,889) had
+all three HIGH levels cluster together**, more than Study A's own
+**19.6%** (1,596 LOW trades). (`1w+3m`-only, with `1d` excluded, is the
+small remainder on both sides -- 3.0% here vs. 1.8% for Study A; a pure
+`3m`-or-`1d`-only pair that excludes `1w` never occurs on either side,
+the same structural fact Study A's own report noted.)
+
+**The likely cause is the DEV window's own secular upward price drift,
+stated plainly as the probable mechanism, not re-derived from first
+principles**: across most of 2016-2022, Indian equities trended up far
+more than they trended down. In a sustained uptrend, the most recent
+high is frequently ALSO the highest point of the past week AND the past
+3 months simultaneously -- a stock making fresh highs tends to make them
+across every lookback window at once, pulling all three HIGH levels into
+a single cluster more often. The LOW side does not have the mirror
+property in the same market regime: a 3-month low, once set, is
+typically set early and then LEFT BEHIND as price grinds upward -- the
+1-week and 1-day lows keep floating higher and essentially never revisit
+it, so the 3-month low rarely joins the 1-day/1-week low cluster (Study
+A's own 19.6% three-way rate vs. this study's 31.3%). This is a genuine,
+direction-caused difference in how "definitional" the overlap is on each
+side, not a wash -- recorded here exactly as the preregistration's own
+Section 11 asked, rather than smoothed into "both studies have the same
+overlap problem."
+
+### Finding 3: the failure is symmetric in WHICH gate conditions fail, but NOT in magnitude -- and Claude's own follow-through prediction was wrong
+
+**Mean net return: -0.1212%** (day-clustered 97.5% CI **[-0.1598%,
+-0.0816%]**, both bounds negative) -- a real loss, but **well under half
+the size of Study A's own -0.2841%**. The same three gate conditions
+fail (mean/CI, ex-best-year, bands 1-100) and the same one passes (both
+nulls at the 100th percentile) -- structurally identical gate shape to
+Study A -- but the MAGNITUDE of the short side's own loss is
+substantially smaller, not a restatement of the same number.
+
+**The reason is follow-through, and it runs the OPPOSITE direction from
+my own pre-committed prediction.** I predicted the short side would show
+"similar or slightly worse" follow-through than Study A's own 21.6%/
+23.1% figures, reasoning that shorting fights the market's long-run
+upward drift. **The real figures run the other way**: of the 9,098
+scaled-eligible trades, **26.5% reached the half target** (vs. Study A's
+own 21.6%), and the fraction of ALL trades that never even reach the
+half-target level (`STOP_NO_HALF` + `TIME_EXIT_FULL`) is **72.5%** here
+vs. Study A's own **77.1%** -- Study B's signal follows through MORE
+often, not less. Of trades that did reach the half target, a slightly
+smaller share went on to the full 3R target (21.3% vs. Study A's 23.1%)
+and a smaller share gave the half exit's own profit back on the
+remainder (3.7% vs. Study A's 5.3%) -- both consistent with a cleaner,
+somewhat more decisive short-side move once the sweep-and-reclaim signal
+actually fires. **I was wrong about the direction of this effect, the
+same kind of miss Study A's own Finding 1 recorded about its own cost
+prediction** -- weighted accordingly: a future revision of this entry
+mechanism focused on follow-through should not assume shorting is
+structurally worse here just because of the market's own secular drift.
+Peak deployed capital is correspondingly lower too -- **28 peak
+concurrent positions, Rs 633,789.78 peak deployed capital**, roughly half
+of Study A's own corrected 46 positions / Rs 1,124,725.31 -- consistent
+with fewer trades reaching the capital-intensive scaled-exit tail.
+
+**Gate: 3 of 4 conditions fail -- same pattern as Study A.**
+
+| Condition | Result | Verdict |
+|---|---|---|
+| Mean > 0, CI excludes zero | mean -0.1212%, CI fully negative | FAIL |
+| >= 95th percentile vs. BOTH nulls | TIMING 100.0, SELECTION 100.0 | **PASS** |
+| Positive after dropping the best year | -0.1370% (2020 excluded) | FAIL |
+| Positive within bands 1-100 | -0.1159% | FAIL |
+
+The gate requires all four; 3 failures is NO EDGE regardless of the one
+pass. TEST is not read, per the preregistration's own Section 10.
+
+**The null comparison is, again, the one genuinely positive finding**:
+the real strategy beat BOTH the TIMING null (same stock-days, random
+entry) and the SELECTION null (random stock-days, matched count per
+month) at the **100th percentile** out of 500 seeds each, identically to
+Study A. The confluence-plus-sweep-plus-reclaim entry carries real,
+non-random selection value on the short side too; it is simply not
+enough, after costs, to turn a net loss into a net gain.
+
+### Side-by-side against Study A, per the preregistration's own Section 11
+
+| Figure | Study A (long) | Study B (short) |
+|---|---|---|
+| Trades | 8,131 | **9,222** |
+| Mean net return | -0.2841% | **-0.1212%** |
+| TIMING null percentile | 100.0 | 100.0 |
+| SELECTION null percentile | 100.0 | 100.0 |
+| Half-target reach rate (of scaled-eligible) | 21.6% | **26.5%** |
+| Full-target rate (of half-reached) | 23.1% | 21.3% |
+| Pure 1d+1w confluence share | 78.6% | **65.6%** |
+| All-three (1d+1w+3m) confluence share | 19.6% | **31.3%** |
+| Extra 3-order cost, mean/trade | Rs 1.24 (0.0050% of position) | Rs 1.27 (0.0051% of position) |
+| Entry/exit-leg STT variance (% of position) | varies with exit price | **zero (fixed 0.025%)** |
+| Peak concurrent positions / capital | 46 / Rs 1,124,725 | **28 / Rs 633,790** |
+| Gate conditions failed | 3 of 4 | 3 of 4 (same 3) |
+
+**Stated plainly, per instruction: the failure is symmetric in STRUCTURE
+(same gate conditions fail, both nulls pass at the identical 100th
+percentile, the same preserved-flaw confluence overlap recurs) but NOT
+symmetric in MAGNITUDE.** Study B loses at less than half the rate of
+Study A, on a trade count that is actually slightly larger, driven by
+genuinely better signal follow-through on the short side in this DEV
+window -- the opposite of what I predicted going in. This is not "both
+sides failed the same way"; it is "the same mechanism, run in both
+directions, fails for the same structural reason (insufficient
+follow-through to clear costs) but to a measurably different degree,"
+and the degree difference is traceable to a specific, understood cause
+(Finding 2's own uptrend-driven confluence-overlap asymmetry, and
+Finding 3's own follow-through-rate asymmetry) rather than left
+unexplained.
+
+**Skip counts** (278,695 total candidate-days checked, identical
+population to Study A since the universe does not depend on direction):
+`no_sweep` 111,271; `no_confluence` 93,561 (LOWER than Study A's own
+105,437 -- HIGH-side confluence was found on 167,739 days vs. Study A's
+own 155,863 LOW-side days, consistent with Finding 2's own uptrend
+explanation); `not_reclaimed` 35,431; `bad_previous_session` 16,301;
+`touch_too_shallow` 8,459; `breakout_not_sweep` 1,321;
+`level_insufficient_history` 1,024; `fill_outside_window` 1,148;
+`no_fill_bar` 402; `stop_too_tight` 401; `zero_qty` 64 (higher than Study
+A's own 49, consistent with HIGH levels running at generally higher raw
+prices than LOW levels by the time 3 months of upward drift have
+elapsed); `ex_date` 70; `stop_too_wide` 20; `atr_unavailable` 0;
+`jump_guard` 0; **`entry_above_stop` 0**, confirming the Section 3 guard
+prediction empirically, the exact mirror of Study A's own
+`entry_below_stop` count of 0. `multi_cluster_count` across all 9,222
+trades: **0**, confirming the Section 2 proof empirically on the HIGH
+side too -- the "multiple separate clusters" branch mathematically
+cannot execute with exactly three candidate levels, exactly as proved
+for Study A's own LOW levels.
+
+**By year**: every year 2016-2022 lost, from -0.04% (2020, the best
+year, still negative) to -0.17% (2022, the worst) -- no year ever
+crossed zero. **By band**: all three rank bands lost similarly (-0.09%
+to -0.14%), no band showing a materially different result.
+
+### Base rate, updated
+
+Fourteen prior strategies in this project have now closed with no edge
+(the thirteen implied by Study A's own updated count, plus this one).
+The liquidity-confluence family has now failed on BOTH sides it was
+tested on, with the same root cause each time (real, non-random
+selection value from the sweep-and-reclaim entry; insufficient
+follow-through to clear costs) and the same specific definitional flaw
+(1-day/1-week overlap by construction) recurring on both the LOW and
+HIGH side, at different but comparably material rates.
+
+**Study B (short only) is closed: NO EDGE on DEV, TEST not read.** Per
+`PREREGISTRATION_LIQUIDITY_B.md` Section 14, these exact parameters are
+not retried at other values. A corrected, non-nesting-timeframe
+confluence definition (Study C) remains a separate, not-yet-undertaken
+trial of this same family.
+
 ## Status
 
-Hand-traces complete, all 5 shapes found and independently verified.
-Next: run DEV only (Process Step 4), report, and **stop for approval
-before TEST**.
+DEV run complete and reported above. **Stopping here for approval before
+TEST**, per the preregistration's own Section 12/Process -- TEST has not
+been read and `liquidity.b.guard_date_range` has not been called with
+`authorize_test=True` anywhere in this study.
