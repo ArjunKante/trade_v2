@@ -1203,3 +1203,69 @@ flagged, not fixed here -- not asked for, and that script's own 09:15
 market-open timing is less tolerant of the same "specified but not
 created" gap going unnoticed, since a missed morning run has no
 after-midnight catch-up equivalent to what cured this one.
+
+## Bug #18: two different price-scale methods, never cross-checked against each other, used on the same signal day across POC, Liquidity, and the Fibo sealed test -- the exact failure `fibo.scale_probe` was built to retire, recurring in the one place that was never migrated
+
+**Mechanism**: `fibo.scale_probe.probe_scale` was built (2026-09-29) to replace
+a table-based method (`fibo.price_scale.get_adjustment_factor` /
+`_build_adjustment_factor_lookup_for_entity`, reading `adjustment_factors`
+directly) specifically because that table-based method's own dev-window
+report showed 14.90% UNRESOLVED, concentrated in a handful of entities with
+corporate actions invisible to or mis-recorded in this project's own
+`corporate_actions` table. `box_theory` and `darvas` were built on, or
+migrated to, `scale_probe` throughout -- confirmed by import trace, neither
+module references `fibo.price_scale` or `adjustment_factors` at all.
+**`poc.v4`, `liquidity.a/b/c`, and `fibo.backtest` (the sealed Fibo test)
+were not fully migrated**: each converts the day's own candles via
+`scale_probe` (correct), but separately converts the REFERENCE LEVEL being
+compared against those candles -- POC/Liquidity's confluence-zone inputs
+(`lo_3m`/`lo_1w`/`lo_1d`/ATR), Fibo's `zone_low`/`zone_high`/`swing_high` --
+via the older table method, with no cross-check that the two methods agree
+for that day.
+
+**Evidence**: on a 1,500-trade random sample from the real, already-published
+Liquidity A/B/C trade population, comparing `scale_probe`'s scale for day D
+(from D-1's own bhav-vs-Angel match) against `adjustment_factors.factor` for
+the same day D: **233/1,500 (15.5%) disagree by >=0.5%**, consistent with
+the 14.90% figure `scale_probe`'s own docstring already recorded for this
+exact failure mode under the predecessor method. Entity-concentrated, not
+random: 50 of 246 entities carry every mismatch, the top 10 account for 43%
+of them, and for every entity with 2+ mismatches the ratio is constant
+across all of that entity's dates (INE239A01016: exactly 0.1x across 14
+dates; INE003A01024: exactly 2.011x across 11 dates; INE237A01028: exactly
+5.0x across 7 dates) -- a few show a clean regime change mid-sample
+(INE423A01024: 1.031 -> 1.648 -> 1.031), consistent with a real corporate
+action partway through. 104 of 233 (45%) land within 2% of a simple
+small-integer ratio. Checked `corporate_actions` directly for the five
+largest-count entities: INE239A01016 and INE263A01016 have recorded
+splits/bonuses consistent with the observed ratio being one missed leg of a
+multi-step adjustment chain; **INE003A01024, INE237A01028, and
+INE745G01035 have zero corporate actions recorded at all**, yet show
+stable 2.011x/5.0x/5.0x mismatches -- the same "invisible corporate event"
+failure `scale_probe`'s docstring names as its original motivation (there,
+KOTAKBANK's pre-2016 merger), recurring in different entities that this
+particular conversion path was never checked against. No correlation with
+the 2024 bhavcopy format cutover -- structurally impossible to be the cause
+here, since every affected date and its forward window falls entirely
+before 2023.
+
+**Effect, stated precisely, not assumed**: the realized entry/stop/target/
+P&L of a specific already-published trade is not directly corrupted by
+this -- those values come from the `scale_probe`-scaled candles directly
+(confirmed via the Study C vs Study A hand-trace cross-check, where
+`stop_price` tracked the candle-derived `final_sweep_low` exactly). What is
+at risk is the SELECTION stage: whether a given entity-day is accepted as
+having a valid confluence zone, or a sweep deep enough relative to ATR, on
+the ~15-18% of days where the reference-level conversion disagrees with the
+validated candle scale -- a false-positive-entry or false-negative-skip
+risk, not a P&L-arithmetic risk, for whichever trades fall on a mismatching
+day. Whether, or how much, this changes any specific published verdict has
+not been measured and is not claimed here.
+
+**Status: found, not fixed.** Affects `poc.v4` (hence POC V1-V5), all of
+`liquidity.a`/`liquidity.b`/`liquidity.c`, and `fibo.backtest` (the sealed
+Fibo test). Does not affect `box_theory` or `darvas`. No code changed by
+this entry -- discovered as a side effect of building a new post-hoc
+diagnostic over the closed Liquidity A/B/C trade population, reported
+before proceeding with that diagnostic, and left for a deliberate decision
+on whether/how to re-measure any of the affected studies' selection stage.
