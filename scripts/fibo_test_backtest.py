@@ -38,7 +38,7 @@ import datetime as dt
 ROOT = Path(__file__).resolve().parents[1]
 WAREHOUSE = ROOT / "data" / "warehouse.duckdb"
 INTRADAY_DB = ROOT / "data" / "fibo_intraday.duckdb"
-RESULTS_PATH = ROOT / "data" / "fibo_test_results.pkl"
+RESULTS_PATH = ROOT / "data" / "fibo_test_results_corrected_scale.pkl"
 
 TEST_END = dt.date(2026, 9, 18)
 TOP_N = 200
@@ -170,13 +170,6 @@ def main():
     m["scale_decision"] = [d for d, s in decisions_scales]
     m["scale"] = [s for d, s in decisions_scales]
 
-    factors = warehouse_con.execute(
-        f"SELECT entity_id, trade_date, factor FROM adjustment_factors WHERE entity_id IN ({placeholders})",
-        entities,
-    ).fetchdf()
-    factors["trade_date"] = pd.to_datetime(factors["trade_date"]).dt.date
-    m = m.merge(factors, on=["entity_id", "trade_date"], how="left")
-
     log("Fetching Bug #1/#11 unexplained-jump exclusions (src/fibo/jump_guard.py, full warehouse history)...")
     jump_dates = combined_unexplained_jump_dates(warehouse_con)
     log(f"  {sum(len(d) for d in jump_dates.values())} flagged date(s) across {len(jump_dates)} entities")
@@ -237,7 +230,7 @@ def main():
                 "swing_high_price": row["swing_high_price"],
             }
             result = evaluate_entity_day(
-                row["entity_id"], row["trade_date"], signal_row, decision, row["scale"], row["factor"], bars,
+                row["entity_id"], row["trade_date"], signal_row, decision, row["scale"], bars,
             )
             cat = result["category"]
             if cat == "TRADE":

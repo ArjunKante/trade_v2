@@ -4,17 +4,19 @@ bars into a category -- EXCLUDED_SCALE, NO_SIGNAL, SETUP_OFF,
 SETUP_ON_NO_TRIGGER, DEGENERATE_QTY, or TRADE -- and, for TRADE, a fully
 resolved trade record.
 
-TWO SCALE LAYERS, applied in order, per PREREGISTRATION_FIBO.md's Section
-2 and the price-scale REVISION note:
-  1. The golden zone and swing high are computed on THIS PROJECT'S OWN
-     adjusted daily prices -- converted to day D's raw scale via
-     src/fibo/price_scale.py, using data_layer.adjustment's deterministic
-     factor(D).
-  2. Angel's own 1-minute bars for day D are converted to raw scale via
-     src/fibo/scale_probe.py's empirically-measured scale(D) (the
-     HIGH/LOW method).
-Both conversions land in the SAME raw scale -- the actual rupee prices D
-traded at -- only then are they compared.
+ONE SCALE LAYER ONLY (REVISED, BUGS.md Bug #18): both the golden zone/
+swing high AND Angel's own 1-minute bars for day D are converted to raw
+scale via src/fibo/scale_probe.py's empirically-measured scale(D) (the
+D-1 HIGH/LOW method). This project's own `adjustment_factors` table
+(src/fibo/price_scale.py) was previously used for the golden zone/swing
+conversion instead, independently of scale_probe's own answer for the
+same day -- found to disagree materially (>=0.5% relative) on 11 of the
+sealed test's 188 signal days and 5 of the DEV window's 67, in every
+case because `adjustment_factors` was missing or misrecording a
+corporate action scale_probe's own D-1 empirical measurement does not
+depend on. 14 of those 16 disagreements flip the `zones_overlap` call
+below from True to False -- a selection-stage error, not merely a
+price-recording one. See Bug #18 in BUGS.md for the full measurement.
 
 ONE TRADE PER STOCK PER DAY, by construction: one daily signal (one swing,
 one golden zone) per entity per day, and the entry scan stops at the FIRST
@@ -29,7 +31,6 @@ import pandas as pd
 from fibo.bars import aggregate_to_15min
 from fibo.resolution import compute_r, compute_target, position_size_shares, resolve_trade
 from fibo.scale_probe import ScaleDecision, to_raw_scale as scale_probe_to_raw
-from fibo.price_scale import to_raw_scale as factor_to_raw
 from swing.costs import round_trip_cost_rs
 
 ORB_START = dt.time(9, 15)
@@ -69,7 +70,7 @@ def find_entry(bars_15min_raw: pd.DataFrame, orb_high: float) -> tuple[pd.Timest
 
 def evaluate_entity_day(
     entity_id: str, day: dt.date, signal_row: dict, scale_decision: ScaleDecision, scale: float | None,
-    factor_d: float, bars_1min_angel: pd.DataFrame | None,
+    bars_1min_angel: pd.DataFrame | None,
 ) -> dict:
     """The full per-(entity, day) decision. `bars_1min_angel` is that day's
     RAW-Angel-units 1-minute bars (columns ts/open/high/low/close/volume,
@@ -99,9 +100,9 @@ def evaluate_entity_day(
         return {"category": "NO_ORB_DATA"}
     orb_high, orb_low = orb
 
-    zone_low_raw = factor_to_raw(signal_row["zone_low"], factor_d)
-    zone_high_raw = factor_to_raw(signal_row["zone_high"], factor_d)
-    swing_high_raw = factor_to_raw(signal_row["swing_high_price"], factor_d)
+    zone_low_raw = scale_probe_to_raw(signal_row["zone_low"], scale)
+    zone_high_raw = scale_probe_to_raw(signal_row["zone_high"], scale)
+    swing_high_raw = scale_probe_to_raw(signal_row["swing_high_price"], scale)
 
     if not zones_overlap(orb_low, orb_high, zone_low_raw, zone_high_raw):
         return {"category": "SETUP_OFF", "orb_high": orb_high, "orb_low": orb_low,

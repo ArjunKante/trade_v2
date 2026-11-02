@@ -40,8 +40,8 @@ def _signal(uptrend=True, has_swing=True, zone_low=99.0, zone_high=101.0, swing_
             "swing_high_price": swing_high_price}
 
 
-def _evaluate(bars, signal_row, factor_d=1.0, scale=1.0, decision=ScaleDecision.RAW_EQUIVALENT):
-    return evaluate_entity_day("E1", dt.date.fromisoformat(DAY), signal_row, decision, scale, factor_d, bars)
+def _evaluate(bars, signal_row, scale=1.0, decision=ScaleDecision.RAW_EQUIVALENT):
+    return evaluate_entity_day("E1", dt.date.fromisoformat(DAY), signal_row, decision, scale, bars)
 
 
 # ---- helper-function unit tests ----

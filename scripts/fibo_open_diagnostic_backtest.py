@@ -263,7 +263,7 @@ def main():
                     "swing_high_price": row["swing_high_price"],
                 }
                 result_b = evaluate_entity_day(
-                    row["entity_id"], row["trade_date"], signal_row, decision, row["scale"], row["factor"], bars_for_day,
+                    row["entity_id"], row["trade_date"], signal_row, decision, row["scale"], bars_for_day,
                 )
                 result_o = evaluate_entity_day_open(
                     row["entity_id"], row["trade_date"], signal_row, decision, row["scale"], row["factor"], bars_for_day,

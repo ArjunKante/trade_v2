@@ -1350,3 +1350,40 @@ comparison is not run -- exactly what `PREREGISTRATION_PORTFOLIO.md`'s
 own Section 7/Section 11 Step 2 structure already enforced, and why it
 is now the template for every future comparison study, not just this
 one.
+
+## STANDING RULE: a bug that affects SELECTION must have its blast radius measured in BOTH directions, not only on the already-selected population
+
+**Discovered live, on Bug #18 (BUGS.md), the two-scale-method defect
+behind `FIBO_FINDINGS.md` Section 11.** The first blast-radius
+measurement checked only one direction: of the Fibo sealed test's 188
+trades and the DEV window's 67, how many would have been REJECTED under
+the corrected scale. That measurement was accurate as far as it went --
+9 of 188 and 5 of 67 -- but it answered only half the question, because
+it could only see the population the bug had already let through. It
+never checked the much larger population on the other side of the same
+decision boundary: of the ~20,000 DEV-window days the ORIGINAL code
+rejected as `SETUP_OFF`, how many should have been accepted under the
+corrected scale? That question was not "not yet answered" -- it was not
+asked at all, because the task as first scoped (re-measure the known
+trade list) never pointed at the rejected population.
+
+**The reverse direction turned out to be 6x larger than the one that was
+checked.** The DEV window's full, honest recomputation did not shrink
+67 trades to 62 (the expected "minus the 5 bad ones") -- it grew to 120:
+the same scale defect that falsely INCLUDED 5 trades also falsely
+EXCLUDED 58 others, net +53. A selection-stage bug, by construction, has
+exactly two failure modes -- false positive and false negative -- and a
+blast-radius measurement that only samples the already-selected side of
+the boundary structurally cannot see the other one, no matter how
+carefully it checks the side it does sample.
+
+**The rule, going forward**: when a bug is found to affect SELECTION
+(not just a recorded price, return, or other value on an
+already-selected row), the blast-radius measurement must cover BOTH the
+already-selected population (did the bug let in rows that shouldn't be
+there) AND the rejected population (did the bug keep out rows that
+should be there) -- before any fix is scoped as "remove N known-bad
+rows." If only the selected side is checked, say so explicitly in the
+report rather than letting a partial measurement be read as the full
+one; a reader who sees "9 of 188 affected" with no mention of the
+rejected side has no way to know the other side was never looked at.
