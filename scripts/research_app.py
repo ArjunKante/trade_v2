@@ -286,7 +286,8 @@ def _liquidity_a_dev_bounds() -> tuple[dt.date, dt.date]:
 # across both studies' full trade populations and did not change the
 # verdict (LIQUIDITY_B_FINDINGS.md's own "Post-DEV diagnostics" /
 # "Liquidity family tally" sections), and the user then confirmed
-# closure. Liquidity family: 2 trials, 2 failures.
+# closure. Liquidity family (after Study C's later closure too):
+# 3 trials, 3 failures.
 # ---------------------------------------------------------------------
 
 @st.cache_data
@@ -304,8 +305,8 @@ def _load_liquidity_b_verdict() -> dict:
         inf = pickle.load(f)
     return {
         "headline": (
-            "CLOSED -- DEV FAILS (NO EDGE) -- Liquidity family trial 2 of 2 (short side, exact mirror "
-            "of Study A) -- family tally: 2 trials, 2 failures"
+            "CLOSED -- DEV FAILS (NO EDGE) -- Liquidity family trial 2 of 3 (short side, exact mirror "
+            "of Study A) -- family tally: 3 trials, 3 failures"
         ),
         "mean_label": "Mean net return",
         "mean_display": f"{inf['mean_net_r']*100:+.4f}%",

@@ -226,12 +226,101 @@ effects neither single predicted mechanism captured). Recorded as a
 pattern, per the preregistration's own instruction, not dismissed as
 three independent coincidences.
 
+## CLOSED -- DEV failed both sides, TEST stays sealed, no retry
+
+**Confirmed by the user.** DEV failed on both sides (3 of 4 gate
+conditions each). TEST was never read and will not be. No retry of this
+configuration. **Liquidity family: 3 trials, 3 failures** (A, B, C, all
+closed, all the same shape: both nulls pass at the 100th percentile
+while the mean stays negative).
+
+### Central finding: the hypothesis was tested directly and REFUTED
+
+**The hypothesis was that filtering non-followers raises the mean
+without raising the win count.** It was tested directly, against the
+hypothesis's own stated criterion, not a proxy for it: the half-target
+reach rate.
+
+**It FELL on both sides** -- 21.6% -> **19.6%** (long), 26.5% ->
+**23.4%** (short). Not flat, not a rounding-level wobble -- a fall, on
+both sides, in the one number the hypothesis itself nominated as its
+test.
+
+**The mechanism is visible directly in the skip breakdown, not inferred
+after the fact**:
+
+```
+LONG:  retest_failed (n=950)  mean -1.019%   -- correctly filtered
+       no_retest     (n=67)   mean +1.005%   -- incorrectly filtered
+SHORT: retest_failed (n=935)  mean -0.954%   -- correctly filtered
+       no_retest     (n=66)   mean +1.151%   -- incorrectly filtered
+```
+
+`retest_failed` trades (price breached the original sweep extreme
+before ever confirming a retest) really were bad, and removing them is
+exactly what the hypothesis predicted. But `no_retest` trades -- price
+ran away in the trade's own favor and never came back to offer a
+confirmation -- were themselves the best trades in the filtered-out
+population, on both sides. **The retest removed the best trades along
+with the worst.**
+
+**General lesson, stated for reuse beyond this study**: a confirmation
+filter that requires price to come back necessarily excludes the moves
+that do not come back -- and those are disproportionately the winners,
+because the strongest moves are the ones least likely to pull back far
+enough to retest before running. A filter built on "wait for
+confirmation" trades win rate for win *rate among survivors*, and the
+trade-off is not automatically favorable: it depends on whether the
+excluded "ran without confirming" population is better or worse than
+the excluded "genuinely failed" population. Here the two were roughly
+comparable in size-weighted impact on the excluded group's own mean
+pulling in opposite directions, and in Study C's measured reach rate
+specifically, the loss of the best non-confirming trades dominated.
+This is a general caution against any retest/confirmation filter
+applied on top of a sweep-and-reclaim-style mechanism without first
+checking, as done here, what the "never came back" population actually
+looked like -- it is not safe to assume it is disproportionately bad.
+
+### Units bug, restated for the closure record
+
+`scripts/liquidity_c_dev_run.py`'s own `filtered_out_trades.
+vs_actual_c_mean` field is wrong (subtracts a raw fraction from a
+percentage, a factor-of-100 error) and was flagged, not silently fixed,
+before this document relied on any derived figure from it. **It never
+touched the gate decision** -- the gate reads `mean_net_return_pct`,
+`ci_low`/`ci_high`, the two null percentiles, the ex-best-year mean, and
+the bands-1-100 mean, none of which pass through the buggy field. The
+corrected figures (-0.62pp long, -0.71pp short) used throughout this
+document were computed by hand directly from the two correctly-scaled
+percentage means, not from the buggy stored field.
+
+### Calibration note: three for three, verdict right / mechanism wrong
+
+**Within this family, the verdict prediction was right all three times
+(A, B, C) and the mechanism prediction was wrong all three times.**
+Study A: predicted cost would be the binding constraint, found instead
+that follow-through was the issue. Study B: predicted similar-or-worse
+follow-through on the short side, found it was better. Study C:
+predicted a sharp trade-count collapse and a rising reach rate driven
+by a small delay cost, found a modest trade-count drop, a *falling*
+reach rate, and a cancellation between two effects (correctly-filtered
+losers vs. incorrectly-filtered winners) that neither single predicted
+mechanism captured.
+
+**Worth stating as a general calibration note about predictions made in
+this project, not just about this family**: the verdict ("will this
+configuration show an edge") has been forecastable from priors and
+counter-evidence recorded in advance. The mechanism ("why, specifically,
+will it fail or succeed") has not been -- three for three wrong, each
+time for a different, concrete, checkable reason rather than a vague
+miss. This suggests pre-committed verdict predictions in this project
+are worth continuing to make and record (they carry real information),
+while pre-committed mechanism predictions should be treated as a
+lower-confidence guess even when the verdict prediction is sound --
+worth checking directly against the data, as done here, rather than
+assumed to follow once the verdict is confirmed.
+
 ## Status
 
-**DEV complete, both sides. NO EDGE, both sides fail the gate (3 of 4
-conditions) with the identical shape Studies A and B each already
-showed.** The hypothesis's own stated test (half-target reach rate) also
-fails on both sides, independent of the gate verdict. **Stopping here
-for approval before TEST**, per the preregistration's own Section 12 --
-TEST has not been read and `liquidity.c.guard_date_range` has not been
-called with `authorize_test=True` anywhere in this study.
+**CLOSED.** DEV failed both sides. TEST was never read and stays
+sealed. No retry. Liquidity family stands at 3 trials, 3 failures.

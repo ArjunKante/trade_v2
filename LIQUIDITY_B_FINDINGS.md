@@ -432,20 +432,26 @@ was tested across 17,353 trades and does not hold.** The existing
 reveal -- performance is flat-to-noisy across the turnover spectrum in
 both studies, the same conclusion at finer resolution.
 
-## Liquidity family tally -- CLOSED, both trials
+## Liquidity family tally -- UPDATED, Study C closed, 3 trials total
 
-**The Liquidity family now stands at 2 trials, 2 failures.** Study A
-(long, LOW-side) and Study B (short, HIGH-side) are both closed, no
-edge on DEV, TEST never read on either. **Both trials share the exact
-same shape**: both nulls (TIMING, SELECTION) passed at the **100th
-percentile** against 500 seeds each -- the entry mechanism carries real,
-non-random selection value on both sides of the market -- **while the
-mean net return stayed negative** on both (-0.2841% for A, -0.1212% for
-B), meaning the gate's own first condition (mean > 0, CI excludes zero)
-failed on both despite that non-random edge, not because the entry
-signal was noise. Fourteen prior strategies in this project have now
-closed with no edge in total (the thirteen implied by Study A's own
-updated count, plus this one).
+**The Liquidity family now stands at 3 trials, 3 failures.** Study A
+(long, LOW-side), Study B (short, HIGH-side), and Study C (retest
+confirmation added on top of A's and B's own entry mechanics) are all
+closed, no edge on DEV, TEST never read on any. **All three trials
+share the exact same shape**: both nulls (TIMING, SELECTION) passed at
+the **100th percentile** against 500 seeds each -- the entry mechanism
+carries real, non-random selection value on both sides of the market,
+with or without the retest filter -- **while the mean net return stayed
+negative** in all three (-0.2841% for A, -0.1212% for B, -0.2694%/
+-0.1096% for C's long/short), meaning the gate's own first condition
+(mean > 0, CI excludes zero) failed every time despite that non-random
+edge, not because the entry signal was noise. Study C additionally
+tested its own confirmation-filter hypothesis directly against its own
+stated criterion (half-target reach rate) and found it refuted, not
+merely unsupported -- see `LIQUIDITY_C_FINDINGS.md` for the full finding
+and the general lesson about confirmation filters recorded there.
+Fourteen prior strategies in this project had closed with no edge
+before this study; fifteen counting Study C.
 
 The two post-DEV diagnostics above (degenerate confluence, turnover)
 were run on both studies' own full trade populations specifically to

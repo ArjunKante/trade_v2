@@ -393,9 +393,14 @@ Study B (short, HIGH-side confluence, exact mirror of this study) has
 since run DEV and closed the same way: NO EDGE, TEST not read, 3 of 4
 gate conditions fail, both nulls again passing at the 100th percentile
 while the mean stayed negative (-0.1212%, less than half this study's
-own -0.2841%). **The Liquidity family now stands at 2 trials, 2
-failures** -- full detail and the side-by-side comparison numbers are in
-`LIQUIDITY_B_FINDINGS.md`, not duplicated here.
+own -0.2841%). Study C (retest confirmation on top of both A's and B's
+own entry mechanics, trial 3) has since also run DEV and closed the
+same way on both sides -- see `LIQUIDITY_C_FINDINGS.md` for the central
+finding there: the hypothesis's own stated test (half-target reach
+rate) was directly refuted, not merely unsupported. **The Liquidity
+family now stands at 3 trials, 3 failures** -- full detail and the
+side-by-side comparison numbers are in `LIQUIDITY_B_FINDINGS.md` and
+`LIQUIDITY_C_FINDINGS.md`, not duplicated here.
 
 Before Study B's closure, the user reviewed individual trades from both
 studies in a new research-browser view (all six levels, the confluence
