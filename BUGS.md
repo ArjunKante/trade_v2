@@ -1269,3 +1269,45 @@ this entry -- discovered as a side effect of building a new post-hoc
 diagnostic over the closed Liquidity A/B/C trade population, reported
 before proceeding with that diagnostic, and left for a deliberate decision
 on whether/how to re-measure any of the affected studies' selection stage.
+
+**Blast-radius measurement, Fibo sealed test and DEV window (requested
+given the sealed test is the only strategy here with a pass)**: checked
+`scale_probe` vs the table method directly on the signal day of every one
+of the 188 TEST trades and 67 DEV trades (`scripts/fibo_bug18_blast_
+radius.py`, read-only, no trades re-run).
+
+**TEST: 11/188 (5.9%) disagree materially; 9/188 (4.8%) flip `zones_overlap`
+from True to False** -- `INE647O01011` (2023-06-22, 2023-06-28),
+`INE237A01028` (2025-01-15, 2025-10-01), `INE0J1Y01017` (2025-09-29),
+`INE732I01013` (2025-04-17), `INE423A01024` (2024-10-08),
+`INE849A01012` (2025-05-05), `INE774D01024` (2024-02-14) -- these 9 would
+not have been selected as trades at all under the validated scale. The
+other 2 mismatches (`INE423A01024`, 2024-06-14/06-20, ~3% ratio) do not
+flip. **These 9 are not neutral**: their mean `net_r_amended` is 0.875 vs.
+0.367 for the full 188 and 0.342 excluding them -- removing them would
+lower the sealed test's own headline mean by roughly 7% relative. The
+verdict itself was not re-run; this states the exposure, not a new result.
+
+**DEV: 5/67 (7.5%) disagree materially, and all 5 flip** -- `INE205A01025`
+(2021-11-22), `INE237A01028` (2016-11-09), `INE397D01024` (2017-05-10),
+`INE628A01036` (2021-12-22), `INE239A01016` (2021-11-26). Here the effect
+on the mean is negligible (0.364 full vs. 0.368 excluding the 5) -- the
+same defect, opposite practical effect, in the two windows.
+
+**Live forward system (`fibo_evening.py`/`fibo_morning.py`): structurally
+immune to this specific mechanism, not merely clean so far.**
+`adjustment_factors.factor(D)` is a product over every ex-date strictly
+AFTER D -- for D = the most recent trading day that product is always
+empty, so factor == 1.0 by construction, with no dependence on whether
+`corporate_actions` is complete. Verified directly, not just derived:
+every one of 175 qualifying watchlist rows logged 2026-10-08 through
+2026-11-02 carries `scale_factor: 1.0`. `orb_high`/`orb_low` need no
+conversion at all (live `getCandleData`, no historical reconstruction).
+Separately flagged, not checked: whether the *adjusted* `golden_zone`/
+`swing_high` inputs themselves, built from a historical lookback window
+inside `fibo_evening.py`, could carry a stale-factor error from within
+that window -- a different, earlier-pipeline question than the one
+measured here. Live exposure to date is close to nil regardless: 87
+`setup` events logged, exactly one `setup_on=True` (AXISBANK, 2026-10-19,
+`run_mode: REPLAY`, never triggered), one `outcome` event, nothing live
+has actually traded.
