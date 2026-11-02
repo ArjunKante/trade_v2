@@ -320,6 +320,218 @@ lower-confidence guess even when the verdict prediction is sound --
 worth checking directly against the data, as done here, rather than
 assumed to follow once the verdict is confirmed.
 
+## POST-CLOSURE DIAGNOSTIC: what did price actually do over the next 10 days, regardless of the strategy's own exits?
+
+**Not a new study. No new strategy, no gate, no verdict change.** All
+three studies (A, B, C) stay closed exactly as recorded above. This is
+a measurement over the already-closed trade population, run after the
+fact and reported here because it spans all three studies' trades.
+Cross-referenced from `LIQUIDITY_A_FINDINGS.md` and
+`LIQUIDITY_B_FINDINGS.md`.
+
+**Question**: for every one of the 32,515 trades actually taken across
+A (8,131), B (9,222), C-long (6,994), and C-short (8,168), starting from
+the real entry price, what did price do over the following 10 trading
+days -- regardless of what the strategy's own stop, half-target,
+full-target, or 15:15 time-exit actually did? Specifically: when (same
+day via 1-minute bars, or which of the next 10 trading days) was each
+of the strategy's own stop, 1.5R, 3R, and -- to see whether moves ran
+further than the strategy ever aimed for -- 5R and 10R, first touched.
+
+**Method, and why it is not literally "daily bars" as first specified**:
+a pre-flight check (see Bug #18, `BUGS.md`) found that `prices_eod`
+disagrees with the bars_1min-derived raw scale on 13-15% of days, with
+the disagreement traced to the same unreconciled-corporate-action
+pattern `fibo.scale_probe` already exists to fix. Rather than import
+that noise into a new measurement, every session here -- the entry day
+(1-minute resolution) and all 10 forward days (daily-aggregated from
+the same 1-minute source) -- is priced from `bars_1min` alone, converted
+via `fibo.scale_probe`'s empirically-validated per-day scale: the exact
+same method, and for the entry day the exact same scale value, that
+`box_theory.context.eligible_day_context` already uses for the candles
+A/B/C's own entry and exit logic runs on. `prices_eod` is used only as
+`scale_probe`'s own required input (the previous day's high/low) and as
+the trading-day calendar, never compared against `entry_price`/
+`stop_price` directly. Validated directly against a known hand-trace
+before running at scale: for Study A's own 2017-05-18 `STOP_NO_HALF`
+trade (`INE002A01018`), this diagnostic independently recovers the exact
+same stop touch -- same day, 13:17:00 -- as the trade's own recorded
+`final_exit_ts`. A day scale_probe cannot resolve (unresolved match,
+ex-date, or gap-guard skip) is recorded as data-unavailable for that
+session, not silently treated as "not touched"; coverage was effectively
+complete (31,091 of 32,515 trades, 95.6%, had the full 10 forward
+trading days resolved; the remainder mostly ran short of the DEV window's
+own end rather than hitting a data gap).
+
+**CAVEATS, stated up front, per instruction**:
+- **Shorts (B, C-short) cannot legally be held overnight in Indian cash
+  equities at retail.** A 10-day hold is not an executable strategy for
+  these two studies' trades -- the numbers below for B and C-short are a
+  measurement of price behaviour only, not a description of anything
+  that could actually be traded.
+- This measurement uses the ORIGINAL entry price and the ORIGINAL stop
+  level, and prices only the move itself -- it does not model delivery
+  margin/costs, overnight gap risk, or the capital a real multi-day hold
+  would tie up. POC V5 already tested an actual 10-day hold directly
+  (not a hypothetical lookahead) and found it WORSE than the intraday
+  version (-0.63% vs -0.29%), substantially for exactly these reasons.
+  Nothing below should be read as contradicting that finding.
+- **This is hindsight on a closed population.** If anything below
+  suggests a better exit rule, that is a hypothesis for a new,
+  separately pre-registered trial -- not a result, and not evidence for
+  or against any of A/B/C's own closed verdicts.
+
+### Section 1: first-touch timing, cumulative % reached by checkpoint, per level
+
+Percent of trades where each level was touched by same-day, by day 1,
+2, 3, 5, 10, or never within the 10-day window (bands do not sum to
+100% beyond "never" since each row is its own cumulative-by-checkpoint
+series):
+
+**LONG (A + C-long combined, n=15,125)**
+
+| level | same day | by day 1 | by day 2 | by day 3 | by day 5 | by day 10 | never |
+|---|---|---|---|---|---|---|---|
+| stop | 41.4% | 63.5% | 70.6% | 74.8% | 79.5% | 84.5% | 15.5% |
+| 1.5R | 24.3% | 50.4% | 60.7% | 66.4% | 73.2% | 80.9% | 19.1% |
+| 3R | 5.8% | 21.6% | 32.5% | 40.3% | 50.0% | 62.7% | 37.3% |
+| 5R | 1.0% | 6.6% | 13.1% | 19.4% | 28.5% | 43.1% | 56.9% |
+| 10R | 0.0% | 0.6% | 1.6% | 3.4% | 7.0% | 16.0% | 84.0% |
+
+**SHORT (B + C-short combined, n=17,390)** -- caveat above applies
+
+| level | same day | by day 1 | by day 2 | by day 3 | by day 5 | by day 10 | never |
+|---|---|---|---|---|---|---|---|
+| stop | 35.8% | 60.2% | 69.7% | 74.5% | 79.9% | 85.8% | 14.2% |
+| 1.5R | 28.9% | 52.6% | 61.9% | 67.2% | 73.2% | 80.2% | 19.8% |
+| 3R | 6.3% | 21.5% | 32.3% | 39.6% | 49.1% | 61.5% | 38.5% |
+| 5R | 1.1% | 6.1% | 12.4% | 18.0% | 27.0% | 41.4% | 58.6% |
+| 10R | 0.0% | 0.5% | 1.4% | 2.7% | 5.8% | 14.0% | 86.0% |
+
+All four studies individually (A, B, C-long, C-short) show the same
+shape as their direction's combined row above, within 1-6 points per
+cell -- the pattern is not specific to any one study. One structural
+fact worth stating plainly: **the strategy's own stop is touched at some
+point within 10 days on 84-86% of ALL trades** (same-day stop alone is
+34-44%) -- the stop is a frequently-revisited level, not a rare tail
+event, regardless of what eventually happens afterward. 3R (the
+strategy's own full target) is reached within 10 days on only 61-63% of
+trades even with no stop/time-exit in the way at all -- confirming the
+strategy's own ~20-27% full-target-after-half reach rate (Study A/B's
+own published figures) is not primarily a "ran out of time" artifact;
+most of the shortfall is simply moves that don't go that far within 10
+days, stop or no stop. 5R and 10R are reached within 10 days on only
+39-44% and 13-17% of trades respectively -- confirming the strategy is
+not systematically leaving large multiples on the table industry-wide,
+though a minority of trades clearly do run much further than 3R.
+
+### Section 2: of trades that hit the stop SAME DAY, how many went on to reach 1.5R or 3R anyway within 10 days?
+
+| | n same-day stop | % of all trades | -> reached 1.5R | -> reached 3R |
+|---|---|---|---|---|
+| LONG | 6,267 | 41.4% | 4,560 (72.8%) | 3,502 (55.9%) |
+| SHORT | 6,219 | 35.8% | 4,248 (68.3%) | 3,233 (52.0%) |
+| A | 3,533 | 43.5% | 2,577 (72.9%) | 2,013 (57.0%) |
+| B | 3,482 | 37.8% | 2,413 (69.3%) | 1,852 (53.2%) |
+| C-long | 2,734 | 39.1% | 1,983 (72.5%) | 1,489 (54.5%) |
+| C-short | 2,737 | 33.5% | 1,835 (67.0%) | 1,381 (50.5%) |
+
+**On roughly 7 of 10 same-day stop-outs, the idea was directionally
+right and the stop (or the one-day horizon) was what was wrong, not the
+setup itself** -- price went on to reach 1.5R within 10 days regardless
+of having first breached the stop. Just over half even reached the full
+3R target. This is consistent across all four studies, long and short
+alike (67-73% for 1.5R, 51-57% for 3R). Read together with Section 1's
+own finding that the stop is touched on 84-86% of ALL trades (not just
+same-day ones) -- a setup breaching its own stop at some point is close
+to the norm, not the exception, for this entry mechanism; what varies is
+whether price comes back afterward.
+
+### Section 3: of trades that exited via 15:15 time-exit without ever reaching the half target (TIME_EXIT_FULL), where did price end up by day 10?
+
+| | n | % of all | mean day-10 return | median | % favourable |
+|---|---|---|---|---|---|
+| LONG | 5,968 | 39.5% | +0.346% | +0.424% | 52.7% |
+| SHORT | 7,116 | 40.9% | -0.309% | -0.123% | 49.0% |
+| A | 2,994 | 36.8% | +0.324% | +0.408% | 52.4% |
+| B | 3,465 | 37.6% | -0.320% | -0.127% | 49.0% |
+| C-long | 2,974 | 42.5% | +0.368% | +0.450% | 53.1% |
+| C-short | 3,651 | 44.7% | -0.299% | -0.117% | 48.9% |
+
+(`day10_return` is signed so positive always means "favourable for the
+position actually taken" -- for SHORT trades this means price fell.)
+
+**Longs that timed out without reaching the half target kept drifting
+favourably afterward on average (median +0.42%, 53% net favourable by
+day 10); shorts that timed out drifted unfavourably on average (median
+-0.12% to -0.13%, only 49% favourable)** -- a small but real directional
+asymmetry, in the same direction as Study B's own already-published
+finding that shorts underperform longs despite better raw metrics
+(Study B outperformed A with no trend filter, yet the family's own
+counter-evidence already flagged shorts as structurally weaker
+follow-through). Separately: of these same TIME_EXIT_FULL trades,
+78-80% went on to reach 1.5R and 57-59% went on to reach 3R within the
+full 10-day window anyway (both directions, all four studies) -- the
+single 15:15 cutoff is, by a wide margin, the single biggest source of
+"target not reached" in this entire population, well ahead of the stop.
+
+### Section 4: when BOTH the stop and a target were reached within 10 days, which came first?
+
+**Target = 1.5R**
+
+| | n both reached | stop first | target first | same session (order unknown) |
+|---|---|---|---|---|
+| LONG | 9,919 (65.6%) | 5,448 (54.9%) | 3,358 (33.9%) | 1,113 (11.2%) |
+| SHORT | 11,490 (66.1%) | 5,382 (46.8%) | 4,757 (41.4%) | 1,351 (11.8%) |
+
+**Target = 3R**
+
+| | n both reached | stop first | target first | same session (order unknown) |
+|---|---|---|---|---|
+| LONG | 7,250 (47.9%) | 5,314 (73.3%) | 1,597 (22.0%) | 339 (4.7%) |
+| SHORT | 8,333 (47.9%) | 5,679 (68.2%) | 2,210 (26.5%) | 444 (5.3%) |
+
+Median gap when orderable: 2 trading sessions for 1.5R, 3 for 3R, both
+directions (means 3.1-3.9, pulled up by a long right tail). Of the
+"same session" cases that were specifically same-DAY (both touched
+intraday, session 0): zero exact-same-minute ties on either target or
+either direction; the stop preceded the target intraday roughly 2.3-2.4x
+as often as the reverse (LONG 1.5R: 398 stop-first vs. 168 target-first
+within the day; SHORT 1.5R: 452 vs. 196) -- consistent with the stop
+typically sitting closer to entry than 1.5R, so a volatile day that
+clears both tends to clear the nearer one first.
+
+**For 3R specifically, the stop comes first roughly 2.6-3.3x as often as
+the target does, in both directions** -- when a trade is eventually
+going to reach the full target AND also touch the stop at some point
+within 10 days, it overwhelmingly touches the stop FIRST. This is the
+most direct evidence in this diagnostic that the strategy's stop
+placement is, more often than not, positioned such that a genuinely
+winning move still "shakes out" the position on the way -- not proof
+that the stop is wrong (a tighter stop also changes position sizing and
+the win population itself, and this is hindsight on a closed
+population, not a trial), but a concrete, measured fact a future
+pre-registered trial on stop placement would need to explain.
+
+### What this does and does not change
+
+**No verdict changes.** A, B, and C stay closed exactly as recorded
+above -- DEV failed, TEST stays sealed, no retry, 3 trials/3 failures.
+Nothing here is a backtest of an alternative exit rule (no costs, no
+position-sizing change, no re-entry logic, no slippage past the
+original fill); it is a measurement of what price did, on the
+population these three closed studies actually traded, after their own
+exits are set aside. The clearest hypotheses it raises for a future,
+separately pre-registered trial -- a wider stop, or a longer hold past
+15:15 for longs specifically given the asymmetric day-10 drift in
+Section 3 -- are exactly that: hypotheses, generated from hindsight on a
+population that already failed its own gate, not findings that this
+population would have passed under a different rule. POC V5's own
+direct test of a longer hold (not a lookahead measurement) already
+found that an actual extended hold made its own family's result WORSE,
+which is the relevant prior for how much weight any hindsight-only
+signal here should carry on its own.
+
 ## Status
 
 **CLOSED.** DEV failed both sides. TEST was never read and stays

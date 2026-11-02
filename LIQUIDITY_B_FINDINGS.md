@@ -466,6 +466,15 @@ the one identified, untried fix to the shared 1-day/1-week overlap flaw
 that recurred -- at different but comparably material rates -- on both
 sides of this family.
 
+A later post-closure diagnostic (not a new trial, no verdict change)
+measured what price did over the 10 trading days following every trade
+in A, B, and C regardless of the strategy's own exits -- see
+`LIQUIDITY_C_FINDINGS.md`'s "POST-CLOSURE DIAGNOSTIC" section. Note the
+caveat recorded there: Study B's own trades cannot legally be held
+overnight in Indian cash equities at retail, so that diagnostic's
+numbers for B measure price behaviour only, not an executable
+alternative to this study's own closed result.
+
 ## Status
 
 **CLOSED.** DEV failed (`mean net return -0.1212%, CI fully negative,

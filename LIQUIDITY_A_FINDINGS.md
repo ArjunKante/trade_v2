@@ -402,6 +402,14 @@ family now stands at 3 trials, 3 failures** -- full detail and the
 side-by-side comparison numbers are in `LIQUIDITY_B_FINDINGS.md` and
 `LIQUIDITY_C_FINDINGS.md`, not duplicated here.
 
+A later post-closure diagnostic (not a new trial, no verdict change)
+measured what price did over the 10 trading days following every trade
+in A, B, and C regardless of the strategy's own exits -- see
+`LIQUIDITY_C_FINDINGS.md`'s "POST-CLOSURE DIAGNOSTIC" section for the
+full numbers (first-touch timing per level, same-day-stop trades that
+recovered anyway, TIME_EXIT_FULL trades' day-10 outcome, and stop-vs-
+target ordering).
+
 Before Study B's closure, the user reviewed individual trades from both
 studies in a new research-browser view (all six levels, the confluence
 zone, and every sweep/reclaim/entry/exit marker drawn per trade) and
