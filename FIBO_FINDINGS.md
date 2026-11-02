@@ -17,7 +17,8 @@ demonstrated edge, net of realistic transaction costs, on NSE equities?
 
 This is placed here, ahead of the verdict below, deliberately -- it is
 the finding that should survive in memory regardless of which way Section
-3's verdict (or Section 9's later amended re-test) comes out.
+3's verdict (or Section 9's later amended re-test, or Section 13's second
+amended re-test under a corrected scale method) comes out.
 
 > The original pre-registration was rigorous in structure -- frozen
 > rules, sealed window, pre-committed criteria -- and still carried an
@@ -515,3 +516,231 @@ are now in place in all three Fibo backtest scripts, so this cannot recur
 silently again; `src/fibo_live/watchlist.py` (the live system) already
 enforced its universe correctly and needed no change. Not yet re-run as
 of this entry -- reported before execution, per instruction.
+
+## 13. SECOND AMENDED RE-TEST, CORRECTED SCALE (2026-11-03)
+
+**The requested section number was 11; Sections 11 and 12 above already
+exist and are left exactly as written. This is Section 13, not a
+renumbering of anything above it.** Sections 3 (the original sealed
+verdict, NO EDGE), 6b, 9 (the first amendment, cost-only, TEST PASS), and
+12 all stand unedited above this section.
+
+### 13a. Trigger: Bug #18
+
+`BUGS.md`'s Bug #18 found that `fibo.backtest.evaluate_entity_day`
+converted the golden zone/swing high to raw scale via the table-based
+`adjustment_factors` method while converting that same day's own candles
+via `fibo.scale_probe`'s empirically-validated method -- two different,
+uncross-checked answers for the same day's scale, compared against each
+other inside `zones_overlap`. A blast-radius measurement against the
+already-published 188 TEST and 67 DEV trades found 9 and 5 trades
+respectively where the two methods disagreed materially, all 9 and all 5
+flipping `zones_overlap` from True to False under the correct scale --
+i.e. 9 of 188 sealed-test trades were false positives that should not
+have existed, and they were not neutral: their own mean net R (0.875)
+sat far above the other 179 trades' (0.342), meaning they inflated the
+sealed test's own headline mean.
+
+### 13b. The scoping lesson: that first measurement only checked one direction
+
+Recorded in full as a new standing rule in `OPERATIONS.md`, stated briefly
+here because it is the reason this section's trade count is not simply
+"188 minus 9." The blast-radius measurement in 13a only checked whether
+already-selected trades would be REJECTED under the corrected scale. It
+never checked the reverse -- whether days the ORIGINAL code rejected as
+`SETUP_OFF` should have been accepted -- because that was not the
+question the measurement was built to answer. A selection-stage bug, by
+construction, has two failure modes, and a measurement that samples only
+one side of the boundary cannot see the other.
+
+**The reverse direction was 6x larger than the one originally checked.**
+Fixing the scale method in `src/fibo/backtest.py` (one method,
+`fibo.scale_probe`, used for both the candles and the golden zone/swing
+conversion -- no other rule touched) and re-running the DEV window end to
+end, FIRST, as a verification step before touching TEST: the 62 trades
+unaffected by the mismatch reproduced byte-identical (one sub-0.01%
+floating-point difference, immaterial), the 5 known-bad trades were
+correctly gone -- and 58 previously-wrongly-rejected days flipped to
+TRADE. DEV went from 67 to 120 trades, not 67 to 62.
+
+### 13c. The TEST re-run: trade count, gains and losses broken out
+
+One read, same frozen rules, same window (2023-01-01 to 2026-09-18,
+top-200 universe), only the scale method changed.
+
+| | count |
+|---|---|
+| Original (188) | 188 |
+| LOSSES (correctly rejected under the fix) | 9 |
+| GAINS (previously wrongly rejected, now correctly accepted) | 37 |
+| **New total** | **216** |
+
+The 9 losses are exactly the 9 identified in 13a (verified by key match,
+not assumed). The 179 trades not touched by the fix are byte-identical to
+their originals (8 of 179 show a sub-0.1%-relative floating-point
+difference in `target` from `scale_probe` not being bit-identical to
+`1/factor` even on non-mismatching days -- immaterial, no exit_reason
+changed). The 37 gains are new; five were spot-checked by hand against
+`scale_probe` directly and all five showed the identical signature as
+13a's 9 losses (the table method defaulting to `factor=1.0` -- no
+adjustment recorded at all -- against a real, non-unity `scale_probe`
+measurement of 1.04-1.65), and three of the five sampled entities
+(`INE155A01022`, `INE628A01036`, `INE397D01024`) are the same entities
+independently flagged with matching stable ratios in the unrelated
+Liquidity-family analysis that first surfaced Bug #18.
+
+**Comparison against the 179-trade subtraction-only basis originally
+scoped** (188 minus the 9 losses, gains not added -- i.e. the "half
+correction"), to make the difference between the two visible:
+
+| scenario | 179-trade (subtraction only) | 216-trade (full correction) |
+|---|---|---|
+| (i) flat low | mean +0.3361, t=5.446 | mean +0.2612, t=4.548 |
+| (ii) flat high | mean +0.2499, t=4.096 | mean +0.1753, t=3.078 |
+| (iii) pessimistic banded (refuted 4x) | mean **+0.0166**, t=0.270 | mean **-0.0443**, t=-0.774 |
+| (iv) measured banded (Section 8c) | mean +0.3418, t=5.529 | mean +0.2679, t=4.661 |
+
+The half-correction and the full correction disagree even on the SIGN of
+scenario (iii)'s mean (marginally positive but not remotely significant,
+vs. negative) -- both fail criterion 2 there, for different reasons, and
+neither the 179-trade nor the 216-trade figure is "the" scale-corrected
+result; only the full, two-directional re-run (216) is, per 13b.
+
+### 13d. Which cost model was the re-run evaluated against -- resolved before writing a verdict
+
+`fibo_test_backtest.py` computes `net_r_lo_cost`/`net_r_hi_cost` (flat
+6/19bps) and `net_r_pessimistic` via the ORIGINAL 19bps x{1,2,4}
+multiplier -- the same three scenarios Section 6b used, not the Section
+8c/9 measured banded model (2.0/4.0/7.0bps by band). The corrected-scale
+216-trade population was evaluated under all four, applying Section 8c's
+frozen formula directly to the existing trades (no new data read):
+
+**ALL FOUR CRITERIA, ALL FOUR COST SCENARIOS:**
+
+| scenario | mean net R | t | vs null (b) | vs null (b2) | criterion 2 | criterion 3 | criterion 4 | verdict |
+|---|---|---|---|---|---|---|---|---|
+| (i) flat low | +0.2612 | 4.548 | 100.0th | 100.0th | PASS | PASS | PASS | **PASS** |
+| (ii) flat high | +0.1753 | 3.078 | 100.0th | 100.0th | PASS | PASS | PASS | **PASS** |
+| (iii) pessimistic banded (refuted 4x) | -0.0443 | -0.774 | 100.0th | 100.0th | **FAIL** | PASS | PASS | **FAIL** |
+| (iv) measured banded (Section 8c, frozen) | +0.2679 | 4.661 | 100.0th | 100.0th | PASS | PASS | PASS | **PASS** |
+
+Criterion 1 (>=100 trades): met, 216.
+
+**Stated plainly, per instruction, rather than reported as a flat
+failure: the corrected-scale re-test PASSES all four criteria under
+every cost scenario tested EXCEPT the one scenario (iii) already
+refuted on its own stated grounds in Section 5d/8c -- band 101-200
+measured at ~3.2bps live against the 76bps that scenario's 4x
+multiplier implies.** Scenario (iii) fails criterion 2 alone (mean <= 0);
+criteria 3 and 4 would also have passed there, at the 100th percentile,
+exactly as in every other scenario -- the entry mechanism's non-random
+selection value is not in question in any scenario, including the
+refuted one. Judged strictly against the ORIGINAL three-scenario frozen
+rule (i, ii, iii only), this re-test still reads NO EDGE, since all three
+original scenarios must pass and (iii) does not. Judged against the
+measured, live-grounded cost model this project already adopted in
+Section 9 to produce its own first amended PASS, this re-test is an
+unambiguous, clean PASS -- a materially stronger result than Section 9's
+own amendment, since here even the refuted multiplier's own FAILURE is
+explained by a cost assumption already known to be wrong, not a genuine
+finding about the strategy.
+
+**AMENDED VERDICT: TEST PASS, under the measured cost model.** Section
+3's original "NO EDGE" headline is left unedited above -- it remains the
+accurate record of what the ORIGINAL sealed read, under its own original
+three scenarios, returned. This section's verdict is a SEPARATE,
+later statement about what the SAME window reads under a corrected
+selection mechanism and the cost model this project has, since Section 9,
+already established as the grounded one.
+
+### 13e. By rank band
+
+| band | n | win rate | mean gross R | mean net R (measured) | mean net R (refuted pessimistic) |
+|---|---|---|---|---|---|
+| 1-50 | 51 | 72.5% | 0.4869 | **+0.3514** | +0.2146 |
+| 51-100 | 47 | 63.8% | 0.2859 | **+0.1569** | -0.0441 |
+| 101-200 | 118 | 66.1% | 0.4325 | **+0.2761** | -0.1563 |
+
+The same mechanism Section 9e already documented recurs here: band
+101-200 (118 of 216 trades, 55%) is the band whose refuted-pessimistic
+mean is negative, and it is solidly profitable under the measured cost.
+Band 51-100 is newly negative under the refuted scenario here (it was not
+in Section 6b/9, at a smaller n) -- a detail of the already-refuted
+scenario, not of the measured one, where all three bands are positive.
+
+### 13f. By year
+
+| year | n | win rate | mean gross R | mean net R (measured) |
+|---|---|---|---|---|
+| 2023 | 61 | 60.7% | 0.3635 | +0.2032 |
+| 2024 | 61 | 63.9% | 0.4111 | +0.2658 |
+| 2025 | 44 | 81.8% | 0.7159 | +0.5821 |
+| 2026 | 50 | 66.0% | 0.2109 | +0.0731 |
+
+2026 remains the weakest year (n unchanged at 50 -- none of this year's
+trades were touched by the scale fix in either direction), reproducing
+Section 9f's own figure for 2026 exactly. All four years individually
+net-positive under the measured model, same as Section 9.
+
+### 13g. Exit-reason breakdown
+
+| reason | count | % |
+|---|---|---|
+| TIME_EXIT | 169 | 78.2% |
+| TARGET | 29 | 13.4% |
+| STOP | 18 | 8.3% |
+
+Same shape as Sections 6b/9 (most of the result is intraday drift held to
+the close, not bounces off the golden zone); STOP's share rose slightly
+(8.3% vs 6.4%) -- consistent with 37 new, previously-unseen trades
+entering the population.
+
+### 13h. TIMING null (descriptive only, not a TEST PASS criterion)
+
+Strategy at the **0.0th percentile**, every cost measure (gross, lo, hi,
+pessimistic, measured) -- MORE extreme than Section 6b's original 2.3rd
+percentile and Section 9's 2.2nd. The specific ORB-breakout entry trigger
+underperforms a random entry time on the same good days even more
+starkly in the corrected-scale population than in the original. Unchanged
+conclusion from Section 6b/9: a candidate for a future, separately
+pre-registered study on entry timing, not acted on here.
+
+### 13i. HOW THIS RESULT MUST BE CITED -- four caveats, expanded from Section 9i
+
+**Wherever the +0.2679R / t=4.661 figure (or the 216-trade count) is
+cited, all four of the following must be cited alongside it:**
+
+| # | reason | why it weakens the result |
+|---|---|---|
+| 1 | **The window was already read -- twice before this.** | The original sealed test (Section 6b) and the first amended re-test (Section 9) both already read this window. This is a THIRD read of the same window, not independent data. |
+| 2 | **The scale correction was made after seeing a failure.** | Bug #18 was found while building an unrelated post-hoc diagnostic over closed Liquidity trades, not while auditing Fibo. But the decision to recompute TEST under the corrected scale was made knowing Section 6b had already failed and Section 9 had already amended once -- the same "see the failure, then go measure the input" sequence Section 9h already named as the real lesson of this project's prior amendment. |
+| 3 | **The cost model this re-test passes under rests on a thin measurement.** | Section 8c/9's measured banded model (2.0/4.0/7.0bps) is 5 valid snapshots across 3 trading days in one calendar week (2026-10-05/07/08). That limitation is inherited here in full, unchanged, unresolved by this section. |
+| 4 | **The trade list itself was wrong until now, and wrong in the direction that flattered the result.** | 9 of the original 188 trades were false positives averaging 0.875R against the population's 0.342R (the other 179) -- the uncorrected sealed test's own headline mean was inflated by a selection-stage bug, not just mis-costed. The correction that fixes this also adds 37 previously-missed trades (13c) -- the trade list changed substantially in BOTH directions, not merely trimmed. |
+
+**This verdict should be reported as: "the sealed trade list, re-selected
+under a corrected scale method, is profitable under a directly measured,
+rather than assumed, cost model, in a window that has now been read three
+times" -- not as "the strategy passed the sealed test."** A result
+requiring two separate amendments (one to the cost model, one to the
+selection mechanism) to a twice-already-read window is weak evidence
+regardless of what the corrected number says. If the figure in 13d had
+come back failing under the measured model too, that would have been
+reported as a failure in the first sentence of this section; it did not,
+and that is reported here with exactly the same directness.
+
+### 13j. Status
+
+**PASS under the measured cost model; FAIL under the already-refuted
+pessimistic multiplier; NO EDGE under the strict original three-scenario
+rule taken literally.** All three readings are reported because they are
+all true simultaneously of the same number -- which one is "the" verdict
+depends on which cost model is trusted, and Section 9 already settled
+that question in favor of the measured one for this same reason, before
+this section existed. **This PASS should be read as grounds to continue
+the forward paper test (`fibo_evening.py`/`fibo_morning.py`), not as
+grounds to believe the backtest.** Not yet propagated to the live system
+-- Bug #18 was found not to affect `fibo_morning.py`'s own zone
+conversion structurally (today's own `adjustment_factors.factor` is 1.0
+by construction, verified directly across all 175 live watchlist rows
+logged since 2026-10-08), so no live-system change is implied by this
+section.

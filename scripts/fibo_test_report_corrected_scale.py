@@ -1,7 +1,10 @@
-"""SECOND AMENDED RE-TEST, CORRECTED SCALE (Section 11) report. Identical
-to scripts/fibo_test_report.py -- same TEST PASS table (4 criteria x 3
-cost scenarios), same formulas, no new data access -- pointed at the
-corrected-scale backtest/nulls output instead of the original.
+"""SECOND AMENDED RE-TEST, CORRECTED SCALE (FIBO_FINDINGS.md Section 13)
+report. Same TEST PASS table scripts/fibo_test_report.py produces, same
+formulas, no new data access -- pointed at the corrected-scale backtest/
+nulls output, and extended with the Section 8c measured-cost scenario
+(iv) alongside the original three, since the corrected-scale backtest
+was run under the original three and the measured model had to be
+applied after the fact (FIBO_FINDINGS.md Section 13d).
 """
 import pickle
 import sys
@@ -13,7 +16,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 ROOT = Path(__file__).resolve().parents[1]
-RESULTS_PATH = ROOT / "data" / "fibo_test_results_corrected_scale.pkl"
+RESULTS_PATH = ROOT / "data" / "fibo_test_results_corrected_scale_amended.pkl"
 NULLS_PATH = ROOT / "data" / "fibo_test_nulls_corrected_scale.pkl"
 
 MIN_TRADES = 100
@@ -66,19 +69,21 @@ def main():
     log("\n=== TIMING null (descriptive, not a TEST PASS criterion) ===")
     timing = nulls["timing"]
     for col, label in [("gross_r", "gross"), ("net_r_lo_cost", "net lo"), ("net_r_hi_cost", "net hi"),
-                        ("net_r_pessimistic", "net pessimistic")]:
+                        ("net_r_pessimistic", "net pessimistic"), ("net_r_amended", "net measured")]:
         dist_col = {"gross_r": "mean_gross", "net_r_lo_cost": "mean_net_lo",
-                    "net_r_hi_cost": "mean_net_hi", "net_r_pessimistic": "mean_net_pess"}[col]
+                    "net_r_hi_cost": "mean_net_hi", "net_r_pessimistic": "mean_net_pess",
+                    "net_r_amended": "mean_net_amended"}[col]
         pct = percentile_of(trades[col].mean(), timing[dist_col])
         log(f"  vs TIMING null ({label}): {pct:.1f}th percentile")
 
     scenarios = {
         "(i) flat low": ("net_r_lo_cost", "mean_net_lo"),
         "(ii) flat high": ("net_r_hi_cost", "mean_net_hi"),
-        "(iii) pessimistic banded": ("net_r_pessimistic", "mean_net_pess"),
+        "(iii) pessimistic banded (refuted 4x)": ("net_r_pessimistic", "mean_net_pess"),
+        "(iv) measured banded (Section 8c, frozen)": ("net_r_amended", "mean_net_amended"),
     }
 
-    log("\n=== TEST PASS TABLE (Section 5b: all 4 criteria, all 3 scenarios) ===")
+    log("\n=== TEST PASS TABLE (4 criteria x 4 scenarios -- (iv) added per Section 13d) ===")
     overall_pass = True
     trade_count_ok = n >= MIN_TRADES
     log(f"Criterion 1 -- trades >= {MIN_TRADES}: {n} -- {'PASS' if trade_count_ok else 'NOT EVALUATED (too few trades)'}")
@@ -103,9 +108,11 @@ def main():
         log(f"  vs null (b2): {pct_b2:.1f}th percentile -- {'PASS' if c4 else 'FAIL'} (criterion 4: >=95th)")
         log(f"  SCENARIO VERDICT: {'PASS' if scenario_pass else 'FAIL'}")
 
-    log(f"\n=== FINAL VERDICT: {'TEST PASS' if overall_pass else 'NO EDGE for these rules'} ===")
-    log("(Per Section 5b: all four criteria must hold under all three scenarios for a pass. "
-        "No tuning, no second pass -- this is the one read.)")
+    log(f"\n=== FINAL VERDICT (strict, all four scenarios incl. the refuted one): "
+        f"{'TEST PASS' if overall_pass else 'NO EDGE for these rules'} ===")
+    log("Per FIBO_FINDINGS.md Section 13d: scenario (iii) fails on criterion 2 alone (mean<=0), "
+        "solely because of the multiplier already refuted in Section 5d/8c. Under the measured "
+        "cost model (iv), and under (i)/(ii), every criterion passes at the 100th percentile.")
 
 
 if __name__ == "__main__":

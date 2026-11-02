@@ -26,7 +26,7 @@ from fibo.intraday_db import get_read_connection as get_intraday_read_connection
 
 ROOT = Path(__file__).resolve().parents[1]
 INTRADAY_DB = ROOT / "data" / "fibo_intraday.duckdb"
-RESULTS_PATH = ROOT / "data" / "fibo_test_results_corrected_scale.pkl"
+RESULTS_PATH = ROOT / "data" / "fibo_test_results_corrected_scale_amended.pkl"
 NULLS_PATH = ROOT / "data" / "fibo_test_nulls_corrected_scale.pkl"
 CHECKPOINT_PATH = ROOT / "data" / "fibo_test_nulls_corrected_scale_checkpoint.pkl"
 CHECKPOINT_EVERY = 10
@@ -72,6 +72,22 @@ def pessimistic_cost_rs(position_size_rs: float, band: str) -> float:
     return fixed + spread
 
 
+# PREREGISTRATION_FIBO.md Section 8c, frozen 2026-10-08: live-measured
+# round-trip spread/impact by band. Added here (Section 11) alongside the
+# original three scenarios -- NOT in place of them -- since Section 9
+# already established (on the ORIGINAL 188-trade population) that the
+# refuted 19bps x {1,2,4} pessimistic multiplier and this measured figure
+# are different questions. No new random call: this is one more
+# accumulator per existing draw, same seeds, same RNG sequence.
+FROZEN_SPREAD_BPS = {"1-50": 2.0, "51-100": 4.0, "101-200": 7.0, "unranked": 7.0}
+
+
+def amended_cost_rs(position_size_rs: float, band: str) -> float:
+    fixed = buy_leg_cost_rs(position_size_rs, "INTRADAY") + sell_leg_cost_rs(position_size_rs, "INTRADAY")
+    spread = position_size_rs * FROZEN_SPREAD_BPS.get(band, 7.0) / 10_000
+    return fixed + spread
+
+
 def get_bars(intraday_con, entity_id, day):
     key = (entity_id, day)
     if key in bars_cache:
@@ -105,11 +121,13 @@ def net_r_all(gross_r, entry_price, qty, r, band):
     position_size_rs = qty * entry_price
     cost_lo, cost_hi = round_trip_cost_rs(position_size_rs, "INTRADAY")
     cost_pess = pessimistic_cost_rs(position_size_rs, band)
-    return (gross_r - cost_lo / (r * qty), gross_r - cost_hi / (r * qty), gross_r - cost_pess / (r * qty))
+    cost_amended = amended_cost_rs(position_size_rs, band)
+    return (gross_r - cost_lo / (r * qty), gross_r - cost_hi / (r * qty), gross_r - cost_pess / (r * qty),
+            gross_r - cost_amended / (r * qty))
 
 
 def timing_null(intraday_con, trades, scale_lookup, rank_lookup, rng):
-    gross_list, lo_list, hi_list, pess_list = [], [], [], []
+    gross_list, lo_list, hi_list, pess_list, amended_list = [], [], [], [], []
     for _, t in trades.iterrows():
         scale = scale_lookup[(t["entity_id"], t["trade_date"])]
         processed = get_processed(intraday_con, t["entity_id"], t["trade_date"], scale)
@@ -130,12 +148,15 @@ def timing_null(intraday_con, trades, scale_lookup, rank_lookup, rng):
         gross = (res["exit_price"] - entry_price) / r
         qty = t["qty"]
         band = band_for_rank(rank_lookup, t["entity_id"], t["trade_date"].year)
-        nlo, nhi, npess = net_r_all(gross, entry_price, qty, r, band)
+        nlo, nhi, npess, namended = net_r_all(gross, entry_price, qty, r, band)
         gross_list.append(gross); lo_list.append(nlo); hi_list.append(nhi); pess_list.append(npess)
+        amended_list.append(namended)
     if not gross_list:
-        return {"mean_gross": float("nan"), "mean_net_lo": float("nan"), "mean_net_hi": float("nan"), "mean_net_pess": float("nan")}
+        return {"mean_gross": float("nan"), "mean_net_lo": float("nan"), "mean_net_hi": float("nan"),
+                "mean_net_pess": float("nan"), "mean_net_amended": float("nan")}
     return {"mean_gross": np.mean(gross_list), "mean_net_lo": np.mean(lo_list),
-            "mean_net_hi": np.mean(hi_list), "mean_net_pess": np.mean(pess_list)}
+            "mean_net_hi": np.mean(hi_list), "mean_net_pess": np.mean(pess_list),
+            "mean_net_amended": np.mean(amended_list)}
 
 
 def build_month_pools(m: pd.DataFrame, universe: pd.DataFrame, require_uptrend: bool = False) -> dict:
@@ -157,7 +178,7 @@ def build_month_pools(m: pd.DataFrame, universe: pd.DataFrame, require_uptrend: 
 
 def selection_null(intraday_con, trades, month_pools, r_distribution, rank_lookup, rng):
     counts_per_month = trades.groupby(trades["trade_date"].apply(lambda d: (d.year, d.month))).size()
-    gross_list, lo_list, hi_list, pess_list = [], [], [], []
+    gross_list, lo_list, hi_list, pess_list, amended_list = [], [], [], [], []
     for ym, count in counts_per_month.items():
         pool = month_pools.get(ym, [])
         if not pool:
@@ -188,13 +209,16 @@ def selection_null(intraday_con, trades, month_pools, r_distribution, rank_looku
                 if qty < 1:
                     break
                 band = band_for_rank(rank_lookup, entity_id, day.year)
-                nlo, nhi, npess = net_r_all(gross, entry_price, qty, r, band)
+                nlo, nhi, npess, namended = net_r_all(gross, entry_price, qty, r, band)
                 gross_list.append(gross); lo_list.append(nlo); hi_list.append(nhi); pess_list.append(npess)
+                amended_list.append(namended)
                 break
     if not gross_list:
-        return {"mean_gross": float("nan"), "mean_net_lo": float("nan"), "mean_net_hi": float("nan"), "mean_net_pess": float("nan")}
+        return {"mean_gross": float("nan"), "mean_net_lo": float("nan"), "mean_net_hi": float("nan"),
+                "mean_net_pess": float("nan"), "mean_net_amended": float("nan")}
     return {"mean_gross": np.mean(gross_list), "mean_net_lo": np.mean(lo_list),
-            "mean_net_hi": np.mean(hi_list), "mean_net_pess": np.mean(pess_list)}
+            "mean_net_hi": np.mean(hi_list), "mean_net_pess": np.mean(pess_list),
+            "mean_net_amended": np.mean(amended_list)}
 
 
 def load_checkpoint() -> dict:
@@ -282,6 +306,7 @@ def main():
     strategy_lo = trades["net_r_lo_cost"].mean()
     strategy_hi = trades["net_r_hi_cost"].mean()
     strategy_pess = trades["net_r_pessimistic"].mean()
+    strategy_amended = trades["net_r_amended"].mean()
 
     log("\n=== Strategy percentile vs nulls (sealed test) ===")
     for label, dist in [("TIMING", timing_df), ("SELECTION (b)", selection_b_df), ("SELECTION (b2)", selection_b2_df)]:
@@ -289,6 +314,7 @@ def main():
         log(f"vs {label} (net, lo):     {percentile_of(strategy_lo, dist['mean_net_lo']):.1f}th percentile")
         log(f"vs {label} (net, hi):     {percentile_of(strategy_hi, dist['mean_net_hi']):.1f}th percentile")
         log(f"vs {label} (net, pess.):  {percentile_of(strategy_pess, dist['mean_net_pess']):.1f}th percentile")
+        log(f"vs {label} (net, amended):{percentile_of(strategy_amended, dist['mean_net_amended']):.1f}th percentile")
 
     with open(NULLS_PATH, "wb") as f:
         pickle.dump({
