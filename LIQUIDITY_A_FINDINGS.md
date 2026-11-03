@@ -408,7 +408,9 @@ in A, B, and C regardless of the strategy's own exits -- see
 `LIQUIDITY_C_FINDINGS.md`'s "POST-CLOSURE DIAGNOSTIC" section for the
 full numbers (first-touch timing per level, same-day-stop trades that
 recovered anyway, TIME_EXIT_FULL trades' day-10 outcome, and stop-vs-
-target ordering).
+target ordering). A second diagnostic there measures maximum adverse
+excursion on every stopped-out trade specifically, tracked 30 trading
+days without a stop -- see "POST-CLOSURE DIAGNOSTIC 2" in the same file.
 
 Before Study B's closure, the user reviewed individual trades from both
 studies in a new research-browser view (all six levels, the confluence

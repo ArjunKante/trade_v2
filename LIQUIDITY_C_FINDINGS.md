@@ -532,6 +532,142 @@ found that an actual extended hold made its own family's result WORSE,
 which is the relevant prior for how much weight any hindsight-only
 signal here should carry on its own.
 
+## POST-CLOSURE DIAGNOSTIC 2: maximum adverse excursion on stopped-out trades
+
+**Not a study. No new strategy, no gate, no verdict change.** All three
+studies stay closed exactly as recorded above. Measures, for every trade
+across A/B/C-long/C-short whose REAL, ACTUAL outcome was a stop-out
+(`final_exit_kind == 'STOP'` -- 12,035 of the 32,515 real trades), what
+price did afterward if no stop had existed, using the ORIGINAL entry
+price and tracking daily bars forward 30 trading days. Same
+`fibo.scale_probe` method as the first post-closure diagnostic above,
+extended from 10 to 30 forward days and from "first touch of 5 preset
+levels" to the full daily high/low path, so maximum adverse excursion
+(MAE) can be measured at any horizon. 88.2% of trades (10,621/12,035)
+had the full 30-day window available; coverage gaps are mostly partial
+windows near the DEV/TEST boundary, never a data error.
+
+**CAVEAT, stated up front, per instruction**: shorts (B, C-short) cannot
+legally be held overnight in Indian cash equities at retail. The SHORT
+numbers below describe price behaviour only -- they are not a
+description of anything executable. **This is hindsight on a closed
+population.** No verdict changes as a result of anything below.
+
+### Section A: MAE distribution, within 10 days and within 30 days
+
+Percentage adverse move from entry, worst point reached (for long:
+entry minus the lowest low reached, over entry; for short: the highest
+high reached minus entry, over entry):
+
+| | n | p50 | p75 | p90 | p95 | p99 | max |
+|---|---|---|---|---|---|---|---|
+| LONG, MAE within 10d | 6,060 | 5.53% | 9.49% | 14.58% | 19.28% | 35.67% | 84.86% |
+| LONG, MAE within 30d | 6,060 | 8.62% | 14.74% | 23.59% | 32.23% | 55.17% | 88.56% |
+| SHORT, MAE within 10d | 5,975 | 5.66% | 9.65% | 15.38% | 19.84% | 37.21% | 99.82% |
+| SHORT, MAE within 30d | 5,975 | 9.61% | 16.50% | 25.81% | 33.36% | 58.52% | 165.26% |
+
+All four studies individually track their direction's combined row
+within 0.1-1 point per cell. **The median stopped-out trade, tracked
+without a stop, still moves against entry by 8.6-9.6% within 30 days**
+-- roughly 14x the stop's own typical distance (stop_distance_pct was
+~0.6-0.9% in the original closed studies). The stop is not a narrow miss
+on a trade that was about to turn around; the median path keeps going
+hard in the adverse direction for a while, consistent with Finding 3's
+earlier observation that `retest_failed` (clean breach) trades really
+were bad. SHORT's tail is heavier than LONG's at every percentile and
+dramatically so at the max (165.26% vs 88.56%) -- a 165% adverse move on
+a short is a position that, unhedged, would have wiped out the account
+multiple times over by the time it happened; this is exactly why the
+caveat above matters, not a rounding curiosity.
+
+### Section B: how many trades crossed 10% / 20% / 50% adverse
+
+Using 30-day MAE (10-day shown for comparison):
+
+| | n | >=10% (30d) | >=20% (30d) | >=50% (30d) | >=10% (10d) | >=20% (10d) | >=50% (10d) |
+|---|---|---|---|---|---|---|---|
+| LONG | 6,060 | 2,610 (43.1%) | 860 (14.2%) | 101 (1.7%) | 1,392 (23.0%) | 279 (4.6%) | 16 (0.3%) |
+| SHORT | 5,975 | 2,863 (47.9%) | 1,067 (17.9%) | 97 (1.6%) | 1,396 (23.4%) | 286 (4.8%) | 22 (0.4%) |
+
+Roughly 4 in 10 stopped-out trades would have moved 10%+ against entry
+within 30 days if held without a stop; roughly 1 in 6-7 would have moved
+20%+; 50%+ is rare but not zero (97-101 trades, ~1.6-1.7%) on both sides.
+Nearly double the 10-day count is reached by day 30 at the 10% and 20%
+thresholds (e.g. LONG 10%: 23.0% -> 43.1%), meaning most of this
+additional adverse movement accrues AFTER day 10, not before it.
+
+### Section C: of trades in each MAE bucket, recovery to 1.5R / 3R within 30 days
+
+| | n | -> 1.5R (rate, median days) | -> 3R (rate, median days) |
+|---|---|---|---|
+| LONG >=10% adverse | 2,610 | 1,678 (64.3%), 2 days | 1,218 (46.7%), 5 days |
+| LONG >=20% adverse | 860 | 465 (54.1%), 2 days | 307 (35.7%), 3 days |
+| LONG >=50% adverse | 101 | 57 (56.4%), 1 day | 40 (39.6%), 2 days |
+| SHORT >=10% adverse | 2,863 | 1,868 (65.2%), 3 days | 1,357 (47.4%), 6 days |
+| SHORT >=20% adverse | 1,067 | 531 (49.8%), 2 days | 331 (31.0%), 5 days |
+| SHORT >=50% adverse | 97 | 31 (32.0%), 1 day | 21 (21.6%), 2 days |
+
+**Recovery rate does not fall monotonically with how far a trade first
+went against entry.** Trades that went 50%+ against entry recover to
+1.5R about as often as (LONG) or notably less often than (SHORT) trades
+that only went 10%+ -- the severity of the adverse excursion is not a
+clean predictor of whether the trade eventually comes back. The median
+time-to-recovery when it happens is short (1-6 days) across every
+bucket, meaning recoveries that occur, occur quickly -- there is no
+large population of trades grinding back slowly over weeks. **SHORT's
+recovery rate degrades much more sharply in the >=50% bucket than
+LONG's** (32.0% vs 56.4% for 1.5R) -- the heavier adverse tail in
+Section A is not merely cosmetic; the worst short trades are also
+disproportionately the ones that do not come back.
+
+### Section D: full return distribution at day 10 and day 30, no stop at all
+
+| | n | day-10 mean | day-10 median | day-10 worst | day-10 best | day-30 mean | day-30 median | day-30 worst | day-30 best |
+|---|---|---|---|---|---|---|---|---|---|
+| LONG | 6,060 | -0.93% | -0.83% | -84.43% | +52.87% | -0.17% | -0.36% | -87.40% | +105.34% |
+| SHORT | 5,975 | -1.60% | -1.30% | -68.34% | +89.74% | -1.83% | -1.64% | -155.17% | +90.00% |
+
+(Return is signed so positive always means favourable for the position
+actually taken; for SHORT this means price fell.)
+
+**Without a stop, the stopped-out population's own mean return stays
+negative at both horizons for both directions** -- consistent with the
+earlier finding that the stop, on average, is not making a bad trade
+worse by itself (SHORT's mean actually gets WORSE from day 10 to day 30,
+-1.60% to -1.83%, while LONG's improves slightly, -0.93% to -0.17%, the
+same long/short asymmetry already recorded in the first post-closure
+diagnostic's Section 3). **The worst-case tail is severe and asymmetric**:
+LONG's floor is bounded near -87% to -88% at both horizons (a long
+position cannot lose more than 100% of entry); SHORT's day-30 worst case
+is -155.17% -- a short position has no such floor, and this number is
+the direct, measured illustration of why the caveat above is not
+boilerplate. The best-case tail is large on both sides (+52.87% to
++105.34% LONG, +89.74% to +90.00% SHORT) -- a reminder that the same
+population contains both the worst single losses and some of the
+largest favourable moves in the whole post-closure analysis, consistent
+with Section C's finding that even badly-adverse trades recover at a
+non-trivial rate.
+
+### What this does and does not change
+
+**No verdict changes.** A, B, and C stay closed exactly as recorded
+above. This is hindsight on a closed population using the ORIGINAL entry
+price and the ORIGINAL R-levels -- it does not model an executable
+alternative (no re-sizing, no re-entry, no delivery costs or margin for
+a multi-day hold, and for SHORT specifically, no model of the overnight
+risk a real multi-day short could not legally carry in the first place).
+Any exit-rule hypothesis this suggests -- a wider stop sized to the
+10-30%+ adverse moves many trades experience before recovering, at the
+cost of the capital and risk a wider stop implies -- is exactly that: a
+hypothesis for a future, separately pre-registered trial, not a finding
+that this population would have passed under a different rule. The same
+prior from the first post-closure diagnostic applies here with more
+force, not less: POC V5's own direct test of an actual extended hold
+(not a lookahead measurement) already found it made that family's result
+WORSE, and this diagnostic's own SHORT worst-case (-155.17%) is a
+concrete illustration of why "the trade recovers eventually" is not the
+same question as "a wider stop is a good idea."
+
 ## Status
 
 **CLOSED.** DEV failed both sides. TEST was never read and stays

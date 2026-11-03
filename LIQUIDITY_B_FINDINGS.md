@@ -473,7 +473,11 @@ in A, B, and C regardless of the strategy's own exits -- see
 caveat recorded there: Study B's own trades cannot legally be held
 overnight in Indian cash equities at retail, so that diagnostic's
 numbers for B measure price behaviour only, not an executable
-alternative to this study's own closed result.
+alternative to this study's own closed result. The same caveat applies,
+stated again, to "POST-CLOSURE DIAGNOSTIC 2" in the same file (maximum
+adverse excursion on every stopped-out trade, tracked 30 days) -- its
+SHORT-side worst case there is a -155% move, the direct illustration of
+why.
 
 ## Status
 
