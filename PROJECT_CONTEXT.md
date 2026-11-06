@@ -1,0 +1,495 @@
+# PROJECT CONTEXT
+
+**Purpose:** bring a cold session up to speed on what this project is, what has
+been tested, what was found, and the rules that govern how work is done here.
+Written 2026-11-06.
+
+Read this before proposing any new study.
+
+---
+
+## 1. WHAT THIS PROJECT IS
+
+A systematic research programme on NSE equities, run by one person with Claude
+Code, starting late September 2026. The question was whether any tradeable edge
+could be found and validated honestly.
+
+**Nineteen strategies have been specified. One passed a clean sealed test. One
+passes under heavy caveats. Seventeen are closed.**
+
+The project's real output is not a strategy. It is a method for distinguishing
+a real result from a convincing one, and a long record of ideas that looked
+convincing and were not.
+
+### Repositories
+
+- **trade-info** — the original ML project. Closed. NO EDGE.
+- **trade-new** (github.com/ArjunKante/trade_v2) — everything since.
+
+### Data
+
+- Point-in-time NSE daily prices, 2016-01 onward, with entity resolution
+  through ISIN changes, corporate actions and split adjustment
+- 1-minute intraday bars, 2016-10-04 onward (Angel One's archive floor),
+  top-200 universe
+- Fundamentals from XBRL filings (balance-sheet data only reaches FY2022-23)
+- NIFTY options EOD, 2016-2026, 5.6M rows
+- IPO listing-day 1-minute bars, 498 usable mainboard listings
+
+### Infrastructure
+
+- Fundamental screener web app (47 surviving names from 147 momentum candidates)
+- Momentum persistence monitor (descriptive only, asserts nothing)
+- Streamlit research browser for inspecting closed studies' trades on charts
+- Fibo forward paper-trading system (GitHub Actions + cron-job.org +
+  healthchecks.io)
+- Live options depth collector
+- Spread measurement tooling
+
+---
+
+## 2. CURRENT LIVE STATE
+
+| Thing | Status |
+|---|---|
+| Momentum basket | Recorded 2026-10-26, 147 holdings, check-in ~2027-01-27 (calendar-uncertain, 2027 holiday master not loaded) |
+| Fibo forward test | Running. Morning job on GitHub Actions, triggered by cron-job.org, monitored by healthchecks.io. Evening job on the laptop at 18:30, manual if missed. |
+| Options depth collector | Scheduled on the laptop, 10:30/12:30/14:30 |
+| Spread estimator validation | Specified, 24 names selected, awaiting market-hours collection |
+| Historical holdout | **RETIRED.** No sealed window remains for any equity study except IPO listing's unread 199 trades. |
+
+### Known operational constraints
+
+- Evening job requires the laptop on and logged in at 18:30. Running it late is
+  fine and actually safer for bhavcopy availability.
+- Angel One: ~3 requests/second on candles, undocumented daily quota, 50
+  instruments per quote call (error AB4029 above that).
+- Long unattended runs get killed by the environment frequently. Everything
+  must checkpoint mid-stage.
+- Task Scheduler Operational log is disabled; enable it before any future
+  scheduler change.
+
+---
+
+## 3. THE METHOD
+
+This matters more than any individual result. It evolved in response to
+specific failures.
+
+### Pre-registration
+
+Every study has a frozen document written and **committed alone** before any
+result exists. The commit timestamp is the evidence that the design preceded
+the number. It specifies: rules, universe, costs, windows, nulls, gate
+conditions, and a verdict rule.
+
+### Gates
+
+A study passes only if **all** conditions hold. Typically:
+- mean return > 0 with a day-clustered bootstrap CI excluding zero
+- ≥95th percentile against both nulls
+- still positive after dropping the best calendar year
+- positive within the liquid bands alone
+
+If the first condition fails decisively, the run is killed — the nulls cannot
+rescue it.
+
+### Nulls
+
+Two comparisons, both essential:
+- **TIMING null** — same stock-days, random entry time. Tests whether the
+  entry trigger adds anything.
+- **SELECTION null** — random stock-days from the same universe. Tests whether
+  the day selection adds anything.
+
+Several studies passed both nulls at the 100th percentile and still lost money.
+Beating random is necessary, not sufficient.
+
+### Sealed windows
+
+Read once, after DEV passes and the human approves. A DEV failure closes the
+study automatically — no human decision needed, which is what stops a failed
+study being talked back to life.
+
+### Trial counting
+
+Every revision of a failed idea increments a family's trial count and is
+recorded as carrying selection pressure. Multiple configurations in one study
+require Bonferroni correction.
+
+### Hand-tracing
+
+Five trades traced by hand against raw data before any aggregate is computed,
+covering the awkward cases (gap-through stop, same-bar tie, each skip reason).
+This has caught real bugs repeatedly.
+
+### Blast-radius measurement
+
+When a bug is found, measure what it affected **before** fixing it, and
+**in both directions**. Bug #18's first measurement only asked which selected
+trades would be rejected; the full correction showed it had also wrongly
+rejected trades, and the second effect was 6x larger.
+
+### Feasibility and power checks first
+
+Two studies were closed before running on cheap pre-checks:
+- **Portfolio construction** — the minimum detectable difference was 45-75
+  percentage points of annual return. No plausible effect is that large.
+- **Liquidity E** — the design was confounded (see §7).
+
+Both saved days of compute on questions that could not have been answered.
+
+### Recording
+
+Failures are recorded as prominently as successes. Wrong predictions are
+recorded as wrong. Superseded documents are annotated, never edited. Logs are
+append-only; corrections are new rows.
+
+---
+
+## 4. WHAT WORKED
+
+### 63-day momentum — the only clean pass
+
+Buy the top decile by `momentum_12_1` (12-month return skipping the most
+recent month), hold 63 trading days, equal weight, long only.
+
+**Sealed holdout: 14.72% vs 10.85% CAGR, +3.87 points, all three
+pre-registered conditions passed.** Large-cap replication +6.56 points (CV
+only).
+
+Verified against the Bug #11 same-ISIN exclusion: margin moved 3.87 → 3.64,
+still clearing the 3.0 threshold. Max drawdown actually *worsened* when those
+entities were excluded, which argues against them flattering the result.
+
+**Never run live until 2026-10-26.** One basket now recorded with a January
+check-in.
+
+### Fibonacci/ORB intraday — passes with four caveats
+
+Daily Alligator uptrend + 50-61.8% golden zone + opening range overlap, entry
+on a 15-minute close above the opening-range high, stop at the opening-range
+low, target min(2R, swing high), exit 15:15.
+
+| Section | Result |
+|---|---|
+| 6b | Original sealed test: **NO EDGE** |
+| 9 | After cost correction: **PASS** |
+| 13 | After scale correction: **PASS**, +0.2679, t=4.661, 100th percentile both nulls, 216 trades |
+
+**The four caveats, which must appear wherever the figure appears:**
+1. The window was read three times
+2. The cost correction was made after seeing a failure
+3. The cost model rests on 5 snapshots across 3 days in October 2026
+4. The trade list itself was wrong in both directions until Bug #18 was fixed
+
+This is the most-corrected result in the project. A pass earned through three
+amendments is a reason to continue the forward test, not to believe the
+backtest.
+
+---
+
+## 5. WHAT FAILED
+
+Every study below reached a pre-registered gate and failed it. Units differ —
+early studies report R (fixed ₹500 risk), later ones report percentage of a
+fixed ₹25,000 position. **These are not comparable across studies.**
+
+### ML on price/volume (trade-info)
+LightGBM, 25 features, 20-seed ensemble. IC 0.0281 against a 0.03 threshold.
+`entity_id` as a categorical feature supplied 55% of the gain but scored IC
+0.0006 on unseen names and **reduced** IC overall. Holdout reversed sign:
++0.0816 → −0.0206.
+
+### Swing V4 — dip + volume + regime
+9.8th percentile against its own pool. Worse than random.
+
+### Swing V1 — dip only
+**The most important failure in the project.** 100th percentile in development,
+p=0.001, 65,219 trades, cleared Bonferroni and Benjamini-Hochberg across a
+six-variant family, with a plausible mechanism.
+
+**Sealed holdout: 61.4th percentile.** Indistinguishable from random.
+
+Every subsequent study cites this. A large sample, a corrected significance
+threshold and a sensible mechanism are not substitutes for a holdout.
+
+### Momentum + fundamentals — untestable
+Earnings yield t=2.75 (fails correction across nine factors), correlation with
+momentum +0.0003. Testing the combination requires **8-72 years** of data. The
+binding constraint is the variance of the difference, not the effect size.
+
+### Box theory V1 — buy yesterday's low on a green candle
+−0.138R. **0th percentile** against the selection null — the touch-days were
+worse than random days. 100th percentile against TIMING. The entry timing was
+better than random; the day selection was actively harmful.
+
+### Box theory V2 — strength-filtered
+Required a candle ≥1.5× trailing range and volume, plus 5% room. 401 trades,
+−0.104R, 27.7th percentile. Moved from harmful to merely useless.
+
+### Darvas box
+200-day high confirmed over 3 days, bottom likewise, buy the breakout, trail
+the stop below each new box. 757 trades, held median 20 days, max 252.
+
+**0.0 / 0.3 / 0.3** percentiles against TIMING, SELECTION and MOMENTUM nulls.
+Lost to random entry timed off its own boxes. The book it came from is
+promotional material for the author's scanning software and contains no
+backtest.
+
+### Fair Value Gap (FVG), A and B
+Three-candle gap on 1-hour candles. A = breakout, B = retest. −0.128R and
+−0.169R, both **0th percentile** against TIMING.
+
+### IPO listing-day green first candle
+498 mainboard listings. 41 trades, −0.149R, MDE 0.36R. The green-candle filter
+was **worse than buying every listing indiscriminately** (−0.149 vs +0.092,
+losing in all 10,000 resamples).
+
+### Per-stock weekly rules
+21 stocks × 2 rules = 42 trials with FIT/CHECK split and Bonferroni.
+**Zero survivors.** VBL passed FIT at t=3.60 and cleared Bonferroni by under
+0.1%, then failed CHECK — the illustrative case.
+
+### NIFTY options pricing
+Monthly ATM straddle price vs realised move, 2016-2026. **No detectable
+mispricing.** Mean R +0.11 dev (+0.02 excluding 2020), −0.13 test, CIs
+including zero.
+
+### POC family — five trials, all failed
+| Version | Change | Result |
+|---|---|---|
+| V1 | 0.5% below POC | −0.6733R, **sizing pathology** |
+| V2 | Fixed capital, 5-day low stop | −0.4077% |
+| V3 | Hourly confirmation | −0.3176% |
+| V4 | Liquidity sweep + reclaim | −0.2862%, **passed both nulls** |
+| V5 | 10-day hold | −0.6302%, worse than intraday |
+
+V4 is notable: it passed both null comparisons and still lost. The selection
+edge was real and smaller than friction. V5 tested whether a longer horizon
+would let it grow past costs — it made things worse, because delivery costs are
+higher and overnight gaps bypass stops.
+
+### Liquidity family — five specified, four failed, one abandoned
+Multi-timeframe confluence (3-month, 1-week, 1-day highs and lows clustering
+within 0.5 ATR), sweep below by 0.1-1.0 ATR, reclaim within 3 candles, scaled
+exit at 1.5R and 3R.
+
+| Study | Change | Long | Short |
+|---|---|---|---|
+| A | base, long | −0.2841% | — |
+| B | base, short | — | −0.1212% |
+| C | require a retest | −0.2694% | −0.1096% |
+| D | require ascending lows | −0.2926% | −0.1383% |
+| E | hourly vs 5-min | abandoned at Phase 1, confounded | |
+
+All passed both nulls at the 100th percentile. All lost.
+
+### Portfolio construction — underpowered
+24 configurations of concentration × weighting × rebalance frequency.
+**Never run.** The MDE at 80% power under 24-trial Bonferroni was **45-75
+percentage points** of annual return. Plausible effects are low single digits.
+The baseline stands by default, not because alternatives lost.
+
+---
+
+## 6. BUGS — roughly 18 documented
+
+Every one produced a plausible wrong number rather than an error. Selected:
+
+**#2 — stale-gap contamination in the LABEL**, not just the features. Found by
+chasing a decile/IC sign conflict.
+
+**#7 — ISIN mismatch.** The fundamentals feed uses the original ISIN, not the
+active one. 166 orphaned companies, 226,715 fact rows rematched. The fix was
+not propagated to fetch-scoping — the fifth instance of that pattern.
+
+**#11 — same-ISIN uncorrected corporate actions.** 78 entities. Seven other
+scripts were later found computing persistence/IC without the exclusion.
+
+**#12 — fundamentals screener is current-state only.** No point-in-time
+history, so any screener-based historical variant is uncomputable.
+
+**#15 — a 404 cached as a holiday.** A backfill ran at 00:23 before the day's
+bhavcopy existed, got a 404, and recorded the day as permanently no-data.
+Every later retry skipped it. Caused a stale watchlist that would have missed
+four of ten stocks.
+
+**#18 — two unreconciled price scales.** `scale_probe` (validated) used for
+ORB and entry; the `adjustment_factors` table (blind to unrecorded corporate
+actions) used for zone and swing. They disagreed on ~15-18% of days, and the
+disagreement changed **which stocks were selected**. In the Fibo sealed test it
+added 9 false positives averaging 0.875R against the population's 0.342R —
+inflating the result — and wrongly rejected 37 others. Found by accident during
+an unrelated holding-period diagnostic.
+
+**Sizing pathology (POC V1).** A stop ₹0.000495 from entry produced 1,010,101
+shares and a ₹130.5M position on a ₹500 risk budget, costing ₹137,450 in fees
+on a trade that lost exactly 1R on price. The worst single trade was −480R.
+
+---
+
+## 7. TRANSFERABLE FINDINGS
+
+These outlive the strategies.
+
+**1. `entity_id` defeats time-based purging.** It supplied 55% of the model's
+gain, scored IC 0.0006 on unseen names, and *reduced* overall IC.
+
+**2. Corwin-Schultz and Roll overstate Indian spreads by 12-31×** on normally
+traded EQ names, and are accurate (~1.0×) on trade-to-trade names. Proposed
+mechanism: CS assumes the daily high-low range contains a bid-ask bounce; on
+continuously traded names, intraday netting absorbs it. Not documented
+elsewhere for NSE as far as is known. A proper validation study is specified
+but not yet run.
+
+**3. Variance of the difference, not effect size, is the binding constraint.**
+Twice: the momentum+fundamentals combination needed 8-72 years; portfolio
+construction needed effects 10-20× larger than any that exist.
+→ **Standing rule: compute MDE before finalising any comparison study.**
+
+**4. "Fixed where noticed, not everywhere the pattern recurs."** Seven
+instances. Grep the codebase for the same defect shape before closing any bug.
+
+**5. A gross-return null cannot see position sizing.** The Fibo timing null
+showed breakout entry picked worse prices than random. I inferred removing the
+breakout would help. It made things dramatically worse — the breakout was
+providing a **cost cushion** by widening R, which a gross-return measure is
+blind to. Entry-rule comparisons must be run on net R.
+
+**6. Confirmation filters discard the winners.** Measured twice. Study C's
+`no_retest` bucket averaged **+1.0%**; Study D's `PATTERN_INCOMPLETE` averaged
+**+0.87% to +0.91%**. A filter requiring price to come back necessarily excludes
+the moves that don't come back, and those are disproportionately the winners.
+
+**7. A stop pinned to a price level other than entry needs a minimum-distance
+floor**, or fixed-risk sizing produces unbounded positions. FVG had one; POC
+V1 did not.
+
+**8. Candle-counted rules change meaning when candle size is the variable.**
+"Reclaim within 3 candles" is 15 minutes at 5-minute candles and 3 hours at
+hourly. Any timeframe comparison must hold time windows constant in minutes.
+
+**9. Blast radius must be measured in both directions.** A selection bug that
+wrongly includes also wrongly excludes.
+
+**10. Jensen's inequality on ratio tests.** Testing mean log(payoff/price) = 0
+reports overpricing even when options are fairly priced, because payoffs are
+right-skewed. Verified empirically: the replaced log test came back negative in
+all three windows including one where buying straddles actually made money.
+
+**11. Calendar-year windows are convenient, not principled.** Mechanical
+peak-to-trough-to-recovery is the correct framing for a drawdown episode.
+
+**12. Matched random entry from the same pool is the discriminating
+benchmark.** Buy-and-hold and coin-flip comparisons are weak.
+
+---
+
+## 8. THE STRUCTURAL FINDING
+
+**Costs are fixed per trade. The available move shrinks with the horizon.**
+
+A round trip costs roughly 0.2-0.3% regardless of holding period. An intraday
+move might be 0.5%; a 63-day move might be 8%. So intraday needs a signal
+several times stronger to end up in the same place.
+
+Phase 1's cost gate established this before any strategy was tested: only one
+configuration cleared break-even in theory, requiring IC 0.05 at a 5-day
+horizon — roughly double what was later measured at 63 days on an easier
+problem.
+
+**Eleven intraday strategies with completely different logic — Darvas boxes,
+Fibonacci zones, volume profile, fair value gaps, IPO openings, liquidity
+sweeps — all landed between roughly −0.1 and −0.3 per trade.** That consistency
+is not eleven bad ideas. It is one constant seen through eleven lenses.
+
+**And the escape is not simply "hold longer."** POC V5 held 10 days and did
+worse: delivery costs are higher than intraday and overnight gaps bypass stops.
+The escape requires a signal whose expected move genuinely grows with time.
+Momentum has one. The chart patterns did not.
+
+One further measurement, across 32,515 Liquidity trades: the strategy's own
+stop is touched within 10 days on **84-86% of all trades**. Of same-day
+stop-outs, 69-73% eventually reach 1.5R. But when both stop and 3R target are
+reached, **the stop comes first 2.6-3.3× as often**. Direction was often right;
+the path made it unharvestable. Held with no stop at all, the mean stays
+negative at both 10 and 30 days, with worst cases of −87% (long) and −155%
+(short).
+
+---
+
+## 9. CALIBRATION NOTES
+
+**On predictions.** Claude pre-committed a prediction before several studies.
+The verdict was right nearly every time; **the mechanism was wrong nearly every
+time.**
+
+- Fibo open-entry: predicted costs were the issue → it was position sizing via
+  stop distance
+- Liquidity A: predicted costs would eat a real edge → costs were ₹10,095
+  total (~0.005%); it failed on follow-through
+- Liquidity B: predicted shorts would fare worse against upward drift → they
+  fared better
+- Liquidity E Phase 1: predicted far fewer hourly trades → there were more,
+  because of the confound
+
+Three-for-three in the Liquidity family: verdict right, mechanism wrong.
+Treat Claude's mechanism reasoning as a hypothesis to test, not a finding.
+
+**On where the knowledge came from.** Claude's training contains extensive
+trading material — Darvas, ICT, volume profile, FVG. That material would have
+predicted all of those strategies work. All failed here. The accurate
+predictions came from *this project's own results*, not from prior knowledge.
+Treat any strategy Claude can describe fluently as having a poor prior,
+precisely because fluency comes from promotional material.
+
+**On chart observation.** Four observations made from browsing charts have been
+tested — degenerate confluence, turnover dependence, retest confirmation,
+ascending lows. **All four came back null.** The research browser is for
+understanding what happened, not for generating the next hypothesis.
+
+---
+
+## 10. WHAT IS STILL OPEN
+
+**The forward tests.** Fibo needs ~19 trades to distinguish decay from noise in
+its weakest year, ~100 for a verdict. Momentum's basket resolves in January.
+Neither is accelerable.
+
+**The spread estimator validation.** Specified, 24 names stratified by
+liquidity, series, price and volatility, protocol written with explicit
+refutation criteria. Awaiting ~10 trading days of collection. This is the one
+piece of work here that is not about making money, and possibly the most
+original.
+
+**IPO listing's sealed TEST window.** 199 listings, never read, the only
+untouched sealed data in the project.
+
+**Liquidity F.** Specified: hourly candle establishes the sweep, 5-minute
+candles confirm the reclaim over a fixed 15-minute window — which avoids
+Study E's confound. Phase 1 estimate not yet run. Family is at 4 failures and
+1 abandonment; the bar for a sixth should be high.
+
+---
+
+## 11. RULES FOR A COLD SESSION
+
+1. **Do not propose a strategy without checking whether it has already been
+   tested.** Nineteen have. Check §5 first.
+2. **Any intraday mean-reversion or level-bounce idea has a very poor prior.**
+   Eleven have failed, all clustering at −0.1 to −0.3.
+3. **Compute MDE before finalising a comparison study.** Twice a fully
+   specified study turned out to be unanswerable.
+4. **Hold time windows constant in minutes, not candles**, when timeframe is
+   the variable.
+5. **Measure blast radius in both directions** when a bug affects selection.
+6. **The historical holdout is retired.** Any new equity study is
+   development-only; a pass justifies forward testing and nothing more.
+7. **A DEV failure closes a study automatically.** No approval needed, and no
+   retry at other parameter values.
+8. **Report bad results in the first sentence.**
+9. **Long runs must checkpoint mid-stage.** The environment kills them
+   frequently; a job estimated at four hours took seventeen.
+10. **Trust nothing that was not measured.** Including — especially — Claude's
+    explanation of why something failed.
