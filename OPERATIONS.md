@@ -1477,3 +1477,22 @@ explicit, approval-gated Phase 1 step, required before any
 preregistration is written) is now validated twice in a row, not just
 once -- worth treating as load-bearing for every future comparison
 study in this project, not only the Liquidity family.
+
+## STANDING RULE: reconcile stage counts before interpreting any result
+
+**RECONCILE STAGE COUNTS BEFORE INTERPRETING ANY RESULT.** Before reading
+the numbers from any stage, check its row counts against the prior
+stage's counts, unscaling where a sample fraction was applied, and check
+that the buckets sum to their parent. A mismatch is a defect until
+explained.
+
+This caught the withdrawn Study F measurement (`MEASUREMENT_F_REJECTED_
+BUCKETS.md`), where the selected (`RECLAIMED`) bucket reconciled cleanly
+against Phase 1's own counts and both rejected buckets (`NOT_RECLAIMED`,
+`SWEEP_EXTENDED`) were short by roughly 15x. The result had plausible
+signs and narrow confidence intervals and was wrong -- a biased
+subsample, not a measurement, produced by a counterfactual that
+re-detected its own setup instead of reusing the one already found
+(`PROJECT_CONTEXT.md` §7 finding #14). Nothing about the numbers
+themselves looked wrong; only the arithmetic against the prior stage
+did.

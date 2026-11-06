@@ -377,6 +377,22 @@ blind to. Entry-rule comparisons must be run on net R.
 **+0.87% to +0.91%**. A filter requiring price to come back necessarily excludes
 the moves that don't come back, and those are disproportionately the winners.
 
+**NARROWED 2026-11-07:** As originally written ("confirmation filters
+discard the winners") this generalised beyond its evidence. The evidence
+is two retest-type filters (Study C `no_retest` +1.0%, Study D
+`PATTERN_INCOMPLETE` +0.87% to +0.91%). The defensible statement is
+structural, not empirical: a filter's condition determines WHICH
+subsequent price behaviour it cannot select. A filter requiring price to
+RETURN to a level cannot select trades where price ran away, so its
+discards skew toward runs. A filter requiring RECOVERY from an adverse
+move cannot select trades where price continued adversely, so its
+discards skew toward continuations. These are opposite discards and
+there is no reason to expect the same return sign. The reclaim-type case
+is UNTESTED. The Study F measurement intended to test it was withdrawn
+(see `MEASUREMENT_F_REJECTED_BUCKETS.md`) and not retried, because the
+family closed. This narrowing rests on construction, not measurement,
+and is flagged as such.
+
 **7. A stop pinned to a price level other than entry needs a minimum-distance
 floor**, or fixed-risk sizing produces unbounded positions. FVG had one; POC
 V1 did not.
@@ -408,6 +424,17 @@ the delay, a timeframe comparison is not merely confounded but unidentifiable:
 no outcome is attributable to the timeframe. Measured in Liquidity F Phase 1,
 where the delay roughly doubled the trade count against the direction the
 coarser grid alone predicted.
+
+**14. A counterfactual must reuse the original setup, not re-derive it.**
+The withdrawn Study F measurement resolved exits for its rejected
+buckets by calling A/B's full entry pipeline, which independently
+re-detects its own sweep from scratch. ~90% of rows dropped for one
+outcome-correlated reason — the re-detected sweep also failed to
+reclaim — leaving a ~6% biased subsample whose CIs looked clean and
+narrow. Any counterfactual, null or bucket comparison must be
+constructed by reusing the recorded setup (extreme, level, timestamp)
+from the stage under study, never by re-running a detector. Studies C
+and D use the correct construction and are unaffected.
 
 ---
 
