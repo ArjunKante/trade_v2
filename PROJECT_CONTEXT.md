@@ -24,8 +24,17 @@ A systematic research programme on NSE equities, run by one person with Claude
 Code, starting late September 2026. The question was whether any tradeable edge
 could be found and validated honestly.
 
-**Nineteen strategies have been specified. One passed a clean sealed test. One
-passes under heavy caveats. Seventeen are closed.**
+**Twenty-one strategies have been specified. One passed a clean sealed test.
+One passes under heavy caveats. Nineteen are closed.** *(Updated 2026-11-07
+for Liquidity E and F's own closures. Convention: every §4/§5 heading counts
+as one, EXCEPT the Liquidity family, which counts its six lettered trials
+(A-F) individually rather than as one heading — the convention already
+implicit in §5's own "five specified" language for A-E before this fix, now
+extended to F. Not applied uniformly: POC's own five trials and FVG's own
+two configs are each still counted as one heading apiece. Flagged, not
+resolved, since changing it would move the count for reasons unrelated to
+today's closure. Full enumeration given in chat when this fix was made, not
+reproduced in any committed file.)*
 
 The project's real output is not a strategy. It is a method for distinguishing
 a real result from a convincing one, and a long record of ideas that looked
@@ -143,12 +152,15 @@ rejected trades, and the second effect was 6x larger.
 
 ### Feasibility and power checks first
 
-Two studies were closed before running on cheap pre-checks:
+Three studies were closed before running on cheap pre-checks:
 - **Portfolio construction** — the minimum detectable difference was 45-75
   percentage points of annual return. No plausible effect is that large.
-- **Liquidity E** — the design was confounded (see §7).
+- **Liquidity E** — the design was confounded (see §7 finding #8).
+- **Liquidity F** — the design was unidentifiable, not merely confounded
+  (see §7 finding #13).
 
-Both saved days of compute on questions that could not have been answered.
+All three saved days (Liquidity F: an estimated ~37 hours) of compute on
+questions that could not have been answered.
 
 ### Recording
 
@@ -281,7 +293,7 @@ edge was real and smaller than friction. V5 tested whether a longer horizon
 would let it grow past costs — it made things worse, because delivery costs are
 higher and overnight gaps bypass stops.
 
-### Liquidity family — five specified, four failed, one abandoned
+### Liquidity family — six specified, four failed, two abandoned, one withdrawn measurement
 Multi-timeframe confluence (3-month, 1-week, 1-day highs and lows clustering
 within 0.5 ATR), sweep below by 0.1-1.0 ATR, reclaim within 3 candles, scaled
 exit at 1.5R and 3R.
@@ -292,9 +304,17 @@ exit at 1.5R and 3R.
 | B | base, short | — | −0.1212% |
 | C | require a retest | −0.2694% | −0.1096% |
 | D | require ascending lows | −0.2926% | −0.1383% |
-| E | hourly vs 5-min | abandoned at Phase 1, confounded | |
+| E | hourly sweep AND reclaim vs 5-min | abandoned at Phase 1, confounded — reclaim-window width varied silently with the sweep timeframe | |
+| F | hourly sweep, fixed 15-min 5-min reclaim | abandoned at Phase 1, unidentifiable — the reclaim-window's *start* is welded to the sweep timeframe by actionability (a slower candle is only knowable at its own close), so the comparison could not be fixed by holding width constant alone | |
 
-All passed both nulls at the 100th percentile. All lost.
+All four completed trials passed both nulls at the 100th percentile. All
+lost. A counterfactual measurement of F's own rejected buckets was
+withdrawn after failing an arithmetic reconciliation against its own
+Phase 1 counts — selective sampling, not a random loss (see
+`MEASUREMENT_F_REJECTED_BUCKETS.md`).
+
+**CLOSED, 2026-11-07. No Study G** — see `LIQUIDITY_FAMILY_CLOSED.md`
+for the full closure reasoning.
 
 ### Portfolio construction — underpowered
 24 configurations of concentration × weighting × rebalance frequency.
@@ -513,6 +533,12 @@ predictions came from *this project's own results*, not from prior knowledge.
 Treat any strategy Claude can describe fluently as having a poor prior,
 precisely because fluency comes from promotional material.
 
+**2026-11-07:** issued two location-scoped documentation instructions in one
+session (OPERATIONS.md title without its body; §2 and §10 without §5), each
+reproducing finding #4's defect shape in documents about that shape. Both
+caught by Claude Code flagging rather than editing. Recorded as an
+instruction-design defect, not a verdict change.
+
 **On chart observation.** Four observations made from browsing charts have been
 tested — degenerate confluence, turnover dependence, retest confirmation,
 ascending lows. **All four came back null.** The research browser is for
@@ -547,11 +573,12 @@ see `LIQUIDITY_FAMILY_CLOSED.md` for the closure reasoning.
 ## 11. RULES FOR A COLD SESSION
 
 1. **Do not propose a strategy without checking whether it has already been
-   tested.** Nineteen have. Check §5 first.
+   tested.** Twenty-one have. Check §5 first.
 2. **Any intraday mean-reversion or level-bounce idea has a very poor prior.**
    Eleven have failed, all clustering at −0.1 to −0.3.
-3. **Compute MDE before finalising a comparison study.** Twice a fully
-   specified study turned out to be unanswerable.
+3. **Compute MDE before finalising a comparison study.** Three times a fully
+   specified study turned out to be unanswerable (Portfolio construction,
+   Liquidity E, Liquidity F).
 4. **Hold time windows constant in minutes, not candles**, when timeframe is
    the variable.
 5. **Measure blast radius in both directions** when a bug affects selection.

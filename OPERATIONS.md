@@ -1496,3 +1496,22 @@ re-detected its own setup instead of reusing the one already found
 (`PROJECT_CONTEXT.md` §7 finding #14). Nothing about the numbers
 themselves looked wrong; only the arithmetic against the prior stage
 did.
+
+## STANDING RULE: documentation facts are updated by search, not by section
+
+**DOCUMENTATION FACTS ARE UPDATED BY SEARCH, NOT BY SECTION.** When a fact
+changes, grep for every statement of that fact across all documents and
+update them in one commit. Do not act on an instruction that names
+specific sections -- treat the named sections as where the issue was
+noticed, not as the scope. This rule exists because the same
+fix-where-noticed defect was committed twice in documentation on
+2026-11-07, in instructions about that very defect, both times caught by
+flagging rather than editing.
+
+## STANDING RULE: adjacent staleness -- same fact fix it, different fact flag it
+
+**When you spot adjacent staleness while executing an instruction: if it
+is the SAME fact as the one being corrected, fix it in the same commit
+and report that you did. If it is a DIFFERENT fact, flag it and do not
+edit.** Both of tonight's cases were the same fact and should have been
+swept without asking.
