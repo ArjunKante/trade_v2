@@ -1440,3 +1440,30 @@ window opens. A real asymmetry with no 5-minute-arm equivalent (whose
 first in-window candle starts exactly at 09:45), worth stating
 explicitly in any future study's own preregistration rather than
 discovering it mid-run.
+
+## The Phase 1 feasibility gate paid for itself a second time -- Liquidity Study F, before any preregistration was written
+
+Study F (`LIQUIDITY_F_ABANDONED.md`) proposed fixing Study E's own
+confound by holding the reclaim window's WIDTH constant in real time
+(15 minutes, regardless of the sweep's own timeframe) -- the correct
+fix for the lesson this file's own entry above records. It did not,
+however, hold the window's START constant: establishing a sweep on an
+hourly candle means the sweep is only knowable at that candle's close,
+so the reclaim check could not start until up to 55 minutes (averaging
+roughly 30) after the sweep's own extreme occurred, against ~5 minutes
+for Studies A and B. That uncontrolled latency, not the sweep's own
+timeframe, turned out to dominate the result -- roughly doubling the
+trade count against the direction the coarser grid alone predicts, and
+making the comparison unidentifiable (no outcome could be attributed to
+timeframe alone) rather than merely confounded.
+
+**This is the second time the Phase 1 feasibility-estimate-first
+discipline has caught a fatal design problem before any backtest
+compute was spent on it, in immediate succession within the same study
+family.** Study E was caught before an estimated ~45-50 hour run; Study
+F before an estimated ~37 hour run; neither ever reached a
+preregistration, let alone a DEV backtest. The discipline itself (an
+explicit, approval-gated Phase 1 step, required before any
+preregistration is written) is now validated twice in a row, not just
+once -- worth treating as load-bearing for every future comparison
+study in this project, not only the Liquidity family.
