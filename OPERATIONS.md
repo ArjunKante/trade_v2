@@ -1387,3 +1387,56 @@ rows." If only the selected side is checked, say so explicitly in the
 report rather than letting a partial measurement be read as the full
 one; a reader who sees "9 of 188 affected" with no mention of the
 rejected side has no way to know the other side was never looked at.
+
+## STANDING RULE: a rule expressed in CANDLES silently changes its real-time meaning when candle size is the variable under test
+
+**Discovered at the Phase 1 feasibility check for Liquidity Study E
+(timeframe comparison, `LIQUIDITY_E_FINDINGS.md`), before any DEV trade
+was computed.** Study E proposed comparing 5-minute vs 1-hour
+sweep-and-reclaim confirmation, reusing `poc.v4.find_sweep`/
+`find_reclaim` unchanged on both candle widths -- deliberately, so the
+comparison would run through identical code. The reclaim rule itself,
+`RECLAIM_WINDOW_CANDLES = 3`, was never touched. But "3 candles" is 15
+minutes at 5-minute granularity and 3 hours at 1-hour granularity -- a
+12x difference in real-time patience that moved WITH the variable the
+study intended to isolate, not independently of it. The two arms would
+have differed in both confirmation granularity and reclaim patience at
+once; any observed difference between them could not have been
+attributed to timeframe alone. A sample-based feasibility estimate
+caught this before the ~45-50 hour full run, not after it -- the
+mechanism was also the reason the hourly arm produced MORE sample
+trades than the 5-minute arm, not fewer, directly contradicting the
+pre-committed prediction (which reasoned from Studies C's and D's own
+"slower confirmation discards winners" finding, an analogy that only
+holds when the real-time window is actually held constant, which it was
+not here).
+
+**The rule, going forward**: before finalizing any study that varies
+candle width (or any other time-bucketing granularity) as the
+independent variable, every OTHER rule in that study expressed as a
+candle count ("N candles," "within 3 bars," a lookback of "K candles")
+must be re-stated in real time (minutes) and held constant across arms
+-- or the preregistration must say explicitly that it is deliberately
+letting that window vary too, and interpret any result accordingly.
+Silence on this point is not neutral: a candle-count rule reused
+unchanged across differently-sized candles is not "the same rule
+applied at a different resolution," it is a different rule, and a
+study that doesn't notice is comparing two things at once while
+reporting it as one.
+
+**Reusable implementation notes from the same feasibility check** (not
+standing rules, just facts worth not re-deriving for the next
+hourly-candle study in this project): (1) the day's last hourly bucket
+(15:15-15:30, a 15-minute partial) is eligible to serve as a sweep or
+confirmation candle like any other -- established precedent from
+`poc.v3.find_entry_v3`, which uses the bucket's own actual `bucket_end`
+for the close timestamp rather than an assumed fixed offset, not
+re-derived for Study E's own Phase 1 sample. (2) The first hourly
+bucket (09:15-10:15) is excluded from sweep eligibility by construction
+whenever `poc.v4.find_sweep` is reused unchanged on hourly candles --
+it filters to `ts >= ENTRY_WINDOW_START` (09:45) using each candle's
+own START time, and the first hourly bucket starts at 09:15, before the
+window opens. A real asymmetry with no 5-minute-arm equivalent (whose
+first in-window candle starts exactly at 09:45), worth stating
+explicitly in any future study's own preregistration rather than
+discovering it mid-run.
