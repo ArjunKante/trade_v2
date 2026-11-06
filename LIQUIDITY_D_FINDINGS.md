@@ -87,3 +87,124 @@ confirming the stop and `PATTERN_BROKEN` logic are correctly
 n_required-independent while entry timing and realized returns correctly
 differ). Next: run DEV only, all four configurations, report, and
 **stop for approval before TEST**.
+
+## DEV run (Section 12 Step 3): 2LOW-long and 2LOW-short complete, 3LOW NOT RUN
+
+The DEV run started 2026-11-03, was interrupted before 3LOW could run,
+and was not resumed. 2LOW-long and 2LOW-short each completed in full
+(backtest, both nulls at the full seed count, gate evaluation). 3LOW-long
+reached only 50/321 entities of its own backtest stage before the
+interruption; 3LOW-short never started. The decision below is to close
+the study on the 2LOW results alone and NOT run 3LOW -- a deliberate
+stop, not an accident of the interruption (see "Why 3LOW was not run,"
+below).
+
+### 2LOW-long: FAIL, worse than unfiltered
+
+Mean net return **-0.2926%** (5,387 trades, CI(Bonf4) [-0.3872%,
+-0.1895%], excludes zero on the negative side), vs **Study A's -0.2841%**
+(8,131 trades). Both nulls at the 100th percentile. `DEV_PASS: false`.
+
+The ascending-lows requirement cut the trade count from 8,131 to 5,387
+(roughly a third of A's trades removed) and the survivors performed
+**worse** than A's unfiltered population (-0.2926% vs -0.2841%), not
+better.
+
+### 2LOW-short: FAIL, worse than unfiltered
+
+Mean net return **-0.1383%** (6,070 trades, CI(Bonf4) [-0.1936%,
+-0.0839%], excludes zero on the negative side), vs **Study B's -0.1212%**
+(9,222 trades). Both nulls at the 100th percentile. `DEV_PASS: false`.
+
+Same pattern as the long side: trade count cut from 9,222 to 6,070
+(again roughly a third removed), and the survivors performed worse than
+B's unfiltered population (-0.1383% vs -0.1212%).
+
+### The hypothesis's own test: half-target reach rate
+
+The hypothesis was that requiring ascending lows selects trades that
+follow through -- sellers losing strength, not just one more touch. The
+half-target reach rate is that hypothesis's own test, and it **fell** on
+both sides:
+
+- 2LOW-long: **17.8%** reach rate (942/5,287 scaled-eligible trades) vs
+  **Study A's 21.6%**.
+- 2LOW-short: **21.5%** reach rate (1,285/5,987 scaled-eligible trades)
+  vs **Study B's 26.5%**.
+
+The filter did not do what was proposed. This is the same direction of
+failure Study C's own retest requirement produced against the same A/B
+baselines (21.6% -> 19.6% long, 26.5% -> 23.4% short) -- a second,
+differently-constructed waiting rule in this family, and a second time
+the reach rate fell instead of rising.
+
+### PATTERN_INCOMPLETE: repeats Study C's NO_RETEST finding
+
+For every trade the ascending-lows requirement filtered out, the
+counterfactual A/B-style (immediate-entry) trade was also computed.
+Split by skip reason:
+
+- 2LOW-long `PATTERN_INCOMPLETE` (1,893 trades): mean counterfactual
+  **+0.906%**. `PATTERN_BROKEN` (4,144 trades): mean counterfactual
+  **-0.765%**.
+- 2LOW-short `PATTERN_INCOMPLETE` (2,675 trades): mean counterfactual
+  **+0.871%**. `PATTERN_BROKEN` (4,460 trades): mean counterfactual
+  **-0.646%**.
+
+`PATTERN_INCOMPLETE` repeats Study C's `NO_RETEST` finding exactly: the
+trades discarded because the pattern never finished were, on average,
+**winners** (+0.87% to +0.91%, in the same range as `NO_RETEST`'s own
++1.0% to +1.15%). A waiting rule that requires more structure before
+entry is, for a third time in this family (Study C's retest, Study D's
+ascending-lows), disproportionately discarding the strongest moves --
+the ones least likely to pause long enough to produce the additional
+structure the rule demands. `PATTERN_BROKEN`'s own counterfactual mean is
+negative, so that half of the filter is working as intended; it is the
+`PATTERN_INCOMPLETE` half that is working against the hypothesis, same
+as `NO_RETEST` did.
+
+### Why 3LOW was not run
+
+2LOW already failed in both directions and already performed worse than
+the unfiltered baseline in both directions. 3LOW is the identical filter
+applied more strictly (a third ascending low required instead of a
+second) -- the same lever, pushed further in the same direction that
+already failed. Running 3LOW now would have answered a question this
+study no longer needed answered. This is recorded as a **deliberate stop
+on an already-decided question**, not as an incomplete study left
+dangling.
+
+The partial 3LOW-long checkpoint (50/321 entities, no completed
+backtest, no nulls) is **discarded, not reported** -- it contains no
+result of any kind, only an interrupted intermediate state.
+
+### Liquidity family tally
+
+**Four trials, four failures.** Study A (long, NO EDGE), Study B (short,
+NO EDGE), Study C (retest, NO EDGE both sides), Study D (ascending lows,
+NO EDGE both sides, 3LOW deliberately not run). **TEST has never been
+read in any of the four.**
+
+### Operational lesson
+
+This DEV run was estimated in hours and needed roughly 20: two
+configurations (2LOW-long, 2LOW-short) alone consumed about 10 hours of
+wall-clock time, and 3LOW-long/3LOW-short were not reached. Future
+multi-configuration studies in this family should either budget
+wall-clock time for the full configuration count up front (roughly 5x
+the single-configuration estimate here, not a flat multiple assumed from
+one config's own quick run), or run each configuration as a separate
+job/process so that an interruption strands at most one half-finished
+configuration rather than leaving the remainder unstarted.
+
+## Status
+
+**CLOSED.** 2LOW-long and 2LOW-short both FAIL at DEV and both perform
+worse than their unfiltered baselines (Studies A and B); the
+hypothesis's own half-target-reach-rate test fell on both sides; the
+`PATTERN_INCOMPLETE` filtered-out trades were, on average, winners,
+repeating Study C's `NO_RETEST` finding. 3LOW was deliberately not run
+(see above) -- its partial checkpoint is discarded. Study D is closed
+**partially completed**: a decision was reached and the study is done,
+even though two of its four pre-registered configurations never
+executed. TEST not read. Liquidity family: 4 trials, 4 failures.
