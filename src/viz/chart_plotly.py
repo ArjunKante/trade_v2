@@ -410,15 +410,23 @@ def build_daily_chart(
     liquidity studies, the multi-month level construction) actually
     used -- invisible on a 1-minute chart. `daily_bars`: `viz.data.
     fetch_daily_bars`'s own output (`trade_date`, `adjusted_open/high/
-    low/close`, `sma`), ENTITY-ADJUSTED scale throughout. `poc_price_
-    adjusted`/`prev_high_adjusted` (POC's own two-level convention) and
-    the generic `levels`/`bands` lists (any study) must ALL already be
-    converted to this same adjusted scale (`viz.data.
-    adjust_raw_level_for_daily_chart`) -- this function does not convert
-    anything itself, so a caller cannot accidentally pass a RAW-scale
-    level through unconverted and have it silently plot at the wrong
-    level. The two legacy params and the generic lists are additive, not
-    exclusive -- a caller may use either or both."""
+    low/close`, `sma`, optionally `is_hindsight`), ENTITY-ADJUSTED scale
+    throughout. `poc_price_adjusted`/`prev_high_adjusted` (POC's own
+    two-level convention) and the generic `levels`/`bands` lists (any
+    study) must ALL already be converted to this same adjusted scale
+    (`viz.data.adjust_raw_level_for_daily_chart`) -- this function does
+    not convert anything itself, so a caller cannot accidentally pass a
+    RAW-scale level through unconverted and have it silently plot at the
+    wrong level. The two legacy params and the generic lists are
+    additive, not exclusive -- a caller may use either or both.
+
+    If `daily_bars` carries an `is_hindsight` column (any True rows --
+    `fetch_daily_bars`'s own `n_after` parameter), that region is shaded
+    and labelled "HINDSIGHT" explicitly: price there is real, but it is
+    what happened AFTER the trade closed, never available to any live
+    decision the strategy made -- shown for retrospective inspection
+    only, and must never be read as something the strategy could have
+    reacted to."""
     if daily_bars.empty:
         raise ValueError(f"no daily bars to plot for {entity_id} ending {trade_date}")
 
@@ -437,6 +445,17 @@ def build_daily_chart(
         x=x, y=bars["sma"], mode="lines", line=dict(color="#e8a33d", width=1.6),
         name="50-day MA (trend filter)",
     ))
+
+    if "is_hindsight" in bars.columns and bool(bars["is_hindsight"].any()):
+        hindsight_start = int(bars.index[bars["is_hindsight"]][0])
+        fig.add_vrect(
+            x0=hindsight_start - 0.5, x1=n - 0.5, fillcolor="#808080", opacity=0.14, line_width=0, layer="below",
+        )
+        fig.add_annotation(
+            x=(hindsight_start + n - 1) / 2.0, y=1.0, yref="y domain", yanchor="bottom",
+            text="<b>HINDSIGHT -- never seen live</b>", showarrow=False,
+            font=dict(size=11, color="#555555"),
+        )
 
     if poc_price_adjusted is not None:
         fig.add_hline(y=poc_price_adjusted, line_color=_color("tab:blue"), line_dash="dash", line_width=1.3,
@@ -465,8 +484,14 @@ def build_daily_chart(
     tick_idx = list(range(0, n, tick_every))
     tick_text = [dates.iloc[i].strftime("%Y-%m-%d") for i in tick_idx]
 
+    n_after_shown = int(bars["is_hindsight"].sum()) if "is_hindsight" in bars.columns else 0
+    n_before_shown = n - n_after_shown
+    title_text = (
+        f"{entity_id} -- daily, {n_before_shown} day(s) through {trade_date}"
+        + (f" + {n_after_shown} day(s) after (hindsight)" if n_after_shown else "")
+    )
     fig.update_layout(
-        title=dict(text=f"{entity_id} -- daily, {n} trading days ending {trade_date}", x=0.01, xanchor="left"),
+        title=dict(text=title_text, x=0.01, xanchor="left"),
         dragmode="pan",
         xaxis=dict(tickmode="array", tickvals=tick_idx, ticktext=tick_text, rangeslider=dict(visible=False)),
         yaxis=dict(title="Price (entity-adjusted)"),

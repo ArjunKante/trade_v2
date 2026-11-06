@@ -166,10 +166,12 @@ SMA_WINDOW = 50  # same as poc.trend.SMA_WINDOW -- the trend filter's own window
 
 
 def fetch_daily_bars(
-    warehouse_con: duckdb.DuckDBPyConnection, entity_id: str, trade_date: dt.date, n_days: int = 80,
+    warehouse_con: duckdb.DuckDBPyConnection, entity_id: str, trade_date: dt.date,
+    n_before: int = 80, n_after: int = 0,
 ) -> dict:
-    """Study-agnostic daily-candle view: up to `n_days` trading days
-    ending on (and including) `trade_date`, ENTITY-ADJUSTED scale --
+    """Study-agnostic daily-candle view: up to `n_before` trading days
+    BEFORE `trade_date` through up to `n_after` trading days AFTER it,
+    inclusive of `trade_date` itself, ENTITY-ADJUSTED scale --
     deliberately NOT RAW scale, because the 50-day moving average shown
     alongside it is the exact line a daily-timeframe trend filter (e.g.
     `poc.trend.build_trend_lookup`) computes, and that filter compares
@@ -179,15 +181,26 @@ def fetch_daily_bars(
     lookup_for_entity` already uses, so this IS the real trend filter's
     own line, not a visually-similar recomputation.
 
+    `n_after` defaults to 0 -- every existing caller (POC's own trend-
+    filter context, which only ever wants history ending ON the trade
+    day) gets exactly its old behavior unchanged. A caller asking for
+    `n_after > 0` is deliberately looking PAST the trade day -- for a
+    closed study, that is hindsight the live strategy never saw, so the
+    returned frame carries an `is_hindsight` column (True for every row
+    strictly after `trade_date`) a renderer can use to mark that region
+    visually, rather than silently drawing it exactly like the rest of
+    the chart.
+
     Returns {"bars": DataFrame[trade_date, adjusted_open/high/low/close,
-    sma] trimmed to the last `n_days` rows, "scale_note": str}. The
-    `sma` column is computed over the ENTITY'S FULL fetched history
-    (not just the displayed window) so the line is correct from the
-    first displayed candle, not NaN-truncated at the left edge.
-    `fetch_adjustment_factor_for_overlay` (below) is what a caller uses
-    to bring a RAW-scale level (POC_PRICE, PREV_HIGH) onto this same
-    adjusted scale for overlay -- never compare a RAW level to these
-    candles directly."""
+    sma, is_hindsight] trimmed to the requested window, "scale_note":
+    str}. The `sma` column is computed over the ENTITY'S FULL fetched
+    history (not just the displayed window) so the line is correct from
+    the first displayed candle, not NaN-truncated at the left edge.
+    `adjust_raw_level_for_daily_chart` (below) is what a caller uses to
+    bring a RAW-scale level (POC_PRICE, PREV_HIGH, or a liquidity
+    study's own six levels/confluence zone) onto this same adjusted
+    scale for overlay -- never compare a RAW level to these candles
+    directly."""
     from fibo.daily_ohlc import build_daily_ohlc_panel
     from fibo.jump_guard import combined_unexplained_jump_dates
 
@@ -203,15 +216,27 @@ def fetch_daily_bars(
     panel = panel.sort_values("trade_date").reset_index(drop=True)
     panel["sma"] = panel["adjusted_close"].rolling(window=SMA_WINDOW, min_periods=SMA_WINDOW).mean()
 
-    panel = panel[panel["trade_date"] <= pd.Timestamp(trade_date)]
-    if panel.empty:
+    trade_ts = pd.Timestamp(trade_date)
+    on_or_before = panel.index[panel["trade_date"] <= trade_ts]
+    if len(on_or_before) == 0:
         return {"bars": pd.DataFrame(), "scale_note": f"NO DATA -- {entity_id} has no daily history on or before {trade_date}"}
 
-    display = panel.tail(n_days).reset_index(drop=True)
+    anchor_pos = int(on_or_before[-1])
+    start_pos = max(0, anchor_pos - n_before)
+    end_pos = min(len(panel) - 1, anchor_pos + n_after)
+    display = panel.iloc[start_pos:end_pos + 1].reset_index(drop=True)
+    display["is_hindsight"] = display["trade_date"] > trade_ts
+
+    n_after_available = int(display["is_hindsight"].sum())
     scale_note = (
         f"Entity-adjusted daily scale (fibo.daily_ohlc) -- NOT the same scale as the 1-minute RAW view. "
         f"50-day MA is the trend filter's own line (jump-guard-flagged days already excluded)."
     )
+    if n_after_available:
+        scale_note += (
+            f"  |  {n_after_available} trading day(s) AFTER the trade date are shown shaded -- "
+            f"HINDSIGHT, never seen by the live strategy."
+        )
     return {"bars": display, "scale_note": scale_note}
 
 

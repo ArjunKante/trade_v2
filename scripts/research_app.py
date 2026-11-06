@@ -286,8 +286,8 @@ def _liquidity_a_dev_bounds() -> tuple[dt.date, dt.date]:
 # across both studies' full trade populations and did not change the
 # verdict (LIQUIDITY_B_FINDINGS.md's own "Post-DEV diagnostics" /
 # "Liquidity family tally" sections), and the user then confirmed
-# closure. Liquidity family (after Study C's later closure too):
-# 3 trials, 3 failures.
+# closure. Liquidity family (after Study C's and Study D's later
+# closures too): 4 trials, 4 failures, TEST never read in any of them.
 # ---------------------------------------------------------------------
 
 @st.cache_data
@@ -305,8 +305,8 @@ def _load_liquidity_b_verdict() -> dict:
         inf = pickle.load(f)
     return {
         "headline": (
-            "CLOSED -- DEV FAILS (NO EDGE) -- Liquidity family trial 2 of 3 (short side, exact mirror "
-            "of Study A) -- family tally: 3 trials, 3 failures"
+            "CLOSED -- DEV FAILS (NO EDGE) -- Liquidity family trial 2 of 4 (short side, exact mirror "
+            "of Study A) -- family FINAL tally: 4 trials, 4 failures"
         ),
         "mean_label": "Mean net return",
         "mean_display": f"{inf['mean_net_r']*100:+.4f}%",
@@ -345,6 +345,238 @@ def _liquidity_b_adapter(warehouse_con, intraday_con, entity_id: str, trade_date
 def _liquidity_b_dev_bounds() -> tuple[dt.date, dt.date]:
     from liquidity.b import DEV_END, DEV_START
     return DEV_START, DEV_END
+
+
+# ---------------------------------------------------------------------
+# Liquidity Study C -- trial 3, retest confirmation added on top of A's/
+# B's own sweep-and-reclaim (PREREGISTRATION_LIQUIDITY_C.md). CLOSED --
+# the retest requirement was REFUTED BY ITS OWN CRITERION: the half-
+# target reach rate (the hypothesis's own test) FELL on both sides
+# rather than rising, and the NO_RETEST filtered-out trades were, on
+# average, winners. Two separate STUDIES object (long/short), one per
+# side, each with its own trade population and verdict.
+# ---------------------------------------------------------------------
+
+@st.cache_data
+def _load_liquidity_c_long_trades() -> pd.DataFrame:
+    with open(ROOT / "data" / "liquidity" / "c" / "long" / "dev_backtest.pkl", "rb") as f:
+        res = pickle.load(f)
+    df = res["trades"].copy()
+    df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
+    return df
+
+
+@st.cache_data
+def _load_liquidity_c_long_verdict() -> dict:
+    with open(ROOT / "data" / "liquidity" / "c" / "long" / "dev_inference.pkl", "rb") as f:
+        inf = pickle.load(f)
+    return {
+        "headline": "CLOSED -- DEV FAILS (NO EDGE) -- Liquidity family trial 3 of 4 (LONG, retest confirmation)",
+        "mean_label": "Mean net return",
+        "mean_display": f"{inf['mean_net_r']*100:+.4f}%",
+        "ci_display": f"[{inf['ci_low']*100:+.4f}%, {inf['ci_high']*100:+.4f}%]",
+        "n_trades": inf["n_trades"], "n_days": inf["n_days"],
+        "summary": (
+            "**Percentage of position value -- not R.** Adds ONE requirement on top of Study A's own "
+            "sweep-and-reclaim: price must return to the zone and reclose through it (RETEST) before "
+            "entry fires, rather than entering immediately at the reclaim. Mean net return is negative "
+            "with the CI excluding zero -- the gate's first condition fails, same as A. **The retest "
+            "requirement was REFUTED BY ITS OWN CRITERION**: the half-target reach rate -- the "
+            "hypothesis's own test, since the retest was proposed specifically to raise it -- FELL "
+            "(21.6% -> 19.6%) rather than rising. The trades filtered out because price never returned "
+            "to retest (`NO_RETEST`) averaged **+1.0% to +1.15%** -- on average, winners the filter "
+            "discarded, not the suspect moves it was meant to screen out. Full detail: "
+            "LIQUIDITY_C_FINDINGS.md."
+        ),
+        "findings_doc": "LIQUIDITY_C_FINDINGS.md",
+    }
+
+
+@st.cache_data
+def _liquidity_c_long_adapter_cached(_warehouse_con, _intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    from viz.liquidity_c_adapter import build_liquidity_c_long_overlay
+    return build_liquidity_c_long_overlay(
+        _warehouse_con, _intraday_con, entity_id, trade_date,
+        jump_dates_by_entity=_poc_jump_dates(), rank_lookup=_poc_rank_lookup(),
+    )
+
+
+def _liquidity_c_long_adapter(warehouse_con, intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    return _liquidity_c_long_adapter_cached(warehouse_con, intraday_con, entity_id, trade_date)
+
+
+def _liquidity_c_dev_bounds() -> tuple[dt.date, dt.date]:
+    from liquidity.c import DEV_END, DEV_START
+    return DEV_START, DEV_END
+
+
+@st.cache_data
+def _load_liquidity_c_short_trades() -> pd.DataFrame:
+    with open(ROOT / "data" / "liquidity" / "c" / "short" / "dev_backtest.pkl", "rb") as f:
+        res = pickle.load(f)
+    df = res["trades"].copy()
+    df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
+    return df
+
+
+@st.cache_data
+def _load_liquidity_c_short_verdict() -> dict:
+    with open(ROOT / "data" / "liquidity" / "c" / "short" / "dev_inference.pkl", "rb") as f:
+        inf = pickle.load(f)
+    return {
+        "headline": "CLOSED -- DEV FAILS (NO EDGE) -- Liquidity family trial 3 of 4 (SHORT, retest confirmation)",
+        "mean_label": "Mean net return",
+        "mean_display": f"{inf['mean_net_r']*100:+.4f}%",
+        "ci_display": f"[{inf['ci_low']*100:+.4f}%, {inf['ci_high']*100:+.4f}%]",
+        "n_trades": inf["n_trades"], "n_days": inf["n_days"],
+        "summary": (
+            "**Percentage of position value -- not R. SHORT side, exact mirror of the long retest "
+            "requirement above (compared against Study B's own unfiltered baseline).** Mean net return "
+            "is negative with the CI excluding zero -- same gate failure as the long side. **Same "
+            "refutation by the hypothesis's own criterion**: half-target reach rate FELL (26.5% -> "
+            "23.4%) instead of rising, and `NO_RETEST` filtered-out trades again averaged positive "
+            "(winners discarded). Full detail: LIQUIDITY_C_FINDINGS.md."
+        ),
+        "findings_doc": "LIQUIDITY_C_FINDINGS.md",
+    }
+
+
+@st.cache_data
+def _liquidity_c_short_adapter_cached(_warehouse_con, _intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    from viz.liquidity_c_adapter import build_liquidity_c_short_overlay
+    return build_liquidity_c_short_overlay(
+        _warehouse_con, _intraday_con, entity_id, trade_date,
+        jump_dates_by_entity=_poc_jump_dates(), rank_lookup=_poc_rank_lookup(),
+    )
+
+
+def _liquidity_c_short_adapter(warehouse_con, intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    return _liquidity_c_short_adapter_cached(warehouse_con, intraday_con, entity_id, trade_date)
+
+
+# ---------------------------------------------------------------------
+# Liquidity Study D -- trial 4, ascending lows (PREREGISTRATION_
+# LIQUIDITY_D.md). CLOSED, PARTIALLY COMPLETE: only CONFIG 2LOW (both
+# directions) ever finished DEV -- CONFIG 3LOW's run was interrupted
+# mid-backtest and deliberately NOT resumed, since 2LOW already failed
+# in both directions and 3LOW is the identical filter pushed stricter in
+# the same already-failed direction (LIQUIDITY_D_FINDINGS.md's own "Why
+# 3LOW was not run" section). Only 2LOW is offered here -- there is no
+# completed 3LOW result anywhere in this project.
+# ---------------------------------------------------------------------
+
+@st.cache_data
+def _load_liquidity_d_2low_long_trades() -> pd.DataFrame:
+    with open(ROOT / "data" / "liquidity" / "d" / "2low" / "long" / "dev_backtest.pkl", "rb") as f:
+        res = pickle.load(f)
+    df = res["trades"].copy()
+    df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
+    return df
+
+
+@st.cache_data
+def _load_liquidity_d_2low_long_verdict() -> dict:
+    with open(ROOT / "data" / "liquidity" / "d" / "2low" / "long" / "dev_inference.pkl", "rb") as f:
+        inf = pickle.load(f)
+    ci_lo = inf.get("ci_low_bonf4", inf["ci_low"])
+    ci_hi = inf.get("ci_high_bonf4", inf["ci_high"])
+    return {
+        "headline": (
+            "CLOSED -- PARTIALLY COMPLETE -- DEV FAILS (NO EDGE) -- Liquidity family trial 4 of 4 (LONG, "
+            "CONFIG 2LOW -- CONFIG 3LOW was never run) -- family FINAL tally: 4 trials, 4 failures, "
+            "TEST never read"
+        ),
+        "mean_label": "Mean net return",
+        "mean_display": f"{inf['mean_net_r']*100:+.4f}%",
+        "ci_display": f"[{ci_lo*100:+.4f}%, {ci_hi*100:+.4f}%] (Bonferroni-4, 4 configs this trial)",
+        "n_trades": inf["n_trades"], "n_days": inf["n_days"],
+        "summary": (
+            "**Percentage of position value -- not R.** Replaces A's own immediate reclaim-entry with a "
+            "longer structural requirement: price must form 2 successive ascending lows (each strictly "
+            "higher/shallower than the last) after the sweep before entry fires. Mean net return is "
+            "negative with the CI excluding zero -- the gate's first condition fails, and the result is "
+            "**WORSE than Study A's own unfiltered baseline** (-0.2926% vs A's -0.2841%), even though "
+            "roughly a third of A's trades were removed by the filter. **The hypothesis's own test "
+            "(half-target reach rate) FELL** (17.8% vs A's 21.6%), the same direction of failure as "
+            "Study C's retest filter. `PATTERN_INCOMPLETE` filtered-out trades repeated Study C's own "
+            "`NO_RETEST` finding: averaged **+0.906%**, i.e. winners discarded by the wait-for-more-"
+            "structure filter. **CONFIG 3LOW was deliberately NOT run** -- 2LOW already failed worse "
+            "than unfiltered in both directions, and 3LOW is the same lever pushed stricter in the same "
+            "already-failed direction; its partial checkpoint (50/321 entities) was discarded, not "
+            "reported. Full detail: LIQUIDITY_D_FINDINGS.md."
+        ),
+        "findings_doc": "LIQUIDITY_D_FINDINGS.md",
+    }
+
+
+@st.cache_data
+def _liquidity_d_2low_long_adapter_cached(_warehouse_con, _intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    from viz.liquidity_d_adapter import build_liquidity_d_long_overlay
+    return build_liquidity_d_long_overlay(
+        _warehouse_con, _intraday_con, entity_id, trade_date,
+        jump_dates_by_entity=_poc_jump_dates(), rank_lookup=_poc_rank_lookup(),
+    )
+
+
+def _liquidity_d_2low_long_adapter(warehouse_con, intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    return _liquidity_d_2low_long_adapter_cached(warehouse_con, intraday_con, entity_id, trade_date)
+
+
+def _liquidity_d_dev_bounds() -> tuple[dt.date, dt.date]:
+    from liquidity.d import DEV_END, DEV_START
+    return DEV_START, DEV_END
+
+
+@st.cache_data
+def _load_liquidity_d_2low_short_trades() -> pd.DataFrame:
+    with open(ROOT / "data" / "liquidity" / "d" / "2low" / "short" / "dev_backtest.pkl", "rb") as f:
+        res = pickle.load(f)
+    df = res["trades"].copy()
+    df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
+    return df
+
+
+@st.cache_data
+def _load_liquidity_d_2low_short_verdict() -> dict:
+    with open(ROOT / "data" / "liquidity" / "d" / "2low" / "short" / "dev_inference.pkl", "rb") as f:
+        inf = pickle.load(f)
+    ci_lo = inf.get("ci_low_bonf4", inf["ci_low"])
+    ci_hi = inf.get("ci_high_bonf4", inf["ci_high"])
+    return {
+        "headline": (
+            "CLOSED -- PARTIALLY COMPLETE -- DEV FAILS (NO EDGE) -- Liquidity family trial 4 of 4 (SHORT, "
+            "CONFIG 2LOW -- CONFIG 3LOW was never run) -- family FINAL tally: 4 trials, 4 failures, "
+            "TEST never read"
+        ),
+        "mean_label": "Mean net return",
+        "mean_display": f"{inf['mean_net_r']*100:+.4f}%",
+        "ci_display": f"[{ci_lo*100:+.4f}%, {ci_hi*100:+.4f}%] (Bonferroni-4, 4 configs this trial)",
+        "n_trades": inf["n_trades"], "n_days": inf["n_days"],
+        "summary": (
+            "**Percentage of position value -- not R. SHORT side, exact mirror of the long ascending-"
+            "lows requirement above (compared against Study B's own unfiltered baseline).** Mean net "
+            "return is negative with the CI excluding zero, and again **WORSE than Study B's own "
+            "unfiltered baseline** (-0.1383% vs B's -0.1212%). **Half-target reach rate FELL** (21.5% "
+            "vs B's 26.5%) -- the hypothesis's own test failed on this side too. `PATTERN_INCOMPLETE` "
+            "filtered-out trades averaged **+0.871%** -- winners discarded, same pattern as the long "
+            "side. **CONFIG 3LOW was deliberately NOT run** (see the long side's own summary above); "
+            "its partial checkpoint was discarded, not reported. Full detail: LIQUIDITY_D_FINDINGS.md."
+        ),
+        "findings_doc": "LIQUIDITY_D_FINDINGS.md",
+    }
+
+
+@st.cache_data
+def _liquidity_d_2low_short_adapter_cached(_warehouse_con, _intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    from viz.liquidity_d_adapter import build_liquidity_d_short_overlay
+    return build_liquidity_d_short_overlay(
+        _warehouse_con, _intraday_con, entity_id, trade_date,
+        jump_dates_by_entity=_poc_jump_dates(), rank_lookup=_poc_rank_lookup(),
+    )
+
+
+def _liquidity_d_2low_short_adapter(warehouse_con, intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    return _liquidity_d_2low_short_adapter_cached(warehouse_con, intraday_con, entity_id, trade_date)
 
 
 @st.cache_data
@@ -455,6 +687,54 @@ STUDIES: dict[str, dict] = {
         "outcome_col": "outcome",
         "net_r_col": "net_return_pct",
         "lookback_days": 0,
+    },
+    "liquidity_c_long": {
+        "label": "Liquidity Study C -- LONG, retest confirmation",
+        "available": True,
+        "trades_loader": _load_liquidity_c_long_trades,
+        "verdict_loader": _load_liquidity_c_long_verdict,
+        "adapter": _liquidity_c_long_adapter,
+        "dev_bounds": _liquidity_c_dev_bounds,
+        "outcome_col": "outcome",
+        "net_r_col": "net_return_pct",
+        "lookback_days": 0,
+        "daily_default_before": 20, "daily_default_after": 20,
+    },
+    "liquidity_c_short": {
+        "label": "Liquidity Study C -- SHORT, retest confirmation",
+        "available": True,
+        "trades_loader": _load_liquidity_c_short_trades,
+        "verdict_loader": _load_liquidity_c_short_verdict,
+        "adapter": _liquidity_c_short_adapter,
+        "dev_bounds": _liquidity_c_dev_bounds,
+        "outcome_col": "outcome",
+        "net_r_col": "net_return_pct",
+        "lookback_days": 0,
+        "daily_default_before": 20, "daily_default_after": 20,
+    },
+    "liquidity_d_2low_long": {
+        "label": "Liquidity Study D -- LONG, ascending lows (2LOW)",
+        "available": True,
+        "trades_loader": _load_liquidity_d_2low_long_trades,
+        "verdict_loader": _load_liquidity_d_2low_long_verdict,
+        "adapter": _liquidity_d_2low_long_adapter,
+        "dev_bounds": _liquidity_d_dev_bounds,
+        "outcome_col": "outcome",
+        "net_r_col": "net_return_pct",
+        "lookback_days": 0,
+        "daily_default_before": 20, "daily_default_after": 20,
+    },
+    "liquidity_d_2low_short": {
+        "label": "Liquidity Study D -- SHORT, ascending highs (2LOW)",
+        "available": True,
+        "trades_loader": _load_liquidity_d_2low_short_trades,
+        "verdict_loader": _load_liquidity_d_2low_short_verdict,
+        "adapter": _liquidity_d_2low_short_adapter,
+        "dev_bounds": _liquidity_d_dev_bounds,
+        "outcome_col": "outcome",
+        "net_r_col": "net_return_pct",
+        "lookback_days": 0,
+        "daily_default_before": 20, "daily_default_after": 20,
     },
     "fibo": {
         "label": "Fibo (ORB + golden zone)",
@@ -617,7 +897,8 @@ default_lookback = study.get("lookback_days", 0)
 show_lookback = False
 lookback_days = default_lookback
 hourly_lookback_days = default_lookback
-daily_lookback_days = 80
+daily_before_days = study.get("daily_default_before", 80)
+daily_after_days = study.get("daily_default_after", 0)
 if chart_mode == "1-minute":
     st.sidebar.subheader("Lookback window (1-minute)")
     show_lookback = st.sidebar.checkbox(
@@ -640,10 +921,17 @@ elif chart_mode == "1-hour (POC window)":
              f"days keeps the chart to roughly 80 candles.",
     )
 else:
-    st.sidebar.subheader("Lookback window (daily)")
-    daily_lookback_days = st.sidebar.number_input(
-        "Trading days ending on the trade day", min_value=10, max_value=250, value=80,
-        help="Entity-adjusted scale -- the same scale the 50-day trend filter itself uses.",
+    st.sidebar.subheader("Window (daily)")
+    daily_before_days = st.sidebar.number_input(
+        "Trading days BEFORE the trade date", min_value=10, max_value=250, value=daily_before_days,
+        help="Entity-adjusted scale -- the same scale the 50-day trend filter itself uses. Up to 60 days "
+             "covers the full confluence-zone construction window; higher values stay available for the "
+             "trend-filter context POC's own view already used.",
+    )
+    daily_after_days = st.sidebar.number_input(
+        "Trading days AFTER the trade date", min_value=0, max_value=60, value=daily_after_days,
+        help="Price the strategy never saw -- shown shaded and labelled HINDSIGHT on the chart. Lets you "
+             "see where price went relative to the six levels/confluence zone long after the trade closed.",
     )
 
 st.sidebar.markdown("---")
@@ -678,7 +966,8 @@ with col_chart:
     bars_empty = result["bars"] is None or (hasattr(result["bars"], "empty") and result["bars"].empty)
 
     if chart_mode == "Daily (trend filter context)":
-        daily = fetch_daily_bars(warehouse_con, entity_id, trade_date, n_days=daily_lookback_days)
+        daily = fetch_daily_bars(warehouse_con, entity_id, trade_date,
+                                  n_before=daily_before_days, n_after=daily_after_days)
         if daily["bars"].empty:
             st.info(f"Nothing to plot on the daily view: {daily['scale_note']}")
         else:
@@ -690,9 +979,12 @@ with col_chart:
                 prev_high_adj = adjust_raw_level_for_daily_chart(
                     warehouse_con, entity_id, trade_date, detail["prev_high"])
 
-            # Generic hook any adapter may populate (currently: liquidity_a/b's
-            # own six levels + confluence zone) -- additive to POC's own two
-            # hardcoded levels above, never required.
+            # Generic hook any adapter may populate (currently: every liquidity
+            # study's own six levels + confluence zone) -- additive to POC's own
+            # two hardcoded levels above, never required. Plotly's add_hline/
+            # add_hrect span the full row width automatically, so these same
+            # levels/zone are already "extended across the whole span" once
+            # daily_after_days widens that row -- no extra code needed here.
             levels_for_daily = [
                 Level(adjust_raw_level_for_daily_chart(warehouse_con, entity_id, trade_date, raw_price),
                       lbl, color=color, linestyle="dash")
