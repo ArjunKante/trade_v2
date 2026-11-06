@@ -402,9 +402,12 @@ earnings_yield move, per instruction, since recovering 166 large,
 established companies could plausibly move it either way and deserves
 scrutiny before being read as a result.
 
-**This is, per this project's own count across it and its predecessor, the
-FOURTH occurrence of the same meta-pattern: a fix applied where the bug was
-first noticed, not everywhere the same pattern occurs.** Bug #2 already
+**This is a recurrence of the same meta-pattern: a fix applied where the bug
+was first noticed, not everywhere the same pattern occurs** (recurrence
+count maintained in `OPERATIONS.md`'s own standing-rule entry; see Bugs #2,
+#7, #9, #12, #18 -- *updated 2026-11-07; this previously hardcoded "FOURTH
+occurrence," accurate when written, stale once Bugs #9/#12/#18 were later
+found*). Bug #2 already
 needed its own gap-awareness fix applied independently to three different
 factor modules rather than shared once. This is the same lesson one layer
 up: `corporate_actions.py` established, and tested, that NSE's corporate-
@@ -592,16 +595,25 @@ the first one, not the second.
 instance: a scoping step that selects a registration without checking it
 resolves is the same class of defect as an unresolved feed-identifier
 join -- a selection made on metadata that was never validated against
-reality.** Bug #7's ISIN join and this dedup rule are two instances of
-that shape now, not two unrelated bugs that happen to rhyme. Anywhere else
+reality.** Bug #7's ISIN join and this dedup rule are both instances of
+that shape (recurrence count maintained in `OPERATIONS.md`'s own
+standing-rule entry; see Bugs #2, #7, #9, #12, #18 -- *updated 2026-11-07;
+this previously hardcoded "two instances... now," accurate at the time,
+stale once Bugs #12/#18 were later found*), not two unrelated bugs that
+happen to rhyme. Anywhere else
 in this project a selection is made from several candidates by metadata
 alone (a preference order, a recency rule, a type filter) is worth reading
 with this shape in mind before the next one is found the hard way.
 
 ## Bug #10: resolve_isin_for_filings ported a direction preference that was correct in its source context and wrong in this one
 
-**A different failure shape from the five fix-not-propagated instances
-already on record** -- not "the fix wasn't applied everywhere the bug
+**A different failure shape from the fix-not-propagated instances already
+on record** (recurrence count maintained in `OPERATIONS.md`'s own
+standing-rule entry; see Bugs #2, #7, #9, #12, #18 -- *updated 2026-11-07;
+this previously hardcoded "five... already on record," accurate at the
+time (and itself a useful later cross-check -- see Bug #7's own
+annotation above), stale once Bugs #12/#18 were later found*) -- not "the
+fix wasn't applied everywhere the bug
 occurs," but "the fix was applied everywhere, and carried an unexamined
 assumption into a place it didn't hold." `resolve_isin_for_filings`
 (Bug #7) copied `resolve_isin_for_actions`' FORWARD-preferred merge_asof

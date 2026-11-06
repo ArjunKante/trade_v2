@@ -74,8 +74,11 @@ silently orphaned from every join through `isin_lineage`, and every Phase
 E factor had been measured on a universe missing them, for months, before
 anyone thought to check (BUGS.md Bug #7).
 
-**This is the fourth occurrence of this exact meta-pattern across this
-project and its predecessor.** It is not carelessness -- each individual
+**This meta-pattern recurs across this project and its predecessor
+(recurrence count maintained in BUGS.md; see Bugs #2, #7, #9, #12, #18) --
+*updated 2026-11-07; previously hardcoded "fourth occurrence" here too,
+the same staleness this entry's own title parenthetical just had.*** It is
+not carelessness -- each individual
 fix was careful, tested, and correct for the case that motivated it. The
 failure is that nobody thinks to ask, at the moment a fix is found and
 verified, "where else does this exact shape of bug live?" A fix's own
