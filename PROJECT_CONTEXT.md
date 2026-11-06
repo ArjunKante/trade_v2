@@ -250,18 +250,35 @@ LightGBM, 25 features, 20-seed ensemble. IC 0.0281 against a 0.03 threshold.
 0.0006 on unseen names and **reduced** IC overall. Holdout reversed sign:
 +0.0816 → −0.0206.
 
-### Swing V4 — dip + volume + regime
-9.8th percentile against its own pool. Worse than random.
+### Swing family — six variants run (V1, V2, V3, V4, V7, V8); V5/V6 never run (Bug #12)
+One pre-specified 6-variant decomposition family
+(`scripts/run_swing_phase3_decomposition.py`), Bonferroni- and
+Benjamini-Hochberg-corrected across all six (`PREREGISTRATION_SWING_V1.md`
+§0):
 
-### Swing V1 — dip only
-**The most important failure in the project.** 100th percentile in development,
-p=0.001, 65,219 trades, cleared Bonferroni and Benjamini-Hochberg across a
-six-variant family, with a plausible mechanism.
+| Variant | DEV percentile | Cleared both corrections | Sealed holdout |
+|---|---|---|---|
+| V1 (dip only) | 100.0 | YES | **61.4th — FAIL** |
+| V2 (dip+volume) | 76.1 | no | not taken |
+| V3 (dip+regime) | 58.2 | no | not taken |
+| V4 (dip+volume+regime, original rule) | 9.8 | no | not taken |
+| V7 (momentum+liquidity, no dip) | 28.5 (degenerate null) | n/a | not taken |
+| V8 (dip, full universe, no momentum) | 100.0 | YES | **never taken** |
 
-**Sealed holdout: 61.4th percentile.** Indistinguishable from random.
+**The most important failure in the project**: V1, 65,219 trades, p=0.001,
+cleared both corrections, with a plausible mechanism, taken to the sealed
+holdout and failing there — 61.4th percentile, indistinguishable from
+random. A large sample, a corrected significance threshold, and a
+sensible mechanism are not substitutes for a holdout. Every subsequent
+study cites this.
 
-Every subsequent study cites this. A large sample, a corrected significance
-threshold and a sensible mechanism are not substitutes for a holdout.
+**V8 also cleared DEV at the 100th percentile and was never taken to the
+sealed holdout. The holdout is now retired, so V8 cannot be resolved the
+way V1 was. Its status is UNVALIDATED and UNVALIDATABLE, not passing. DO
+NOT REVIVE. Two of six run variants reached the 100th percentile in DEV;
+the one that was tested against sealed data came back at the 61.4th. That
+is the project's clearest base rate for what a 100th-percentile DEV
+result is worth.**
 
 ### Momentum + fundamentals — untestable
 Earnings yield t=2.75 (fails correction across nine factors), correlation with
@@ -318,6 +335,16 @@ V4 is notable: it passed both null comparisons and still lost. The selection
 edge was real and smaller than friction. V5 tested whether a longer horizon
 would let it grow past costs — it made things worse, because delivery costs are
 higher and overnight gaps bypass stops.
+
+**The gate's own Bonferroni denominator stayed pinned at 2 while the
+family's trial count reached 5.** V3's, V4's, and V5's own preregistrations
+each self-flagged the growing gap (V4's own section title: "the Bonferroni
+caveat is now WORSE, stated again") — and the denominator was never
+updated. No verdict changes here: all five failed anyway, so no result was
+read against a threshold too lenient for it to have actually passed. But
+had any of V3, V4, or V5 passed, it would have passed against a threshold
+that did not account for the accumulated trials — a near-miss this family
+never had to test.
 
 ### Liquidity family — six specified, four failed, two abandoned, one withdrawn measurement
 Multi-timeframe confluence (3-month, 1-week, 1-day highs and lows clustering
@@ -483,6 +510,15 @@ constructed by reusing the recorded setup (extreme, level, timestamp)
 from the stage under study, never by re-running a detector. Studies C
 and D use the correct construction and are unaffected.
 
+**15. A flag recorded in a per-study document is not a correction.**
+POC V3, V4 and V5 each self-flagged that the family's Bonferroni
+denominator was stale, and the denominator was never updated, because
+nothing carried the flag out of the file it was written in. The
+recording convention assumed that writing a defect down was sufficient.
+It is not: a flag needs an escalation path to OPERATIONS.md or §7, or it
+dies where it was written. Found 2026-11-07 while building the §3 trial
+table, weeks after the flags were written.
+
 ---
 
 ## 8. THE STRUCTURAL FINDING
@@ -564,6 +600,13 @@ session (OPERATIONS.md title without its body; §2 and §10 without §5), each
 reproducing finding #4's defect shape in documents about that shape. Both
 caught by Claude Code flagging rather than editing. Recorded as an
 instruction-design defect, not a verdict change.
+
+**2026-11-07, same session:** the above is an instruction-design pattern on
+my side, not three unrelated slips — repeatedly treating conversation as
+the record. Three instances in one session: a document described as handed
+over that had never reached the machine; a numbered findings ledger
+referenced before it existed in the repo; and Liquidity E/F Bonferroni
+figures asserted as settled that exist only in chat.
 
 **On chart observation.** Four observations made from browsing charts have been
 tested — degenerate confluence, turnover dependence, retest confirmation,

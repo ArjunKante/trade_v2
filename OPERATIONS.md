@@ -1515,3 +1515,28 @@ is the SAME fact as the one being corrected, fix it in the same commit
 and report that you did. If it is a DIFFERENT fact, flag it and do not
 edit.** Both of tonight's cases were the same fact and should have been
 swept without asking.
+
+## STANDING RULE: a flag written inside a per-study document is not a correction
+
+Any defect or discrepancy flagged inside a per-study document (a
+preregistration, a findings record, a closure note) must also be recorded
+in `OPERATIONS.md` or `PROJECT_CONTEXT.md` §7 **in the same commit**, or it
+does not count as recorded. POC V3, V4, and V5 each wrote down, in their
+own text, that the family's Bonferroni denominator was stale -- and it
+stayed stale through V5, because nothing carried that flag anywhere a
+later session would see it without re-reading all five documents in
+sequence. A flag that lives only in the file where it was noticed has the
+same blast radius as a bug fix applied only where it was noticed (finding
+#4) -- it is the same defect shape, one layer up, in documentation instead
+of code.
+
+## STANDING RULE: a figure is not a project fact until it is committed
+
+**A FIGURE IS NOT A PROJECT FACT UNTIL IT IS COMMITTED.** Statements made
+in conversation, including mine and including instructions that assert a
+number as settled, are not records. If a figure cannot be traced to a
+committed file, it is UNVERIFIED regardless of who stated it or how
+confidently. Three instances on 2026-11-07: a document described as handed
+over that had never reached the machine, a numbered findings ledger
+referenced before it existed in the repo, and Liquidity E/F Bonferroni
+figures asserted as settled that exist only in chat.

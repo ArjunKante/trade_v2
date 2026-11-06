@@ -230,7 +230,11 @@ the decomposition's own V1-vs-V8 comparison, without touching the holdout
 again. **V8** (the same dip condition, ranked and applied across the
 FULL liquid universe, with NO momentum-top-decile restriction at all) also
 cleared the 100th percentile pre-holdout (p=0.001), though at much lower
-absolute expectancy than V1 (0.040-0.170% vs. 0.364-0.494%). **The
+absolute expectancy than V1 (0.040-0.170% vs. 0.364-0.494%). **V8 was
+never taken to the sealed holdout and, with the holdout now retired,
+cannot be — its status is UNVALIDATED and UNVALIDATABLE, not passing;
+see `PROJECT_CONTEXT.md` §5's own Swing entry before reading the
+inference below as more than an inference.** The
 pre-holdout reversal measurement was not an artifact of restricting to
 momentum winners specifically -- it appeared, at the same extreme
 percentile, in two structurally different universes.** This weakens
@@ -678,8 +682,12 @@ momentum-family persistence statistics, confirmed independently in two
 codebases at two different horizons -- Phase 3's V1/V8 cross-universe
 result remains the single strongest conclusion in this document: two
 structurally different universes, V1 within momentum winners and V8
-across the full market, both cleared the 100th percentile pre-holdout,
-both failed to establish a real edge, pointing straight at the
+across the full market, both cleared the 100th percentile pre-holdout --
+V1 then failed on sealed data; V8 was never taken to holdout and, that
+window now retired, cannot be -- its own "failed to establish a real
+edge" here is this document's inference from V1's result, not a
+measurement of V8 itself (`PROJECT_CONTEXT.md` §5: UNVALIDATED and
+UNVALIDATABLE, DO NOT REVIVE) -- pointing straight at the
 persistence measurement itself rather than at either universe choice, and
 matching Project 1's own placebo-validated sign-reversal finding
 independently). A-descriptive **produces understanding, not returns** --

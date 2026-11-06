@@ -173,3 +173,11 @@ problematic ~20-hour, two-of-four-configurations-unfinished precedent.
 The reusable lesson (candle-expressed rules silently change real-time
 meaning when candle size is the variable under test) is recorded as a
 standing rule in `OPERATIONS.md`.
+
+**No committed Bonferroni gate threshold exists for this study.** A
+"four configurations, p < 0.0125" framing was discussed before this
+study was closed, but that framing was never written into this
+document or into any other committed file -- it exists only in chat.
+Any figure for this study's own Bonferroni correction circulating
+outside this repository was never committed and should not be treated
+as a project fact (`OPERATIONS.md`'s own standing rule on this).

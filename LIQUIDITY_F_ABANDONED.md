@@ -161,3 +161,11 @@ This is the second time in this project that the Phase 1 feasibility
 gate has caught a fatal design problem before any backtest compute was
 spent on it — recorded in `OPERATIONS.md` as the second case where that
 gate paid for itself.
+
+**No committed Bonferroni gate threshold exists for this study.** A "two
+configurations, p < 0.025" framing was discussed before this study was
+closed, but that framing was never written into this document or into
+any other committed file — it exists only in chat. Any figure for this
+study's own Bonferroni correction circulating outside this repository
+was never committed and should not be treated as a project fact
+(`OPERATIONS.md`'s own standing rule on this).
