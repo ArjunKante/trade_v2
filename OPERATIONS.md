@@ -54,7 +54,14 @@ the price/corporate-actions backfills since this job's resumability
 substrate is the fact table itself, not fetch_log (see the exchange that
 prompted this note for why that distinction matters).
 
-## A fix applied only where the bug was noticed, not everywhere the same pattern occurs (fourth occurrence)
+## A fix applied only where the bug was noticed, not everywhere the same pattern occurs (recurrence count maintained in BUGS.md; see Bugs #2, #7, #9, #12, #18)
+
+*(This parenthetical previously read "(fourth occurrence)" -- correct when
+written, immediately after Bug #7, and went stale as Bugs #9, #12, and #18
+were later found to be further instances of the same shape. A count written
+into a standing rule goes stale by construction; pointing at BUGS.md's own
+entries instead of hardcoding a number here is the fix, per
+`PROJECT_CONTEXT.md`'s own cross-validated count of 7 as of 2026-11-07.)*
 
 `corporate_actions.py` established, and tested, that NSE's corporate-
 actions feed's `isin` field cannot be trusted for company identification
