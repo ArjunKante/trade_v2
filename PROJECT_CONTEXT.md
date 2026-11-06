@@ -24,17 +24,15 @@ A systematic research programme on NSE equities, run by one person with Claude
 Code, starting late September 2026. The question was whether any tradeable edge
 could be found and validated honestly.
 
-**Twenty-one strategies have been specified. One passed a clean sealed test.
-One passes under heavy caveats. Nineteen are closed.** *(Updated 2026-11-07
-for Liquidity E and F's own closures. Convention: every §4/§5 heading counts
-as one, EXCEPT the Liquidity family, which counts its six lettered trials
-(A-F) individually rather than as one heading — the convention already
-implicit in §5's own "five specified" language for A-E before this fix, now
-extended to F. Not applied uniformly: POC's own five trials and FVG's own
-two configs are each still counted as one heading apiece. Flagged, not
-resolved, since changing it would move the count for reasons unrelated to
-today's closure. Full enumeration given in chat when this fix was made, not
-reproduced in any committed file.)*
+**What has been tested is enumerated in §5, not totalled here.** The unit
+of account differs by family — Liquidity counts lettered trials, POC counts
+sequential revisions under one heading, Swing counts variants within a
+single multi-arm test, Per-stock counts (stock, rule) combinations under
+one correction, others count one heading each — and no single running
+total survives mixing those units honestly. §3's trial-count table states
+each family's own count and correction separately, which is the form this
+fact actually has. **One strategy passed a clean sealed test. One passes
+under heavy caveats. Everything else enumerated in §5 is closed.**
 
 The project's real output is not a strategy. It is a method for distinguishing
 a real result from a convincing one, and a long record of ideas that looked
@@ -136,6 +134,34 @@ study being talked back to life.
 Every revision of a failed idea increments a family's trial count and is
 recorded as carrying selection pressure. Multiple configurations in one study
 require Bonferroni correction.
+
+**Trial, defined**: any configuration that reached a pre-registered gate OR
+was killed at a Phase 1 feasibility check. Both carry selection pressure. A
+configuration blocked before either (never run, no gate reached, not
+Phase-1-killed — e.g. Swing's own V5/V6, blocked by Bug #12) is not a trial
+under this definition.
+
+**Per-family trial count, derived from the committed preregistrations and
+findings files, not from §5's own prose** (2026-11-07):
+
+| Family | Trials run | Outcomes | Bonferroni denominator (as committed) |
+|---|---|---|---|
+| Swing | 6 (V1, V2, V3, V4, V7, V8 — `PREREGISTRATION_SWING_V1.md` §0; V5/V6 never run, not counted) | V1 passed DEV (100th pctile) then **failed** the sealed holdout (61.4th); V8 also cleared DEV (100th pctile) but was never taken to holdout; V2/V3/V4/V7 failed DEV | 6, explicit (`Bonferroni (α/6)`) |
+| Box theory | 4 (V1-FAST, V1-SLOW, V2-FAST, V2-SLOW) | all 4 failed | 2 per generation (V1's FAST/SLOW pair, then V2's FAST/SLOW pair separately — `PREREGISTRATION_BOX_V2.md`: "no further Bonferroni adjustment beyond this") |
+| FVG | 2 (A, B) | both failed | 2, explicit |
+| POC | 5 (V1-V5, sequential) | 5 failed (V4 passed both nulls, still failed its own gate on cost) | **Stale as committed**: the gate's own CI machinery stayed "Bonferroni-built for 2" through V2-V5 even as the family's trial count reached 5 — each of V3/V4/V5's own preregistration explicitly flags this as a growing, unresolved gap (V4's own section title: "the Bonferroni caveat is now WORSE, stated again") |
+| Liquidity | 6 (A-F) | 4 DEV failures (A, B, C, D — all passing both nulls at the 100th percentile); 2 Phase 1 abandonments (E, F) | Not one family-wide number: A+B share one Bonferroni-2; C's own denominator is not stated explicitly in its committed text (UNVERIFIED); D states Bonferroni-4 explicitly; E's and F's "4"/"2 configurations" appear in their committed findings docs only as runtime-estimate context, never as a stated gate threshold (UNVERIFIED as committed, despite being proposed with that framing in chat before each was abandoned) |
+| Per-stock weekly | 42 (21 stocks × 2 rules, actually run — `PER_STOCK.md` §4: preregistered for 50×2=100, only 42 actually run) | 0 survivors | 42, explicit ("across ALL trials actually run") |
+| Momentum (63-day) | 2 (Study 1; Study 2, large-cap replication) | Study 1 passed its sealed holdout; Study 2 ran CV-only, no holdout spent | UNVERIFIED for this pair specifically — no numbered correction found in `FINDINGS.md` for Studies 1/2 themselves (a *different* study, the momentum+fundamentals combination, states "m=8" for its own nine-factor screen — not reused here) |
+| Fibo | 1 | Passed, after two corrections to the same trial (cost model, then a price-scale bug) — one authorized sealed-test read, not three trials | None found or stated — single trial, no multi-config split |
+
+**Disagreements found between this table and §5's own prose, reported, not
+reconciled here**: §5 names only two of Swing's six run variants (V1, V4)
+and does not mention that V8 also cleared both corrections. §5's POC rows
+do not mention the Bonferroni-denominator staleness documented in POC's own
+V3-V5 preregistrations. Liquidity E's and F's Bonferroni figures, stated
+elsewhere (including by Claude, in chat) as settled design parameters, are
+not actually present in either study's own committed closure document.
 
 ### Hand-tracing
 
@@ -573,7 +599,8 @@ see `LIQUIDITY_FAMILY_CLOSED.md` for the closure reasoning.
 ## 11. RULES FOR A COLD SESSION
 
 1. **Do not propose a strategy without checking whether it has already been
-   tested.** Twenty-one have. Check §5 first.
+   tested.** §5 is the enumeration; no single total is maintained across it
+   (§1). Check §5 first.
 2. **Any intraday mean-reversion or level-bounce idea has a very poor prior.**
    Eleven have failed, all clustering at −0.1 to −0.3.
 3. **Compute MDE before finalising a comparison study.** Three times a fully
