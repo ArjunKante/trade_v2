@@ -67,6 +67,7 @@ convincing and were not.
 | Options depth collector | Scheduled on the laptop, 10:30/12:30/14:30 |
 | Spread estimator validation | Specified, 24 names selected, awaiting market-hours collection |
 | Historical holdout | **RETIRED.** No sealed window remains for any equity study except IPO listing's unread 199 trades. |
+| Liquidity family | **CLOSED, 2026-11-07.** 4 DEV failures, 2 Phase 1 abandonments, 1 withdrawn measurement. No Study G. See `LIQUIDITY_FAMILY_CLOSED.md`, §10. |
 
 ### Known operational constraints
 
@@ -493,7 +494,16 @@ sweep to reclaim, which the delayed check inflates. The conversion-rate
 effect dominated in both cases. Liquidity family running total: 4 of 4
 mechanism predictions wrong, 2 of 2 count-direction predictions wrong.
 
-Four-for-four in the Liquidity family: verdict right, mechanism wrong.
+**Study F rejected-buckets measurement**: pre-committed a guardrail
+against over-reading a POSITIVE result and built none for a negative
+one, which shows which way the expectation ran. The first numbers came
+back negative and were then withdrawn as unmeasured, so the prediction
+was neither confirmed nor refuted — it was moot. Recorded because the
+asymmetric guardrail is itself the tell. Liquidity family: 5 of 5
+mechanism predictions wrong, 2 of 2 count-direction predictions wrong,
+1 implicit expectation moot.
+
+Five-for-five in the Liquidity family: verdict right, mechanism wrong.
 Treat Claude's mechanism reasoning as a hypothesis to test, not a finding.
 
 **On where the knowledge came from.** Claude's training contains extensive
@@ -525,10 +535,12 @@ original.
 **IPO listing's sealed TEST window.** 199 listings, never read, the only
 untouched sealed data in the project.
 
-**Liquidity F.** Specified: hourly candle establishes the sweep, 5-minute
-candles confirm the reclaim over a fixed 15-minute window — which avoids
-Study E's confound. Phase 1 estimate not yet run. Family is at 4 failures and
-1 abandonment; the bar for a sixth should be high.
+**Liquidity family — CLOSED, 2026-11-07.** No longer open. Study F's
+Phase 1 estimate found the comparison unidentifiable (fixing Study E's
+window-width confound left the window's start uncontrolled) and it was
+abandoned before preregistration, matching Study E. Final tally: 4 DEV
+failures, 2 Phase 1 abandonments, 1 withdrawn measurement. No Study G —
+see `LIQUIDITY_FAMILY_CLOSED.md` for the closure reasoning.
 
 ---
 
