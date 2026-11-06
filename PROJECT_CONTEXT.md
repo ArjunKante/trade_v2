@@ -4,6 +4,16 @@
 been tested, what was found, and the rules that govern how work is done here.
 Written 2026-11-06.
 
+**This is a living cross-session document, meant to be appended to over time —
+unlike a preregistration or a per-study findings record, which this project's
+own rule annotates rather than edits once closed.** §7's numbering originates
+in this document: findings #1-12 were written here today (2026-11-06) from
+the conversation record, and no earlier numbered ledger of transferable
+findings exists anywhere in this project or its predecessor. §7 numbering is
+append-only from this point forward — never renumbered, never reused, even
+for a finding later retracted (a retracted finding keeps its number and gains
+a RETRACTED annotation instead).
+
 Read this before proposing any new study.
 
 ---
@@ -350,6 +360,11 @@ construction needed effects 10-20× larger than any that exist.
 
 **4. "Fixed where noticed, not everywhere the pattern recurs."** Seven
 instances. Grep the codebase for the same defect shape before closing any bug.
+*(Note: this entry's own list position, "#4," is unrelated to OPERATIONS.md's
+"fourth occurrence" label for the same defect shape — that label counts
+recurrences at the time it was written and is a different, and now stale,
+number. The coincidence that both read "4" is accidental; no catalog ties the
+two together.)*
 
 **5. A gross-return null cannot see position sizing.** The Fibo timing null
 showed breakout entry picked worse prices than random. I inferred removing the
@@ -383,6 +398,16 @@ peak-to-trough-to-recovery is the correct framing for a drawdown episode.
 
 **12. Matched random entry from the same pool is the discriminating
 benchmark.** Buy-and-hold and coin-flip comparisons are weak.
+
+**13. Window width and window start are separate parameters.** Establishing
+structure on a slower timeframe necessarily delays the start of any
+confirmation window by up to one slow candle, because the structure is not
+knowable until that candle closes. Holding the window's WIDTH constant in
+minutes (finding #8) does not control its START. Where actionability forces
+the delay, a timeframe comparison is not merely confounded but unidentifiable:
+no outcome is attributable to the timeframe. Measured in Liquidity F Phase 1,
+where the delay roughly doubled the trade count against the direction the
+coarser grid alone predicted.
 
 ---
 
@@ -431,10 +456,17 @@ time.**
   total (~0.005%); it failed on follow-through
 - Liquidity B: predicted shorts would fare worse against upward drift → they
   fared better
-- Liquidity E Phase 1: predicted far fewer hourly trades → there were more,
-  because of the confound
 
-Three-for-three in the Liquidity family: verdict right, mechanism wrong.
+**Named bias — coarser-timeframe setup-count direction, wrong twice:**
+Predicted FEWER setups on the coarser timeframe in both Liquidity E Phase 1
+and Liquidity F Phase 1. Both times there were MORE. Direction wrong, not
+just mechanism. Diagnosed cause: reasoning about the count of qualifying
+LEVELS (coarser grid, fewer levels) while ignoring the CONVERSION RATE from
+sweep to reclaim, which the delayed check inflates. The conversion-rate
+effect dominated in both cases. Liquidity family running total: 4 of 4
+mechanism predictions wrong, 2 of 2 count-direction predictions wrong.
+
+Four-for-four in the Liquidity family: verdict right, mechanism wrong.
 Treat Claude's mechanism reasoning as a hypothesis to test, not a finding.
 
 **On where the knowledge came from.** Claude's training contains extensive
