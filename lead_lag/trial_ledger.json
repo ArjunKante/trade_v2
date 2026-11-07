@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "family": "lead_lag_v1",
+  "frozen_as_of_commit": "e1418a661a769c9f134d750bbe95dc1a831b0305",
+  "note": "This file is the authoritative, machine-readable trial count for the lead-lag family's multiple-testing correction denominator. The denominator is COMPUTED as len(trials), never hand-typed into a markdown document. Any markdown document (preregistration, feasibility doc, findings) that states a trial count must derive it from this file, not restate it independently -- see lead_lag/ledger.py:denominator(). Appending a new trial here requires a git commit of this file, which is the enforcement mechanism against the POC-family failure mode (PROJECT_CONTEXT.md Section 3: Bonferroni denominator stayed pinned at 2 across three preregistrations while the real trial count reached 5, because the count lived only in prose).",
+  "trials": [
+    {
+      "id": 1,
+      "config_key": "grouping:liquidity_tier",
+      "configuration": "Liquidity-tier grouping (top 20% / bottom 80% by trailing turnover within the point-in-time universe)",
+      "stage_registered": "phase2_feasibility",
+      "date_registered": "2026-11-07",
+      "status": "adopted_primary",
+      "source_doc": "lead_lag/LEAD_LAG_FEASIBILITY.md Section 1a/1c",
+      "gate_runs": []
+    },
+    {
+      "id": 2,
+      "config_key": "grouping:statistical_cluster",
+      "configuration": "Statistical-cluster grouping (trailing 252-trading-day daily-return correlation; 5 descriptive threshold cuts 0.3-0.7 of one correlation matrix, treated as one configuration per PREREGISTRATION_LEAD_LAG_V1.md Section 15's explicit framing)",
+      "stage_registered": "phase2_feasibility",
+      "date_registered": "2026-11-07",
+      "status": "examined_not_adopted",
+      "source_doc": "lead_lag/LEAD_LAG_FEASIBILITY.md Section 1b",
+      "gate_runs": []
+    },
+    {
+      "id": 3,
+      "config_key": "horizon:5min",
+      "configuration": "Forward prediction horizon = 5 minutes",
+      "stage_registered": "phase2_feasibility",
+      "date_registered": "2026-11-07",
+      "status": "exploratory_non_gating",
+      "source_doc": "lead_lag/LEAD_LAG_FEASIBILITY.md Section 2d; PREREGISTRATION_LEAD_LAG_V1.md Section 10",
+      "gate_runs": []
+    },
+    {
+      "id": 4,
+      "config_key": "horizon:15min",
+      "configuration": "Forward prediction horizon = 15 minutes",
+      "stage_registered": "phase2_feasibility",
+      "date_registered": "2026-11-07",
+      "status": "exploratory_non_gating",
+      "source_doc": "lead_lag/LEAD_LAG_FEASIBILITY.md Section 2d; PREREGISTRATION_LEAD_LAG_V1.md Section 10",
+      "gate_runs": []
+    },
+    {
+      "id": 5,
+      "config_key": "horizon:30min",
+      "configuration": "Forward prediction horizon = 30 minutes",
+      "stage_registered": "phase2_feasibility",
+      "date_registered": "2026-11-07",
+      "status": "secondary_robustness",
+      "source_doc": "lead_lag/LEAD_LAG_FEASIBILITY.md Section 2d; PREREGISTRATION_LEAD_LAG_V1.md Section 10",
+      "gate_runs": []
+    },
+    {
+      "id": 6,
+      "config_key": "horizon:60min",
+      "configuration": "Forward prediction horizon = 60 minutes",
+      "stage_registered": "phase2_feasibility",
+      "date_registered": "2026-11-07",
+      "status": "primary_gate",
+      "source_doc": "lead_lag/LEAD_LAG_FEASIBILITY.md Section 2d/Section 5; PREREGISTRATION_LEAD_LAG_V1.md Section 10/17/20",
+      "gate_runs": []
+    }
+  ]
+}
