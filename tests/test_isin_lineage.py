@@ -19,7 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from data_layer.db import get_connection
+from data_layer.db import get_read_connection
 from data_layer.isin_lineage import parse_isin, build_lineage, build_entity_resolver
 
 WAREHOUSE = Path(__file__).resolve().parents[1] / "data" / "warehouse.duckdb"
@@ -37,7 +37,7 @@ def test_parse_isin_matches_known_real_structure():
 def real_con():
     if not WAREHOUSE.exists():
         pytest.skip("real warehouse not present")
-    return get_connection(WAREHOUSE)
+    return get_read_connection(WAREHOUSE)
 
 
 def test_bajfinance_three_isin_chain_resolves_to_one_entity(real_con):

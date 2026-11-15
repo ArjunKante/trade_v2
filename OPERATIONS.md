@@ -1900,6 +1900,78 @@ say so")**:
   running on this machine at the time of this check (2026-11-15). Stated
   as the leading candidate by elimination, not as a closed finding.
 
+**UPDATE 2026-11-16, re-examined because the elimination above was done
+before an important fact was known**: this session's events.jsonl
+hardening work (BUGS.md Bug #24) found 5 test files
+(`test_adjustment_factors.py`, `test_fibo_price_scale.py`,
+`test_fibo_scale_probe.py`, `test_isin_lineage.py`,
+`test_momentum_entity_aware.py`) that were silently opening the real
+`data/warehouse.duckdb` in WRITE mode (`get_connection`, not
+`get_read_connection`) despite only ever reading from it -- a live,
+previously-unconsidered candidate for who held the lock on 2026-10-27
+and 2026-11-03, since the elimination above never checked whether the
+test suite itself was running at those moments. Re-checked, with the
+real timestamped evidence this time rather than reasoning from
+elimination alone:
+
+- **The historical-rate table earlier in this file (2026-10-27, "16:04")
+  is a DIFFERENT event from the one that actually cost a forward-test
+  day.** `fetch_log` has an `error` row for trade_date 2026-10-27 at
+  `attempted_at` 16:04:03 -- but `scheduler.log` shows the evening job's
+  16:01:15 run that day completed successfully (watchlist computed,
+  committed, and pushed by 16:03:12), with no second invocation logged
+  at 16:04 at all. That fetch_log row is from some OTHER process calling
+  the same bhavcopy-fetch-and-log function, unexplained, but not the
+  scheduled evening run. The run that actually failed and cost the day
+  is logged separately, with a full traceback, at **18:30:04** -- the
+  job's normal scheduled time before the 20:00 move.
+- **Both real incidents now have an exact Windows PID from the OS
+  error text**: `File is already open in ...python.exe (PID 30856)` at
+  18:30:04 on 2026-10-27, and `PID 44160` at 18:30:10 on 2026-11-03.
+  Neither PID is resolvable after the fact -- no process-list snapshot
+  was captured at either moment, and PIDs are not preserved across
+  reboots. This cannot be narrowed further than "some python.exe
+  process," from the OS message alone.
+- **`scripts/research_app.py` did not exist at all until 16:52:31 on
+  2026-10-27** (`git log --diff-filter=A`), roughly 48 minutes AFTER
+  the (unrelated) 16:04 fetch_log anomaly but 1h38m BEFORE the real
+  18:30:04 incident -- so Streamlit was not yet capable of being the
+  holder for anything before 16:52 that day, but remains fully possible
+  for the actual 18:30:04 failure. The commit log shows a 5.5-hour gap
+  with no commits between 17:01:31 and 22:31:59 that day, spanning the
+  incident -- consistent with, though not proof of, a freshly-built
+  research app being opened in a browser tab and left there. For
+  2026-11-03 (a week after research_app.py already existed), the commit
+  immediately before the 18:30:10 incident is at 17:37:31, leaving a
+  ~53-minute gap before the failure -- also consistent with the same
+  pattern, though less pronounced than the first.
+- **The 5 write-mode test files cannot be ruled out, but are
+  mechanistically a weaker fit than Streamlit, not a stronger one.**
+  `scheduler.log`'s own fibo_morning/evening-specific test noise (see
+  "Test output was polluting the real scheduler.log," below) is
+  clustered at 15:53:21-15:53:35 on 2026-10-27 -- over two hours before
+  the 18:30:04 incident, not concurrent with it -- and there is no
+  comparable log trace for 2026-11-03 at all. That noise is not
+  dispositive either way for THESE 5 files specifically, since none of
+  them write to scheduler.log (their fixtures open the warehouse
+  directly, silently). But their connections are module-scoped and
+  close within however long one test file takes to run -- on the order
+  of seconds -- while Streamlit's `@st.cache_resource` connection, once
+  opened, stays open for the life of the server process, which this
+  project's own TTL fix (above) was written specifically to address.
+  For a brief-lived test connection to be the explanation, pytest would
+  need to have been running at the exact second of 18:30:0X on TWO
+  separate days; for Streamlit, it only needs to have been started at
+  some earlier point and left open, which the commit-gap evidence above
+  is consistent with on both dates.
+
+**Conclusion: Streamlit remains the leading candidate, now on direct
+timeline evidence rather than elimination alone, but this is still not
+a closed finding** -- the test-file candidate is real and now
+explicitly considered (not simply missed), not excluded with certainty,
+and the underlying PIDs are permanently unresolvable. The actual fix
+(retry with backoff, above) does not depend on which one it was.
+
 **Verified by test, not reasoning**: `tests/test_fibo_evening_duckdb_lock_retry.py`
 (4 tests) -- succeeds immediately when unlocked, succeeds after transient
 locks clear within the attempt budget (with the exact exponential backoff
@@ -2075,8 +2147,76 @@ N-readers-AND-1-writer. A long-lived cached connection in
 **Consequence**: `_open_warehouse_with_retry`'s bounded retry (added
 earlier, this file's "warehouse.duckdb lock conflict" section) is not
 "defence in depth" behind a primary fix -- for the specific
-reader-vs-writer collision this machine can produce, it is the only
-mitigation available short of never running `research_app.py` near 20:00,
-or moving to a setup with real multi-process read+write support (outside
-this change's scope, not requested, not built). Kept as originally
+reader-vs-writer collision this machine can produce, it was, until the
+TTL below, the only mitigation available short of never running
+`research_app.py` near 20:00, or moving to a setup with real multi-process
+read+write support (outside this change's scope, not requested, not
+built). Kept as originally
 implemented; nothing reverted.
+
+## research_app.py: a 15-minute TTL added to bound the collision window (2026-11-15)
+
+**The correction to record plainly, since the premise behind asking for
+this was itself wrong and that matters for anyone reading this later**:
+`read_only=True` was ALREADY in place on both of `research_app.py`'s
+cached connections before any of this session's changes (see the section
+above) -- it is not, and was never going to be, a mitigation for the
+specific collision this file documents, because DuckDB's local-file
+concurrency model is N-readers-XOR-1-writer: a read-only reader still
+blocks a write-mode connection from a separate process. The actual gap
+was that `@st.cache_resource` had no TTL at all, so a cached connection
+-- read-only or not -- could be held open for as long as the Streamlit
+SERVER PROCESS runs, which is unbounded (days, if nobody restarts it).
+
+**Fix**: `_CONNECTION_TTL_SECONDS = 900` (15 minutes) on `_connections()`.
+Chosen for how this tool is actually used -- bursty, interactive research
+sessions (open, look at a handful of charts, close) -- long enough that
+an active session doesn't pay a reconnect on every rerun, short enough
+that any session longer than a quick look cycles the connection at least
+once.
+
+**What this does and does not guarantee, confirmed live, not assumed**:
+Streamlit's `cache_resource` TTL is evaluated LAZILY, on the next call to
+the cached function -- there is no background thread that closes an
+expired entry on its own (confirmed by reading `streamlit.runtime.
+caching.ttl_cache`'s source: `expire()` is only invoked from `__setitem__`,
+never from a timer). Verified directly, not inferred: a connection cached
+with `ttl=2` seconds, in a process that made no further calls to the
+cached function, was still blocking a separate process's write attempt 4
+seconds later -- 2x past its own TTL. **This TTL does not guarantee the
+connection closes the instant 15 idle minutes have passed while the
+process sits untouched.** What it does guarantee: the next time ANYONE
+uses the app, a connection older than 15 minutes is discarded and
+replaced first. The practical effect is that the realistic exposure
+window each day shrinks to "zero interaction with this app in the 15
+minutes immediately before the evening job runs," not "any time, for as
+long as the server has been running" -- the "hours to minutes" reduction
+that was asked for, not an elimination. `_open_warehouse_with_retry`
+(`scripts/fibo_evening.py`) remains the backstop for whatever window is
+left, and its own failure message now names `research_app.py` as the
+likely holder explicitly, with this TTL's actual behavior spelled out, so
+the message is actionable rather than just "locked."
+
+**Verified by test**: `tests/test_research_app_connection_ttl.py` (2
+tests) -- the TTL is actually wired to the cache decorator (not just
+present in a comment), and both connections are still read-only. Checked
+by STATIC SOURCE INSPECTION (`ast.parse`), deliberately never by
+importing `research_app.py` -- an early draft of this exact test did
+import it, which executes `warehouse_con, intraday_con = _connections()`
+at module level (plain top-level Streamlit-script code, run
+unconditionally on import) and caches the result for the rest of the
+process. That draft caused 19 unrelated test errors elsewhere in the same
+pytest run (`test_fibo_scale_probe.py`, `test_isin_lineage.py`,
+`test_momentum_entity_aware.py` -- all needing a real read-write
+connection to the same file) -- a live instance of the exact collision
+class this whole section exists to prevent, caused by the verification
+test itself. Caught by running the full suite before committing, not by
+reasoning about the risk in advance. See item B's conftest-level fix
+(below) for the general version of this same mistake.
+
+**The fuller fix, if this recurs after the TTL -- not built, not
+requested**: a periodic snapshot/copy of `warehouse.duckdb` for
+`research_app.py` to read from instead of the live file would eliminate
+this collision class outright (no shared file handle at all). Noted here
+as the next step if the TTL proves insufficient in practice, and left
+there.

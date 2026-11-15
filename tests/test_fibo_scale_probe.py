@@ -28,7 +28,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from data_layer.db import get_connection
+from data_layer.db import get_read_connection
 from fibo.intraday_db import get_read_connection as get_intraday_connection
 from fibo.scale_probe import (
     ScaleDecision, probe_scale, passes_gap_guard, to_raw_scale,
@@ -97,7 +97,7 @@ def test_to_raw_scale_arithmetic():
 def warehouse_con():
     if not WAREHOUSE.exists():
         pytest.skip("real warehouse not present")
-    return get_connection(WAREHOUSE)
+    return get_read_connection(WAREHOUSE)
 
 
 @pytest.fixture(scope="module")

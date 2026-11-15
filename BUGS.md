@@ -1422,6 +1422,19 @@ schedule and exit code asserted) and an upgraded
 retry-then-exhaust path. Full detail in OPERATIONS.md's "warehouse.duckdb
 lock conflict" section.
 
+**UPDATE, 2026-11-15, same day**: `research_app.py`'s cached connections
+were checked, not assumed -- both already used `read_only=True` before
+any of this bug's own fix landed, and that was never going to help
+anyway: DuckDB's local-file concurrency here is N-readers-XOR-1-writer,
+so a read-only reader still blocks a writer. The actual gap was an
+unbounded `@st.cache_resource` with no TTL. Added `ttl=900` (15 min) --
+confirmed live that Streamlit evaluates this lazily (next-call, not a
+background timer), so it bounds the realistic exposure window to "no
+interaction with the app in the 15 minutes before the evening job runs,"
+not an elimination. The retry above remains the backstop. Full detail,
+including the live TTL-eviction test, in OPERATIONS.md's "research_app.py:
+a 15-minute TTL added" section.
+
 ## Bug #21: test output was polluting the real scheduler.log
 
 **Mechanism**: `src/fibo_live/scheduler_support.py`'s `make_logger()`

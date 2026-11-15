@@ -14,7 +14,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from data_layer.db import get_connection
+from data_layer.db import get_read_connection
 from data_layer.entity_features import trailing_return
 
 WAREHOUSE = Path(__file__).resolve().parents[1] / "data" / "warehouse.duckdb"
@@ -24,7 +24,7 @@ WAREHOUSE = Path(__file__).resolve().parents[1] / "data" / "warehouse.duckdb"
 def con():
     if not WAREHOUSE.exists():
         pytest.skip("real warehouse not present")
-    return get_connection(WAREHOUSE)
+    return get_read_connection(WAREHOUSE)
 
 
 def test_252d_window_shortly_after_2016_transition_spans_both_isins(con):

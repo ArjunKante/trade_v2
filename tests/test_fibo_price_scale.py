@@ -28,7 +28,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from data_layer.db import get_connection
+from data_layer.db import get_read_connection
 from fibo.price_scale import get_adjustment_factor, to_raw_scale, zone_to_raw_scale
 
 WAREHOUSE = Path(__file__).resolve().parents[1] / "data" / "warehouse.duckdb"
@@ -42,7 +42,7 @@ COMBINED_RATIO = 10.0           # Face Value Split Rs10->Re1, from corporate_act
 def con():
     if not WAREHOUSE.exists():
         pytest.skip("real warehouse not present")
-    return get_connection(WAREHOUSE)
+    return get_read_connection(WAREHOUSE)
 
 
 def test_factor_jumps_by_exactly_the_split_ratio_across_the_real_boundary(con):

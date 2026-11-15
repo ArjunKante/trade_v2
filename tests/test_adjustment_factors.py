@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from data_layer.db import get_connection
+from data_layer.db import get_read_connection
 from data_layer.adjustment import compute_factors_sql, compute_factors_python, read_adjusted_prices
 
 WAREHOUSE = Path(__file__).resolve().parents[1] / "data" / "warehouse.duckdb"
@@ -20,7 +20,7 @@ WAREHOUSE = Path(__file__).resolve().parents[1] / "data" / "warehouse.duckdb"
 def con():
     if not WAREHOUSE.exists():
         pytest.skip("real warehouse not present")
-    return get_connection(WAREHOUSE)
+    return get_read_connection(WAREHOUSE)
 
 
 def test_sql_and_python_implementations_agree_on_bajfinance(con):

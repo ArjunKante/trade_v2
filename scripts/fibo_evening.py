@@ -139,11 +139,18 @@ def _open_warehouse_with_retry(path, log):
                 f"{type(e).__name__} -- retrying in {delay}s...")
             time.sleep(delay)
     log(f"FATAL: warehouse.duckdb still locked after {DB_OPEN_MAX_ATTEMPTS} attempts: "
-        f"{type(last_exc).__name__}: {last_exc}. Another process is holding this file open -- "
-        f"the options-depth collector never opens it (writes only a CSV); check for a "
-        f"Streamlit research_app.py session left running (its cache_resource connection "
-        f"never closes on its own). Exiting non-zero so this is visible in Task Scheduler's "
-        f"own run history, in addition to the dead-man's switch going overdue.")
+        f"{type(last_exc).__name__}: {last_exc}. LIKELY HOLDER: scripts/research_app.py's "
+        f"Streamlit session -- its cached connection is read-only, which does NOT prevent "
+        f"this collision (DuckDB here is N-readers-XOR-1-writer), and has a 15-minute TTL "
+        f"(2026-11-15) that is evaluated lazily on its NEXT use, not by a background timer -- "
+        f"so if nobody has used that app in the last 15 minutes, its connection should "
+        f"already be gone; if this is still firing, someone is ACTIVELY browsing it right "
+        f"now. Action: close that browser tab (or run `taskkill` on its streamlit.exe "
+        f"process) and let the next scheduled run retry, or run this script by hand "
+        f"immediately after. The options-depth collector is structurally ruled out -- it "
+        f"never opens this file at all (writes only a CSV, src/options_depth/writer.py). "
+        f"Exiting non-zero so this is visible in Task Scheduler's own run history, in "
+        f"addition to the dead-man's switch going overdue.")
     sys.exit(1)
 
 

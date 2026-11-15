@@ -46,7 +46,41 @@ st.set_page_config(page_title="Strategy Research Browser", layout="wide")
 # DB connections -- cached as a resource (not re-opened per rerun)
 # ---------------------------------------------------------------------
 
-@st.cache_resource
+# TTL added 2026-11-15 (OPERATIONS.md's "research_app.py" section,
+# BUGS.md Bug #20): both connections below are already read-only, which
+# does NOT by itself stop this app from colliding with fibo_evening.py's
+# write connection -- DuckDB's local-file concurrency is N-readers-XOR-
+# 1-writer, so even a read-only connection blocks a writer. Without a
+# TTL, @st.cache_resource holds this connection open for as long as the
+# Streamlit SERVER PROCESS runs, which can be days if nobody restarts it.
+#
+# 15 minutes, chosen for how this tool is actually used: bursty,
+# interactive research sessions (open, look at a handful of charts,
+# close) -- long enough that an active session doesn't pay a reconnect
+# on every rerun, short enough that the connection cycles at least once
+# during any session longer than a quick look.
+#
+# WHAT THIS DOES AND DOES NOT GUARANTEE, confirmed live, not assumed:
+# Streamlit's cache_resource TTL is evaluated LAZILY, on the NEXT call to
+# this function -- there is no background thread that closes an expired
+# entry on its own. Verified directly: a cached connection with ttl=2s,
+# held in a process that made no further calls to this function, was
+# STILL blocking a separate process's write attempt 4 seconds later (2x
+# past its TTL). So this does NOT guarantee the connection is closed the
+# instant 15 minutes of true inactivity have passed while the process
+# sits idle. What it DOES guarantee: every time this function IS called
+# again, a connection older than 15 minutes is discarded and replaced --
+# so the realistic exposure window each day shrinks to "the last 15
+# minutes before the evening job runs, with zero interaction with this
+# app in that window," not "any time, for as long as the server has been
+# running." Combined with the evening job's own 20:00 move, this is the
+# "hours to minutes" reduction asked for, not an elimination -- the
+# DuckDB retry (`_open_warehouse_with_retry`, scripts/fibo_evening.py)
+# remains the backstop for whatever residual window is left.
+_CONNECTION_TTL_SECONDS = 15 * 60
+
+
+@st.cache_resource(ttl=_CONNECTION_TTL_SECONDS)
 def _connections():
     return get_warehouse_con(WAREHOUSE_DB), get_intraday_con(INTRADAY_DB)
 
