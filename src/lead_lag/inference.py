@@ -379,10 +379,13 @@ def null_imposed_block_bootstrap(
     )
     if k_eff < k:
         import warnings
+        zero_variance_desc = zero_variance_regressors or (
+            "(none -- deficiency is a collinearity among otherwise-varying "
+            "columns, not a single dead column)"
+        )
         warnings.warn(
             f"null_imposed_block_bootstrap: the real design matrix has rank {k_eff} < {k} "
-            f"parameters. Zero-variance regressor(s) identified: {zero_variance_regressors or '(none -- '
-            f'deficiency is a collinearity among otherwise-varying columns, not a single dead column)'}. "
+            f"parameters. Zero-variance regressor(s) identified: {zero_variance_desc}. "
             f"For h=60 specifically, TOD_closing_30 is identically zero because no approved h=60 anchor "
             f"falls in the closing-30 window -- a permanent property of the approved specification, not "
             f"introduced by this bootstrap; `fit_ols`'s own lstsq already resolves it silently via its "

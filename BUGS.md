@@ -1693,3 +1693,49 @@ Verified live: full suite run before and after this fix, 692 passed / 1
 failed (the known, untouched `test_monitor_persistence.py`), hash of
 `data/fibo_live/v1/events.jsonl` identical before and after, `git
 status` clean.
+
+## Bug #25: a module-level SyntaxError on Python 3.11, invisible on this laptop's 3.13
+
+**Found live, by the new CI workflow's first real run (2026-11-15,
+`.github/workflows/test_suite.yml`, BUGS.md Bug #24's own hermetic-test
+work)**: `src/lead_lag/inference.py` line 384 failed to even import on
+the GitHub Actions runner (Python 3.11.18), `SyntaxError: unterminated
+string literal`, which `pytest` surfaced as a collection ERROR for both
+`tests/test_lead_lag_inference.py` and
+`tests/test_lead_lag_null_imposed_inference.py` -- the whole run never
+reached a single test. This laptop's own Python (3.13) imports the same
+file without complaint, so nothing local had ever caught it.
+
+**Mechanism**: the `warnings.warn(...)` call built its message from
+several ADJACENT f-string literals (ordinary implicit concatenation),
+and one `{...}` expression's content --
+`{zero_variance_regressors or '(none -- '` -- was left open across the
+boundary into the NEXT literal, which closed it:
+`f'deficiency ... column)'}`. Each f-string literal is tokenized as a
+self-contained unit; pre-3.12 Python requires every `{}` expression to
+be complete within the single literal it appears in, so this is not
+valid syntax before PEP 701 (Python 3.12's relaxed f-string grammar).
+Python 3.13 (this laptop) accepts it; Python 3.11 (this project's own
+pinned CI/Actions Python, `fibo_morning.yml`'s own `python-version:
+"3.11"`) does not.
+
+**Blast radius**: confirmed, not assumed, that this is isolated to this
+one call site -- re-byte-compiled all 400 `.py` files under `src/`,
+`scripts/`, and `tests/` with a real local Python 3.11.9 install
+(`python -m py_compile`) after the fix; zero other files fail. Before
+this CI workflow existed, nothing in this project's own test suite or
+development workflow ever ran on anything but this laptop's 3.13, so a
+3.11-incompatible construct like this could have shipped into
+`fibo_morning.yml`'s own runner (also 3.11) the moment anything there
+imported `lead_lag.inference` -- it happens not to, today, but nothing
+structural prevented it.
+
+**Status: fixed, 2026-11-15.** Extracted the zero-variance description
+to a plain local variable (`zero_variance_desc`) before the
+`warnings.warn(...)` call, removing the cross-literal brace entirely --
+portable on both 3.11 and 3.13. Verified: `python -m py_compile` clean
+on 3.11.9 for all 400 files; `pytest tests/test_lead_lag_inference.py
+tests/test_lead_lag_null_imposed_inference.py` still 45 passed on 3.13,
+with the warning text byte-for-byte unchanged; full suite re-run
+afterward, 692 passed / 1 pre-existing failure (untouched), events.jsonl
+hash unchanged.
