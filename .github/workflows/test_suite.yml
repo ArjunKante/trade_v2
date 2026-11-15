@@ -1,0 +1,46 @@
+name: Test suite
+
+# Runs the pytest suite on every push. SEPARATE from the two Fibo
+# workflows (fibo_morning.yml, probe_github_actions.yml) on purpose:
+# different trigger (push, not workflow_dispatch), no write permission
+# to repo contents (this job never commits or pushes anything), and no
+# secrets at all -- only the default GITHUB_TOKEN, which `permissions:
+# contents: read` below narrows further. This workflow cannot reach
+# fibo_morning.yml's dispatch path and has nothing that would let it try.
+#
+# Expect 648 passed / 45 skipped on a fresh checkout. This repo's data/
+# is gitignored except a handful of small, explicitly committed
+# exception files (.gitignore) -- a GitHub-hosted runner never has
+# data/warehouse.duckdb, data/fibo_intraday.duckdb, or the real
+# multi-year data/raw/nse_cm_holidays.pkl. The 45 skips are tests that
+# need one of those and say so explicitly (pytest.skip), rather than
+# failing outright -- confirmed by temporarily hiding all real local
+# data and running the full suite (2026-11-15/16, BUGS.md Bug #24),
+# which is also what found and fixed the one file that used to fail
+# ungated instead of skipping (tests/test_lead_lag_calendar.py).
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Pinned, not ubuntu-latest, matching fibo_morning.yml's own reasoning
+    # (that file's comment on this exact line): avoid an unrelated runner-
+    # image change as a silent variable; bump deliberately later instead.
+    runs-on: ubuntu-24.04
+    env:
+      TZ: Asia/Kolkata
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run test suite
+        run: python -m pytest -q

@@ -21,16 +21,38 @@ from lead_lag.calendar import (
     PRIMARY_SAMPLE_EXCLUSIONS,
     HolidayCalendarMissing,
 )
-from data_layer.nse_holidays import is_nse_holiday
+from data_layer.nse_holidays import is_nse_holiday, HOLIDAYS_PKL
 
 
-def test_ordinary_weekday_session():
+@pytest.fixture(scope="module")
+def real_holiday_calendar():
+    """Tests below check specific pre-2026 years (2016, 2020, 2021,
+    2024, 2025) that only the full multi-year data/raw/nse_cm_holidays.pkl
+    covers -- the committed fallback JSON covers 2026 only (see
+    data_layer/nse_holidays.py's own module docstring). Not committed
+    (data/ is gitignored), so a checkout without it (a fresh clone, a
+    GitHub Actions runner) must skip these rather than fail with
+    HolidayCalendarMissing -- matching the "real warehouse not present"
+    skip idiom already used throughout this suite (e.g.
+    test_isin_lineage.py's real_con), applied here to the one resource
+    this file actually needs. Found 2026-11-15 by temporarily hiding all
+    real data and running the full suite (BUGS.md Bug #24's hermetic-test
+    count): these 12 tests failed outright, uncaught, rather than
+    skipping like their 33 data-dependent siblings elsewhere -- this
+    fixture is the fix. Module-scoped since nse_holidays._load() is
+    itself process-cached (lru_cache) and the file doesn't change
+    mid-run."""
+    if not HOLIDAYS_PKL.exists():
+        pytest.skip("real NSE holiday calendar (nse_cm_holidays.pkl) not present")
+
+
+def test_ordinary_weekday_session(real_holiday_calendar):
     d = dt.date(2024, 6, 10)  # Monday, not a holiday
     assert not is_nse_holiday(d)
     assert is_exchange_session(d) is True
 
 
-def test_nse_holiday_is_not_a_session():
+def test_nse_holiday_is_not_a_session(real_holiday_calendar):
     # Republic Day is a fixed NSE holiday every year
     d = dt.date(2024, 1, 26)
     assert is_nse_holiday(d) is True
@@ -51,7 +73,7 @@ def test_all_four_weekend_special_sessions_are_governing_sessions():
         assert is_primary_sample_date(d) is True
 
 
-def test_2021_02_24_excluded_from_primary_sample_but_present_in_governing():
+def test_2021_02_24_excluded_from_primary_sample_but_present_in_governing(real_holiday_calendar):
     d = dt.date(2021, 2, 24)
     assert d in PRIMARY_SAMPLE_EXCLUSIONS
     assert d.weekday() == 2  # ordinary Wednesday
@@ -60,7 +82,7 @@ def test_2021_02_24_excluded_from_primary_sample_but_present_in_governing():
     assert is_primary_sample_date(d) is False   # primary-sample: no
 
 
-def test_calendar_session_with_zero_bars_1min_rows_remains_a_governing_session():
+def test_calendar_session_with_zero_bars_1min_rows_remains_a_governing_session(real_holiday_calendar):
     """A valid exchange session must not depend on whether any vendor's
     archive happens to have rows for it -- `is_exchange_session` takes
     no database connection at all, so this is true by construction, not
@@ -74,7 +96,7 @@ def test_calendar_session_with_zero_bars_1min_rows_remains_a_governing_session()
     assert is_exchange_session(d) is True
 
 
-def test_2016_10_03_is_a_genuine_session_despite_archive_starting_2016_10_04():
+def test_2016_10_03_is_a_genuine_session_despite_archive_starting_2016_10_04(real_holiday_calendar):
     """Decision 24: the intraday archive's own coverage gap must never
     be mistaken for the exchange being closed."""
     d = dt.date(2016, 10, 3)  # Monday
@@ -92,7 +114,7 @@ def test_unknown_holiday_year_raises_not_silently_resolved():
         exchange_session_dates(dt.date(2099, 1, 1), dt.date(2099, 1, 31))
 
 
-def test_exchange_session_dates_enumeration_matches_is_exchange_session():
+def test_exchange_session_dates_enumeration_matches_is_exchange_session(real_holiday_calendar):
     start, end = dt.date(2024, 1, 1), dt.date(2024, 1, 31)
     dates = exchange_session_dates(start, end)
     d = start
@@ -105,7 +127,7 @@ def test_exchange_session_dates_enumeration_matches_is_exchange_session():
     assert len(dates) > 0
 
 
-def test_primary_sample_dates_excludes_2021_02_24_only():
+def test_primary_sample_dates_excludes_2021_02_24_only(real_holiday_calendar):
     dates_gov = exchange_session_dates(dt.date(2021, 2, 1), dt.date(2021, 2, 28))
     dates_prim = primary_sample_dates(dt.date(2021, 2, 1), dt.date(2021, 2, 28))
     assert dt.date(2021, 2, 24) in dates_gov
@@ -113,7 +135,7 @@ def test_primary_sample_dates_excludes_2021_02_24_only():
     assert set(dates_gov) - set(dates_prim) == {dt.date(2021, 2, 24)}
 
 
-def test_first_session_of_month_weekend_special_wins():
+def test_first_session_of_month_weekend_special_wins(real_holiday_calendar):
     dates = exchange_session_dates(dt.date(2025, 2, 1), dt.date(2025, 2, 28))
     out = first_session_of_month(dates)
     assert out[(2025, 2)] == dt.date(2025, 2, 1)  # the Saturday special, not Feb 3
@@ -123,13 +145,17 @@ def test_first_session_of_month_weekend_special_wins():
     (2020, 2, dt.date(2020, 2, 1)),   # Saturday special wins
     (2024, 1, dt.date(2024, 1, 1)),   # ordinary Jan 1, 2024 is a Monday
     (2025, 2, dt.date(2025, 2, 1)),   # Saturday special wins
-    (2026, 2, dt.date(2026, 2, 1)),   # Sunday special wins
+    (2026, 2, dt.date(2026, 2, 1)),   # Sunday special wins -- this one case
+    # alone is covered by the committed fallback JSON, but the whole
+    # parametrized function is gated below anyway: this codebase's
+    # existing skip idiom (test_isin_lineage.py's real_con, etc.) always
+    # skips at whole-test-function granularity, never per-parametrize-case.
 ])
-def test_ranking_date_for_month_february_special_session_consequence(year, month, expected):
+def test_ranking_date_for_month_february_special_session_consequence(year, month, expected, real_holiday_calendar):
     assert ranking_date_for_month(year, month) == expected
 
 
-def test_ranking_date_for_month_2016_10_uses_true_calendar_not_archive_start():
+def test_ranking_date_for_month_2016_10_uses_true_calendar_not_archive_start(real_holiday_calendar):
     """Decision 24's concrete consequence: the TRUE governing ranking
     date for October 2016 is 2016-10-03 (the first genuine Monday
     session), not 2016-10-04 (where the intraday archive happens to
