@@ -47,6 +47,27 @@ entities. Rerun after the fix: still exactly **3 mechanical regimes**
 rejection in `NEW_RESEARCH_DIRECTION.md` rested on ("under ~5 regimes")
 is unchanged by this correction.
 
+**UPDATE, 2026-11-16: that "3" was a snapshot, not a constant, and it
+has since moved.** `same_isin_jump_excluded_entities()` and
+`compute_daily_persistence()` both read the FULL warehouse at call time
+with no `before` cutoff, by design -- so this count is a function of how
+much has been backfilled, not a fixed property of 2017-2024. 49 days
+later, with no change to this module's or the lineage-jump-guard's own
+logic (checked via git log), the exclusion set grew from 78 to 82
+entities and the mechanical regime count is now **5**
+(2017-2019 +, 2020 -, 2021 +, 2022 -, 2023-2024 +), re-verified directly
+against `scripts/run_momentum_persistence_regime_count.py` (confirmed
+live: both report 5, so this is data drift, not a divergence between the
+two). This module's own live payload (`src/monitor/web.py`) would
+already have shown the correct, current count to anyone who looked, any
+time it ran -- there was no bug here, only a comment (this one, until
+now) and a test (`tests/test_monitor_persistence.py`, now updated) that
+treated a snapshot as permanent. Still open, and NOT decided here: the
+A-actionable rejection's own stated basis was "3, under the ~5 needed
+for a credible read" -- the real count is now AT that threshold, not
+under it, which at minimum needs the rejection's wording revisited, not
+silently left as "unchanged" (see BUGS.md's follow-up to Bug #24).
+
 **Grep-for-siblings, per instruction**: checked whether any OTHER script
 in this project computing cross-sectional persistence or rank IC lacks
 this same exclusion. Seven do (`scripts/run_phase_e_factors.py`,

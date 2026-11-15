@@ -1739,3 +1739,69 @@ tests/test_lead_lag_null_imposed_inference.py` still 45 passed on 3.13,
 with the warning text byte-for-byte unchanged; full suite re-run
 afterward, 692 passed / 1 pre-existing failure (untouched), events.jsonl
 hash unchanged.
+
+## Bug #24 follow-up: the known test_monitor_persistence.py failure was data drift, not a code bug
+
+**Investigated 2026-11-16**, prompted by this same session's work: the
+long-standing `test_reproduces_the_three_published_pre_holdout_regimes`
+failure (first seen in this session's own full-suite runs, present
+since the module was built 2026-09-27 -- 49 days before this
+investigation) was never root-caused before this; it was only ever
+carried as "known, pre-existing, untouched."
+
+**Which side was wrong -- settled by direct comparison, not assumption**:
+ran `scripts/run_momentum_persistence_regime_count.py` live against the
+current real warehouse. It reported 82 excluded same-ISIN-jump entities
+and 5 mechanical regimes (2017-2019 +, 2020 -, 2021 +, 2022 -,
+2023-2024 +) -- IDENTICAL to the test's own actual (failing) output,
+confirmed via both using the exact same `monitor.persistence` functions
+(`same_isin_jump_excluded_entities`, `compute_daily_persistence`,
+`annual_mean_sign`, `mechanical_regimes`). No divergence between the
+script and the module exists. Checked `git log` on
+`src/data_layer/lineage_jump_guard.py` and `src/monitor/persistence.py`:
+neither has changed since before the module was built (2026-09-23 and
+2026-09-27 respectively) -- so this is not a regression from a code
+edit either.
+
+**The actual cause**: `same_isin_jump_excluded_entities()` and
+`compute_daily_persistence()` both read the FULL warehouse at call
+time, by design ("full warehouse, no `before` cutoff," that function's
+own docstring) -- not a point-in-time snapshot. On 2026-09-27, that
+query returned 78 excluded entities and a 3-regime result; 49 days of
+ordinary ongoing backfill later, it returns 82 and 5 regimes. The
+CODE never changed and is not wrong; three STATIC TEXTS treated a
+live, data-dependent query's result as a permanent fact: this test's
+hardcoded assertion, `monitor/persistence.py`'s own module docstring,
+and `scripts/run_momentum_persistence_regime_count.py`'s own docstring
+(all three said "still exactly 3... unchanged"). Fixed all three to
+state the current number with an explicit "this moves" caveat, not a
+fourth permanent snapshot.
+
+**Blast radius -- checked, not assumed, whether any LIVE output was ever
+actually wrong**: `src/monitor/web.py`'s `build_monitor_payload()` (the
+screener web app's `/api/monitor` panel) also calls `mechanical_regimes`
+and is regenerated FRESH "at server startup" every time (its own
+docstring) -- it was never a cached, stale value; anyone who looked at
+that panel on any day since the exclusion set grew would have seen the
+CORRECT count for that day, not a frozen "3." Nothing in this project's
+trading logic reads `mechanical_regimes`/`annual_mean_sign` at all
+(grepped: only `web.py`, this test, and the two scripts above import
+them) -- no paper-trading or backtest decision was ever downstream of
+this number. **The one real, open question this does raise**:
+`NEW_RESEARCH_DIRECTION.md`'s Hypothesis A-actionable rejection states
+its basis as "3 [regimes], under the ~5 needed for a credible read,
+fixed as the threshold before this was computed." The true current
+count is 5 -- AT that threshold, not under it. This does not
+automatically reverse the rejection (the threshold was not crossed, and
+the broader regime-instability argument in that document does not rest
+on this number alone), but the document's own "unchanged by this
+correction" framing is no longer accurate and the rejection's wording
+has not been revisited. Flagged for the user to decide; not edited
+unilaterally here, since changing a hypothesis-rejection's stated
+rationale is a bigger decision than a code fix.
+
+**Status: fixed, 2026-11-16.** Test assertion updated to the current,
+re-verified 5-regime result, with a docstring making explicit that this
+number is expected to move again as the warehouse grows and should be
+re-checked against the script rather than assumed. Full suite: **693
+passed, 0 failed** -- the first fully green run this session.

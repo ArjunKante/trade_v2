@@ -10,15 +10,26 @@ src/monitor/persistence.py (built after this script, per instruction, to
 be the module's single source of truth) -- this script imports from
 there instead of duplicating the logic, so the two cannot drift apart.
 
-CORRECTED (second pass): now excludes the 78 same-ISIN-jump entities
+CORRECTED (second pass): now excludes the same-ISIN-jump entities
 (BUGS.md Bug #11), matching every other rigorous computation in this
 project. The original instruction to build the monitor was
 self-contradictory (reuse this script's definition exactly, AND apply
 same-ISIN exclusions -- this script did not originally apply them);
 resolved by adding the exclusion HERE, so "the script's definition" and
 "the same-ISIN-excluded definition" are the same thing going forward.
-Regime count re-verified after the fix: still exactly 3 (2017-2019 +,
-2020 -, 2021-2024 +) -- unchanged from the pre-fix run.
+Regime count re-verified after the fix (2026-09-27): still exactly 3
+(2017-2019 +, 2020 -, 2021-2024 +), 78 entities excluded -- unchanged
+from the pre-fix run AT THAT TIME.
+
+UPDATE 2026-11-16: this count is NOT a fixed fact -- both the exclusion
+set and compute_daily_persistence read the full warehouse at call time,
+no `before` cutoff, by design, so the result moves as more data is
+backfilled. Re-run live today: 82 entities excluded, 5 regimes
+(2017-2019 +, 2020 -, 2021 +, 2022 -, 2023-2024 +). No code here or in
+monitor/persistence.py changed between the two runs (checked via git
+log) -- see that module's own docstring and BUGS.md's follow-up to Bug
+#24 for the full investigation and what it does and does not call into
+question.
 
 Pre-holdout only (`read_entity_panel`'s default; `authorize_holdout` never
 passed). No new holdout touch.

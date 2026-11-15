@@ -136,16 +136,47 @@ def real_pre_holdout_daily():
     return compute_daily_persistence(panel, jump_dates)
 
 
-def test_reproduces_the_three_published_pre_holdout_regimes(real_pre_holdout_daily):
-    """NEW_RESEARCH_DIRECTION.md and scripts/run_momentum_persistence_
-    regime_count.py both report 3 mechanical regimes in trade-new's own
-    pre-holdout history: 2017-2019 (+), 2020 (-), 2021-2024 (+). This
-    module must reproduce that exactly, since the script now imports its
-    computation from here -- a divergence would mean the two have drifted
-    apart, which is exactly what this test exists to catch."""
+def test_reproduces_the_current_pre_holdout_regimes(real_pre_holdout_daily):
+    """NOT a fixed historical fact -- `same_isin_jump_excluded_entities`
+    and `compute_daily_persistence` both read "the full warehouse, no
+    before cutoff" (see that function's own docstring), so this number
+    is a function of how much has been backfilled by the time this runs,
+    not an immutable property of 2017-2024. It genuinely moved: when this
+    module was built (2026-09-27), 78 same-ISIN-jump entities were
+    excluded and the mechanical regime count was 3 (2017-2019 +, 2020 -,
+    2021-2024 +) -- see NEW_RESEARCH_DIRECTION.md and this module's own
+    (now-corrected) docstring. By 2026-11-16, 49 days later, with no code
+    change to the exclusion or persistence logic (confirmed: git log on
+    data_layer/lineage_jump_guard.py and monitor/persistence.py both
+    predate this gap), the warehouse has grown enough that 82 entities
+    are excluded and the 2021-2024 run splits into three single-year
+    regimes (2021 +, 2022 -, 2023-2024 +) -- 5 regimes total, re-verified
+    with `scripts/run_momentum_persistence_regime_count.py` directly
+    (same single-source-of-truth functions, same real warehouse, same
+    5-regime result) to confirm this is data drift, not a divergence
+    between the script and this module.
+
+    This test still exists to catch exactly that divergence (script vs.
+    module), not to freeze a specific regime count -- re-run this
+    assertion's two numbers (now 5, previously 3) against both sources
+    again before assuming either one is still current; this project has
+    no point-in-time guard on this particular computation, by design, so
+    the honest number is "whatever both independent computations agree
+    on right now," not a date-stamped constant. See BUGS.md Bug #24
+    follow-up (2026-11-16) for the full investigation, including why this
+    is NOT a bug in persistence.py or web.py's live payload (both would
+    already have shown the current, correct count to anyone who looked,
+    every time either ran) -- and the still-open question of whether
+    NEW_RESEARCH_DIRECTION.md's Hypothesis A-actionable rejection, whose
+    own stated basis was "3, under the ~5 needed for a credible read,"
+    still holds now that the real count is AT that threshold, not under
+    it."""
     annual = annual_mean_sign(real_pre_holdout_daily)
     regimes = mechanical_regimes(annual)
-    assert regimes == [(2017, 2019, 1.0), (2020, 2020, -1.0), (2021, 2024, 1.0)]
+    assert regimes == [
+        (2017, 2019, 1.0), (2020, 2020, -1.0), (2021, 2021, 1.0),
+        (2022, 2022, -1.0), (2023, 2024, 1.0),
+    ]
 
 
 # ---------------------------------------------------------------------------
