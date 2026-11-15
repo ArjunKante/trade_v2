@@ -209,9 +209,14 @@ recent month), hold 63 trading days, equal weight, long only.
 pre-registered conditions passed.** Large-cap replication +6.56 points (CV
 only).
 
-Verified against the Bug #11 same-ISIN exclusion: margin moved 3.87 → 3.64,
-still clearing the 3.0 threshold. Max drawdown actually *worsened* when those
-entities were excluded, which argues against them flattering the result.
+Verified against the Bug #11 same-ISIN exclusion: margin is +3.57 to +5.22
+across exclusion-set versions 78-82 (currently +4.00), not a fixed 3.64 --
+that exclusion set reads the full warehouse at call time with no pinned
+version, so its own count has moved since the original 2026-09-27 check,
+and the margin moves with it (`FINDINGS.md` Section 2's 2026-11-16 update).
+The floor of that range still clears the 3.0 threshold with room. Max
+drawdown actually *worsened* when these entities were excluded, which
+argues against them flattering the result.
 
 **Never run live until 2026-10-26.** One basket now recorded with a January
 check-in.

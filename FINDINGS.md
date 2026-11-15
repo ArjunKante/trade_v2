@@ -65,8 +65,11 @@ check on the now-retired window, Section 7, not a new spend).
 **No condition flipped anywhere. Margins moved modestly, in both
 directions** (down 0.62pts and 0.23pts on the pre-holdout and holdout
 comparisons, up 0.74pts on the large-cap one) -- not a one-directional
-inflation. The holdout margin (3.64 vs. the 3.0-point threshold) is the
-closest to its bar of the three, but still clears it with room, and
+inflation. The holdout margin (3.64 vs. the 3.0-point threshold, AS OF
+THIS 2026-09-27 CHECK ONLY -- see the 2026-11-16 update below: this is
+a point reading of what is actually a 3.57-5.22 range across exclusion-
+set versions, not a fixed value) is the closest to its bar of the
+three, but still clears it with room, and
 momentum's own holdout MaxDD actually got slightly WORSE excluding these
 entities (-6.48% -> -7.85%) while its CAGR barely moved -- evidence
 against these entities uniformly flattering the result, not for it.
@@ -92,7 +95,11 @@ contamination. Not re-run further; the six other scripts sharing this
 same gap (BUGS.md Bug #11's update) remain recorded, not fixed.
 
 **UPDATE, 2026-11-16: reproducibility check, same holdout window, newer
-exclusion-set versions -- margin never approached 3.0.** BUGS.md Bug
+exclusion-set versions -- margin never approached 3.0.** This Bug #11
+holdout margin is a RANGE, not a point: **+3.57 to +5.22 across
+exclusion-set versions 78-82, currently +4.00 -- the floor of that range
+is still above the 3.0 threshold.** Treat it as that range wherever it
+is cited, not as "3.64." BUGS.md Bug
 #24's follow-up found that `monitor.persistence.same_isin_jump_excluded_
 entities()` reads the full warehouse at call time with no point-in-time
 cutoff, so the exclusion set this check applied (78 entities, 2026-09-27)
