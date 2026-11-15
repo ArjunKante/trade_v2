@@ -45,38 +45,58 @@ class GitPullError(Exception):
 
 
 def pull_before_appending(log) -> None:
-    """Fast-forward-only pull -- must be the FIRST thing fibo_evening.py's
-    main() does, before any append_event call touches events.jsonl on
-    disk. Once the Fibo morning job runs on GitHub Actions (committing
-    and pushing its own setup/trigger/outcome events during market
-    hours) while the evening job still runs on this laptop hours later,
-    the laptop's checkout can be behind origin by however many morning
-    commits happened that day. Pulling FIRST -- before this run appends
-    a single line -- means the local file already contains the
-    morning's lines before the evening job's own new lines are appended
-    after them, so every subsequent commit is a clean linear fast-
-    forward: there is never a divergent history to merge, and never a
-    rejected non-fast-forward push.
+    """Merge pull -- must be the FIRST thing fibo_evening.py's main() does,
+    before any append_event call touches events.jsonl on disk.
+
+    CHANGED 2026-11-15 (BUGS.md, OPERATIONS.md's "Evening job dead-man's
+    switch" sections): this was `git pull --ff-only` until a
+    single-writer assumption in what is actually a two-writer system
+    (GitHub Actions commits from the morning job, this laptop commits
+    from the evening job, both to the same events.jsonl) blocked every
+    evening run for 7 straight trading days, 2026-11-06 through
+    2026-11-13, the moment the two histories diverged -- which is the
+    NORMAL state for two independent writers to the same file, not an
+    error. `--ff-only` treated normal, expected divergence as a fatal
+    refusal, with no automatic recovery and no visible alert (the exact
+    gap the dead-man's switch above now also covers).
+
+    FIXED by switching to an ordinary merge pull (`--no-rebase`,
+    explicit regardless of this machine's `pull.rebase` config) plus
+    `.gitattributes`'s `merge=union` driver on `data/fibo_live/v1/*.jsonl`:
+    the file is append-only and every line carries its own timestamp, so
+    line order is not semantically load-bearing, which is exactly the
+    precondition a union merge (keep both sides' lines, never a manual
+    conflict) needs to be safe. `fibo_live/eventlog.py`'s `read_events()`
+    also dedupes by `event_id` as cheap insurance against a line
+    appearing on both sides of a merge. See
+    `tests/test_fibo_git_union_merge.py` for a real two-branch merge
+    proving no loss and no duplication.
+
+    NEVER REBASE HERE: rebase rewrites committer timestamps, and a
+    commit's own timestamp is this project's provenance evidence that an
+    event was logged before its outcome was known (this module's own
+    docstring). A merge commit's timestamp is new, but it never alters
+    the timestamp already recorded on the commits being merged.
 
     UNLIKE this module's push (sync_events_log_to_git, best-effort,
-    every failure swallowed): this RAISES on failure. Proceeding on a
-    stale local events.jsonl is exactly the scenario this exists to
-    prevent -- silently computing against a watchlist that doesn't yet
-    include this morning's events, or a non-fast-forward push rejected
-    hours later with this run's own commit stuck on top of it. One
-    precondition this depends on for a plain `--ff-only` to ever
-    succeed: fibo_morning.py must be the ONLY thing that ever commits to
-    this repo from anywhere else -- the laptop never runs it once the
-    GitHub Actions schedule is live (see OPERATIONS.md)."""
-    result = _run_git("pull", "--ff-only")
+    every failure swallowed): this still RAISES on failure. A union
+    merge resolves any divergence IN events.jsonl automatically and
+    never produces a conflict there; a GitPullError here now means
+    something else is genuinely wrong (no network, a conflict in some
+    OTHER tracked file, a corrupted checkout) -- still worth refusing to
+    run against, since proceeding on an unknown repo state is exactly
+    the scenario this function exists to prevent."""
+    result = _run_git("pull", "--no-rebase")
     output = (result.stdout.strip() + " " + result.stderr.strip()).strip()
     if result.returncode != 0:
         raise GitPullError(
-            f"git pull --ff-only failed ({result.returncode}): {output} -- refusing to run "
-            f"against a possibly-stale events.jsonl. Resolve manually (check for a diverged "
-            f"history -- this should only ever be a clean fast-forward) before re-running."
+            f"git pull --no-rebase failed ({result.returncode}): {output} -- refusing to run "
+            f"against a possibly-stale or conflicted events.jsonl. Resolve manually before "
+            f"re-running (a clean merge of events.jsonl should never conflict -- see "
+            f".gitattributes's merge=union driver -- so a failure here points at something "
+            f"else: no network, a conflict in a different tracked file, or a corrupted checkout)."
         )
-    log(f"  git pull --ff-only: {output or 'already up to date'}")
+    log(f"  git pull --no-rebase: {output or 'already up to date'}")
 
 
 def sync_events_log_to_git(path: Path, log, job_label: str = "Fibo evening events") -> None:

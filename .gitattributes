@@ -1,0 +1,11 @@
+# data/fibo_live/v1/events.jsonl is append-only and every line carries its
+# own timestamp, so line order is not semantically load-bearing -- a
+# union merge (keep both sides' lines, never asking for manual conflict
+# resolution) is safe here. This is the fix for BUGS.md's evening-job
+# git-divergence entry: GitHub Actions (morning job) and this laptop
+# (evening job) are two independent writers to the same file, so
+# diverging branches are the normal state, not an error -- see
+# src/fibo_live/git_sync.py's pull_before_appending docstring.
+# fibo_live/eventlog.py's read_events() also dedupes by event_id as
+# cheap insurance against a line appearing on both sides of a merge.
+data/fibo_live/v1/*.jsonl merge=union

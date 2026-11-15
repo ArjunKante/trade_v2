@@ -1323,3 +1323,102 @@ measured here. Live exposure to date is close to nil regardless: 87
 `setup` events logged, exactly one `setup_on=True` (AXISBANK, 2026-10-19,
 `run_mode: REPLAY`, never triggered), one `outcome` event, nothing live
 has actually traded.
+
+## Bug #19: `git pull --ff-only` encoded a single-writer assumption in what became a two-writer system -- blocked the evening job for 7 straight trading days
+
+**Mechanism**: `src/fibo_live/git_sync.py`'s `pull_before_appending`
+used `git pull --ff-only`, which only succeeds if the laptop's local
+history is a strict subset of origin's. Its own docstring stated the
+precondition explicitly: "fibo_morning.py must be the ONLY thing that
+ever commits to this repo from anywhere else." That stopped being true
+the day the morning job moved to GitHub Actions (2026-10-16, OPERATIONS.md)
+-- GitHub Actions and this laptop became two independent writers to the
+same `events.jsonl`, so a diverged history (each side has a commit the
+other lacks) is the NORMAL state for that arrangement, not a failure
+condition. `--ff-only` could not tell the two apart and refused every
+time, with zero automatic recovery.
+
+**Blast radius, found by a 2026-11-15 health check, not by design**: 7
+straight trading days, 2026-11-06 through 2026-11-13, every scheduled
+18:30 evening run aborted on this exact line (`fibo_live.git_sync.
+GitPullError`) before touching anything else -- no watchlist produced,
+cascading into the morning job REFUSING every one of those mornings
+(`assert_watchlist_current`, working exactly as designed). Two earlier,
+shorter instances of the identical error (2026-10-28, 2026-10-30) had
+self-resolved only because the NEXT evening's run happened to find origin
+back in a fast-forwardable state -- not because anything fixed the root
+cause; the 2026-11-06 instance simply did not get that lucky before this
+bug was found.
+
+**Blast radius, the other direction (finding #9, `PROJECT_CONTEXT.md`
+§7)**: checked whether any OTHER tracked file in this repo could hit the
+same non-fast-forward wall via this same `pull_before_appending` call
+(it pulls the whole repo, not just `events.jsonl`). None currently does
+-- the evening job only ever writes `events.jsonl`, and no other
+automated process commits to this repo from this laptop on a schedule
+(`TradeNew_BoxTheoryDevRun` and `TradeNew_OptionsDepthTest` are one-shot,
+non-recurring Task Scheduler entries, confirmed via `Get-ScheduledTask`
+showing no `NextRunTime`; see OPERATIONS.md's "Options-depth collector
+dead-man's switch" section for the full grep). The exposure is real only
+for `events.jsonl`, which is exactly what the fix targets.
+
+**Status: fixed, 2026-11-15.** `git pull --no-rebase` (never `--ff-only`,
+never a rebase -- rebase rewrites committer timestamps, which this
+project's provenance argument depends on being untouched) plus a new
+`.gitattributes`: `data/fibo_live/v1/*.jsonl merge=union`, safe because
+the file is append-only and line order is not semantically load-bearing.
+A known, accepted limit of the union driver (a genuinely overlapping edit
+can still duplicate a line in the raw merged file) is closed by
+`fibo_live/eventlog.py`'s `read_events` now deduping by `event_id` --
+every reader in this codebase goes through `read_events`, never a raw
+file read. Regression-tested with real git subprocesses, not mocked:
+`tests/test_git_sync_pull.py::
+test_merges_cleanly_when_laptop_and_origin_have_both_diverged`
+reproduces the literal historical failure and proves `pull_before_
+appending` no longer raises; `tests/test_fibo_git_union_merge.py` (2
+tests) proves the merge itself loses nothing and that the duplicate case
+is real, not hypothetical; `tests/test_fibo_eventlog_dedupe.py` (4 tests)
+covers the dedupe logic directly. Full detail, including the historical
+timeline and the incidental merge commit that happened to unblock this
+repo before the fix landed (luck, not a fix -- see OPERATIONS.md), is in
+OPERATIONS.md's "git pull --ff-only was a single-writer assumption"
+section.
+
+## Bug #20: warehouse.duckdb lock conflict had no retry and no attribution -- cost 2 forward-test days
+
+**Mechanism**: `scripts/fibo_evening.py` opened `warehouse.duckdb` with a
+single, unretried `get_connection()` call. `duckdb.connect()` raises
+`duckdb.IOException` INSTANTLY when any other process already holds the
+file open on Windows (confirmed live with two concurrent Python
+processes, byte-for-byte the same error text the production logs
+showed) -- it never blocks and waits on its own. A transient hold by any
+other process at exactly the wrong instant was therefore fatal with no
+chance to recover.
+
+**Blast radius**: 2 forward-test days, 2026-10-27 and 2026-11-03, the
+evening job aborted immediately on this line, producing no watchlist for
+the following trading day.
+
+**Blast radius, the other direction (finding #9)**: checked which other
+process could plausibly hold this exact file open. The options-depth
+collector is structurally ruled out -- `src/options_depth/writer.py`
+never imports `duckdb` or opens any `.duckdb` file, only a CSV.
+`scripts/serve_screener.py` explicitly closes its read-only connection
+before serving. The one long-lived process in this codebase that holds
+`warehouse.duckdb` open indefinitely is `scripts/research_app.py`'s
+Streamlit research browser (`@st.cache_resource`, never closed) -- the
+leading candidate by elimination, not confirmed for the specific
+historical dates (no process audit trail exists for those timestamps).
+
+**Status: fixed, 2026-11-15.** `_open_warehouse_with_retry` -- 5 attempts,
+exponential backoff (3/6/12/24s) -- added around the connection. On
+exhaustion, `sys.exit(1)` (a deliberate `SystemExit`, not a raised
+exception, so it survives `run_unattended`'s catch-all and actually
+terminates the process non-zero, a second independent failure signal
+alongside the dead-man's switch above going overdue). Regression-tested:
+`tests/test_fibo_evening_duckdb_lock_retry.py` (4 tests, exact backoff
+schedule and exit code asserted) and an upgraded
+`tests/test_fibo_evening_heartbeat_wiring.py` case exercising the real
+retry-then-exhaust path. Full detail in OPERATIONS.md's "warehouse.duckdb
+lock conflict" section.
+

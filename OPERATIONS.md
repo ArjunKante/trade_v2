@@ -1772,3 +1772,142 @@ the evening job:
 heartbeats in this file -- a run that starts, reaches the ping, and still
 recorded wrong data; a healthchecks.io outage; an email-delivery failure.
 
+## git pull --ff-only was a single-writer assumption in a two-writer system -- fixed 2026-11-15
+
+**Root cause, stated plainly**: `pull_before_appending` (`src/fibo_live/
+git_sync.py`) used `git pull --ff-only`, which only ever succeeds if the
+laptop's local history is a strict subset of origin's. Its own docstring
+said so explicitly: "fibo_morning.py must be the ONLY thing that ever
+commits to this repo from anywhere else." That assumption was false from
+the day the morning job moved to GitHub Actions (2026-10-16) -- GitHub
+Actions and this laptop are two independent writers to the same
+`events.jsonl`, so a diverged history (the laptop has a commit origin
+lacks, origin has a commit the laptop lacks) is the NORMAL state, not an
+error. `--ff-only` treated it as fatal every time, with no automatic
+recovery: 7 straight trading days, 2026-11-06 through 2026-11-13, every
+single evening run aborted at this exact line before touching anything
+else.
+
+**Fix**: `git pull --no-rebase` (explicit, regardless of this machine's
+`pull.rebase` config -- never `--ff-only`, never a rebase) plus a new
+`.gitattributes`: `data/fibo_live/v1/*.jsonl merge=union`. The file is
+append-only and every line carries its own timestamp, so line order is
+not semantically load-bearing -- exactly the precondition a union merge
+(keep both sides' lines, never a manual conflict) needs to be safe.
+**No rebase, anywhere in this fix**: rebase rewrites committer
+timestamps, and this project's entire provenance argument (`git_sync.py`'s
+own module docstring, `FIBO_FINDINGS.md`) depends on a commit's timestamp
+being untouched evidence that an event was logged before its outcome was
+known. A merge commit's own (new) timestamp never alters the timestamps
+already recorded on the commits it merges.
+
+**A known, accepted limit, not papered over**: the union driver's own
+guarantee is not airtight -- a genuinely overlapping edit (both sides add
+a line with the same `event_id`, surrounded by other distinct lines) can
+still produce a literal duplicate line in the merged file (proven live,
+not assumed, in `tests/test_fibo_git_union_merge.py`'s second test).
+`fibo_live/eventlog.py`'s `read_events` now dedupes by `event_id`,
+keeping the first occurrence, as the actual guarantee the system relies
+on -- every reader in this codebase (`fibo_morning.py`, `fibo_evening.py`,
+`src/reports/fibo_live_web.py`) goes through `read_events`, never a raw
+file read, so this closes the gap for the whole system, not just one
+caller.
+
+**Verified by test, not reasoning**: `tests/test_fibo_git_union_merge.py`
+(2 tests, real git subprocesses, no mocking) reproduces the two-writer
+shape directly -- distinct events from both sides merge with no loss and
+no duplication; a forced overlapping duplicate-`event_id` case shows the
+raw merged file CAN still duplicate a line, and `read_events` collapses
+it back to one. `tests/test_git_sync_pull.py` gained a new test,
+`test_merges_cleanly_when_laptop_and_origin_have_both_diverged`,
+reproducing the literal historical failure (laptop has an unpushed
+commit, origin has a commit the laptop lacks) through `pull_before_
+appending` itself, proving it no longer raises `GitPullError`.
+`tests/test_fibo_eventlog_dedupe.py` (4 tests) covers the dedupe logic in
+isolation. All 10 new/changed tests pass; full `fibo`/`options_depth`
+selection unaffected.
+
+**Did today's incidental merge commit already resolve the divergence?
+Yes -- and that is luck, not a fix.** Commit `679fdac` ("Merge
+remote-tracking branch 'origin/main'"), timestamped 2026-11-15 17:55:45,
+landed on this machine from unrelated work (a lead-lag study commit made
+locally interleaved with the morning job's own `0753fb6`/`398a5c1`/etc.
+"Fibo morning events" commits) minutes before this health check began --
+confirmed via `git status -sb` showing `main...origin/main` with no
+ahead/behind count, i.e. genuinely in sync right now. **That merge was
+not produced by any mechanism this project controls or can rely on
+recurring** -- it happened to occur because another line of work on this
+same machine triggered an ordinary `git pull`/merge at the right moment,
+not because anything watches for or resolves Fibo's own divergence. Had
+that unrelated work not happened today, the evening job would still have
+been stuck on 2026-11-13's `GitPullError` through Monday 2026-11-16
+18:30 (now 20:00) and beyond. The code fix above is what actually
+prevents recurrence -- the incidental merge only explains why the repo
+happened to be unblocked before this fix landed, not why it is safe
+going forward.
+
+## warehouse.duckdb lock conflict -- retry with backoff, and who actually holds it, 2026-11-15
+
+**Cost 2 forward-test days before this fix**: 2026-10-27 and 2026-11-03,
+`fibo_evening.py` aborted immediately (`_duckdb.IOException: ... The
+process cannot access the file because it is being used by another
+process.`) the instant it tried to open `warehouse.duckdb`. Confirmed
+live, not assumed: `duckdb.connect()` raises this INSTANTLY when another
+process already holds the file open on Windows -- it does not block and
+wait on its own -- reproduced directly with two concurrent Python
+processes, byte-for-byte the same error text as the historical log lines.
+This means a bounded sleep-and-retry genuinely helps for a transient
+hold, which is exactly what was added:
+`scripts/fibo_evening.py::_open_warehouse_with_retry` -- 5 attempts,
+exponential backoff (3/6/12/24s), well inside the Task Scheduler task's
+15-minute execution limit. On exhaustion it calls `sys.exit(1)`
+deliberately (a `SystemExit`, not a raised exception) so it survives
+`run_unattended`'s `except Exception` and actually terminates the process
+non-zero -- Task Scheduler's own run history (`Get-ScheduledTaskInfo`'s
+`LastTaskResult`) becomes a second, independent signal on top of the
+dead-man's switch already going overdue (the heartbeat is never reached
+either way). This is the one deliberate exception to "a crashed run must
+never block the next scheduled one" in this file -- safe here because
+Task Scheduler fires on its own schedule regardless of the previous run's
+exit code; nothing in this task's configuration retries or reschedules
+based on `LastTaskResult`.
+
+**Who actually holds the lock -- checked, not guessed, per the explicit
+ask ("if it is the options-depth collector or a stray Streamlit session,
+say so")**:
+- **The options-depth collector is structurally ruled out, not just
+  unlikely.** `src/options_depth/writer.py` never imports `duckdb` and
+  never opens `warehouse.duckdb` or any `.duckdb` file at all -- it
+  writes only a CSV (`data/options_depth/v1/nifty_depth_log.csv`). No
+  lock contention with this file is possible from that process, same
+  conclusion (different file, same verification method) as this file's
+  earlier "NOT a lock conflict with the options backfill" entry above
+  for `data/options_history/options_history.duckdb`.
+- **`scripts/serve_screener.py`** opens a read-only connection but
+  explicitly calls `con.close()` right after building its in-memory
+  cache, before serving anything -- ruled out.
+- **The prime suspect, by elimination: `scripts/research_app.py`'s
+  Streamlit research browser.** `@st.cache_resource` caches a read-only
+  `warehouse.duckdb` connection for the ENTIRE Streamlit server process
+  lifetime -- never explicitly closed anywhere in that script. It is the
+  only long-lived process anywhere in this codebase that holds this
+  specific file open indefinitely once started. Confirmed mechanistically
+  (two concurrent Python processes, one holding a read-only connection,
+  the second's read-write `connect()` call fails with the exact
+  historical error text) -- but NOT confirmed as the actual cause on
+  2026-10-27/2026-11-03 specifically, since nothing audits which process
+  had the file open at those exact timestamps; no Streamlit process was
+  running on this machine at the time of this check (2026-11-15). Stated
+  as the leading candidate by elimination, not as a closed finding.
+
+**Verified by test, not reasoning**: `tests/test_fibo_evening_duckdb_lock_retry.py`
+(4 tests) -- succeeds immediately when unlocked, succeeds after transient
+locks clear within the attempt budget (with the exact exponential backoff
+schedule asserted), exits non-zero with the right code after exhausting
+all 5 attempts, and confirms `SystemExit` specifically survives
+`run_unattended`'s swallow-everything wrapper. `tests/
+test_fibo_evening_heartbeat_wiring.py`'s DuckDB-lock wiring test was
+upgraded to exercise the real retry-then-exhaust path (previously a bare
+`OSError`, now a real `duckdb.IOException` through the actual retry
+function) and still proves the heartbeat is never reached.
+

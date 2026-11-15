@@ -57,9 +57,11 @@ this file can: Task Scheduler never launching python.exe at all.
 import argparse
 import datetime as dt
 import sys
+import time
 import uuid
 from pathlib import Path
 
+import duckdb
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -86,7 +88,63 @@ from spread_monitor.market_hours import IST
 SERIES_INCLUDE = ["EQ", "BE", "BZ"]  # same set config.yaml's nse_bhavcopy.series_include uses
 MAX_LOOKBACK_DAYS = 10  # bound for the backward walk only when the warehouse has no prior data at all (see main())
 
+# DuckDB lock retry (BUGS.md, OPERATIONS.md's "warehouse.duckdb lock conflict"
+# section): cost 2 forward-test days (2026-10-27, 2026-11-03) when another
+# process already had warehouse.duckdb open the instant this job tried to
+# open it -- confirmed to raise instantly, not block-and-wait, so a bare
+# retry-after-a-pause genuinely helps if the other process's hold is
+# transient. 5 attempts, exponential backoff (3/6/12/24s between tries,
+# ~45s total) -- well inside the Task Scheduler task's own 15-minute
+# execution limit.
+DB_OPEN_MAX_ATTEMPTS = 5
+DB_OPEN_RETRY_BASE_SECONDS = 3
+
 log = make_logger()
+
+
+def _open_warehouse_with_retry(path, log):
+    """get_connection(path), retrying on a DuckDB file-lock IOException
+    (Windows: "The process cannot access the file because it is being
+    used by another process.") -- confirmed live, not assumed: the
+    options-depth collector never opens warehouse.duckdb at all (it
+    writes only a CSV, src/options_depth/writer.py), so it is structurally
+    ruled out; the one other long-lived process in this codebase that
+    holds this exact file open indefinitely is scripts/research_app.py's
+    Streamlit research browser (@st.cache_resource caches a read-only
+    connection for the whole server lifetime, never closed) -- the prime
+    suspect by elimination, not confirmed for the specific historical
+    dates since nothing audits which process held the file then.
+
+    On exhaustion, calls sys.exit(1) -- deliberately a SystemExit, not a
+    raised Exception, so it is NOT caught by run_unattended's `except
+    Exception` and actually terminates the process non-zero. This is the
+    one case in this script where that matters: Task Scheduler's own run
+    history (`Get-ScheduledTaskInfo`'s LastTaskResult) becomes a second,
+    independent signal on top of the dead-man's switch already going
+    overdue (the heartbeat is never reached either way) -- never calling
+    sys.exit() changes the "a crashed run must never block the next
+    scheduled one" guarantee every other failure in this file still has,
+    since Task Scheduler fires on schedule regardless of the previous
+    run's exit code."""
+    last_exc = None
+    for attempt in range(1, DB_OPEN_MAX_ATTEMPTS + 1):
+        try:
+            return get_connection(path)
+        except duckdb.IOException as e:
+            last_exc = e
+            if attempt == DB_OPEN_MAX_ATTEMPTS:
+                break
+            delay = DB_OPEN_RETRY_BASE_SECONDS * (2 ** (attempt - 1))
+            log(f"  warehouse.duckdb is locked (attempt {attempt}/{DB_OPEN_MAX_ATTEMPTS}): "
+                f"{type(e).__name__} -- retrying in {delay}s...")
+            time.sleep(delay)
+    log(f"FATAL: warehouse.duckdb still locked after {DB_OPEN_MAX_ATTEMPTS} attempts: "
+        f"{type(last_exc).__name__}: {last_exc}. Another process is holding this file open -- "
+        f"the options-depth collector never opens it (writes only a CSV); check for a "
+        f"Streamlit research_app.py session left running (its cache_resource connection "
+        f"never closes on its own). Exiting non-zero so this is visible in Task Scheduler's "
+        f"own run history, in addition to the dead-man's switch going overdue.")
+    sys.exit(1)
 
 
 def next_trading_day(con, d: dt.date, known_through: dt.date) -> dt.date:
@@ -301,7 +359,7 @@ def main() -> None:
             f"expected valid snapshots today ({today_ist}){holiday_note} -- "
             f"at least one scheduled run was missed or failed.")
 
-    con = get_connection(WAREHOUSE_DB)
+    con = _open_warehouse_with_retry(WAREHOUSE_DB, log)
 
     # BUGS.md: the staleness guard must protect the COMPUTATION, not block
     # the fetch that would cure it. Checking staleness BEFORE fetching (the

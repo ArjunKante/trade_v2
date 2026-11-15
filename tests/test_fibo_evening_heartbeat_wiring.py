@@ -62,23 +62,44 @@ def test_git_sync_failure_never_reaches_the_heartbeat(monkeypatch):
     assert any("FakeGitPullError" in m or "simulated diverging branches" in m for m in logged)
 
 
-def test_duckdb_lock_failure_never_reaches_the_heartbeat(monkeypatch):
+def test_duckdb_lock_failure_never_reaches_the_heartbeat(monkeypatch, capsys):
     """Same proof, for the other failure shape actually observed live
-    (warehouse.duckdb locked by another process, 2026-10-27/2026-11-03)."""
+    (warehouse.duckdb locked by another process, 2026-10-27/2026-11-03).
+    Exercises the real retry-then-exhaust path (_open_warehouse_with_retry),
+    not just a bare exception -- time.sleep is monkeypatched so the test
+    doesn't actually wait out the ~45s of backoff."""
+    import duckdb as duckdb_module
+
     monkeypatch.setenv("FIBO_EVENING_HEALTHCHECK_URL", "https://hc-ping.com/fake-uuid")
     monkeypatch.setattr(heartbeat, "load_dotenv", lambda *a, **k: None)
     monkeypatch.setattr(heartbeat.requests, "get", _get_must_not_be_called)
     monkeypatch.setattr(sys, "argv", ["fibo_evening.py", "--date", "2026-11-06"])
+    monkeypatch.setattr(fibo_evening.time, "sleep", lambda s: None)
 
     monkeypatch.setattr(fibo_evening, "pull_before_appending", lambda log: None)
 
     def raise_lock_error(path):
-        raise OSError('IO Error: Cannot open file "warehouse.duckdb": '
-                      "The process cannot access the file because it is being used by another process.")
+        raise duckdb_module.IOException(
+            'IO Error: Cannot open file "warehouse.duckdb": '
+            "The process cannot access the file because it is being used by another process."
+        )
 
     monkeypatch.setattr(fibo_evening, "get_connection", raise_lock_error)
 
     logged = []
-    run_unattended("FIBO EVENING JOB", fibo_evening.main, logged.append)
+    # After exhausting its retries, _open_warehouse_with_retry calls
+    # sys.exit(1) deliberately -- a SystemExit, not a plain exception, so
+    # it survives run_unattended's `except Exception` and actually
+    # terminates the process non-zero (see that function's own docstring
+    # for why: Task Scheduler's own run history becomes a second signal
+    # on top of the dead-man's switch already going overdue).
+    with pytest.raises(SystemExit) as exc_info:
+        run_unattended("FIBO EVENING JOB", fibo_evening.main, logged.append)
+    assert exc_info.value.code == 1
 
-    assert any("UNHANDLED EXCEPTION" in m for m in logged)
+    # main() logs through the module's own real logger (make_logger,
+    # which prints), not the `logged.append` passed to run_unattended --
+    # that one only ever fires from run_unattended's OWN except block,
+    # which SystemExit bypasses entirely. Captured stdout is what proves
+    # the FATAL message was actually logged before exiting.
+    assert "FATAL" in capsys.readouterr().out

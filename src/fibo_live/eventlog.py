@@ -57,16 +57,32 @@ def append_event(kind: str, payload: dict, log_path: Path = EVENTS_LOG) -> dict:
 def read_events(kind: str | None = None, log_path: Path = EVENTS_LOG) -> list[dict]:
     """All events, optionally filtered to one `kind`, in file (= chronological
     append) order. Returns [] if the log does not exist yet -- a fresh
-    version with nothing logged is not an error."""
+    version with nothing logged is not an error.
+
+    DEDUPES BY event_id, keeping the first occurrence: cheap insurance
+    against the same line appearing on both sides of a git merge
+    (.gitattributes's `merge=union` driver on this file, git_sync.py's
+    pull_before_appending) -- a union merge is expected to already avoid
+    this, but this is a one-line guarantee against relying on that alone.
+    An event with no `event_id` (should not happen; every append_event
+    call mints one) is never deduped against anything, including itself,
+    since there's no key to dedupe on."""
     if not log_path.exists():
         return []
     events = []
+    seen_event_ids = set()
     with open(log_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
-            events.append(json.loads(line))
+            event = json.loads(line)
+            event_id = event.get("event_id")
+            if event_id is not None:
+                if event_id in seen_event_ids:
+                    continue
+                seen_event_ids.add(event_id)
+            events.append(event)
     if kind is not None:
         events = [e for e in events if e.get("kind") == kind]
     return events
