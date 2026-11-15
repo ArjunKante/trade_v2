@@ -37,11 +37,14 @@ def events_log(tmp_path, monkeypatch):
                          functools.partial(real_read_events, log_path=log_path))
     monkeypatch.setattr(fibo_morning, "record_session_status",
                          functools.partial(real_record_session_status, log_path=log_path))
-    # assert_watchlist_current's own `log_path` parameter defaults to the
-    # REAL EVENTS_LOG, bound at function-definition time -- a call site
-    # that doesn't pass log_path explicitly (main() doesn't) bypasses the
-    # append_event/read_events monkeypatches above entirely. Rebind the
-    # whole function instead, the same way the other two are rebound.
+    # UPDATE 2026-11-15: assert_watchlist_current's `log_path=None` now
+    # resolves fibo_live.config.EVENTS_LOG fresh at call time rather than
+    # binding it once at import (BUGS.md Bug #24) -- conftest.py's
+    # autouse _redirect_events_log fixture would catch this on its own
+    # now. Kept as an explicit rebind anyway, so this fixture's tmp_path
+    # is shared consistently across append_event/read_events/
+    # record_session_status/assert_watchlist_current within THIS test,
+    # independent of whatever conftest.py does.
     monkeypatch.setattr(fibo_morning, "assert_watchlist_current",
                          functools.partial(real_assert_watchlist_current, log_path=log_path))
     return log_path

@@ -1571,3 +1571,125 @@ uses. Regression-tested: 4 new tests in `tests/test_holiday_week_oct2026.py`
 assertion in `tests/test_fibo_morning_watchlist_freshness.py`. Full
 detail in OPERATIONS.md's "Trading-day logic now refuses loudly on an
 uncovered year" section.
+
+## Bug #24: a test could write to the real events.jsonl -- one draft test actually did
+
+**Mechanism**: 7 functions (`eventlog.append_event`, `eventlog.read_events`,
+`fibo_morning.assert_watchlist_current`, `outcomes.record_outcome`,
+`outcomes.evaluate`, `session_status.already_logged_session_status`,
+`session_status.record_session_status`) all had a
+`log_path: Path = EVENTS_LOG` default -- bound ONCE, at import time, to
+the real `data/fibo_live/v1/events.jsonl`, the same stale-default shape
+`scheduler_support.make_logger` had (fixed 2026-11-15, see that
+function). Because Python binds a default argument once at function
+definition, no later monkeypatch of the imported `EVENTS_LOG` name, or
+of `fibo_morning.append_event`/`read_events` as names, could change what
+`assert_watchlist_current` actually used UNLESS the test also rebound
+`assert_watchlist_current` itself.
+
+**THE NEAR MISS, 2026-11-13/14**: an in-progress draft test for
+`fibo_morning.py`'s holiday-calendar-missing refusal called
+`fibo_morning.main()` after monkeypatching `fibo_morning.append_event`,
+`read_events`, and `record_session_status` to a `functools.partial`
+bound to a tmp_path log -- but not `assert_watchlist_current`, which
+still used its own stale `log_path=EVENTS_LOG` default. Worse: even the
+functions that WERE rebound would not have helped here, because an
+explicit `log_path=` keyword at a call site overrides a
+`functools.partial`'s preset keyword (confirmed empirically) --
+`assert_watchlist_current`'s own call to `read_events(kind=...,
+log_path=log_path)` passed its own (real) `log_path` explicitly, which
+always wins. The result: a fabricated `session_status` event
+(`event_id: "0ac21757-d28d-4c84-8d7e-05fcc148ba3f"`, `trade_date:
+"2027-01-04"`, `status: "REFUSED"`, `run_mode: "REPLAY"`) was appended to
+the REAL `data/fibo_live/v1/events.jsonl`. Caught immediately via `git
+diff` (this project's habitual before/after check around every test
+run), reverted with `git checkout -- data/fibo_live/v1/events.jsonl`,
+confirmed byte-identical to `HEAD` afterward, and re-verified clean
+across every full-suite rerun since.
+
+**Blast radius, both directions**:
+- *What the fabricated event would have affected had it survived to the
+  next real job run*: `sync_events_log_to_git` (git_sync.py) commits and
+  pushes ANY diff in this file unconditionally, on every real morning or
+  evening run -- so the very next scheduled run would have permanently
+  committed and pushed the fabricated line to GitHub, requiring a manual
+  revert commit rather than a quiet local `git checkout`. Separately,
+  `already_logged_session_status`'s dedup key is
+  `(trade_date, session, reason)` -- a genuine evening or morning refusal
+  on 2027-01-04 with the same `reason` text as the fabricated event would
+  have been silently treated as "already logged" and never written,
+  which is exactly the failure this file exists to make impossible
+  (git_sync.py's own module docstring: this file is the sole evidentiary
+  record that a signal was logged before its outcome was known).
+- *Whether any prior test run could have written to the file before this
+  one was caught*: checked the full 45-commit history of
+  `data/fibo_live/v1/events.jsonl` (`git log --follow`) -- every commit
+  message matches either the automated `"Fibo {evening,morning} events
+  -- synced <date>"` pattern from `sync_events_log_to_git`, or one of two
+  known manual interventions (`2026-10-16`'s gap backfill,
+  `2026-10-11`'s initial tracking commit). None is anomalous. Checked the
+  file's current content for any `trade_date`/`target_trade_date`/
+  `as_of_date` in 2027 or later (this project's "has this leaked
+  somewhere" canary, since no real job has run against a 2027+ date as
+  of 2026-11-15) -- zero matches. The one real mix found while building
+  the integrity check below (1,233 lines with a naive `ts`, 2026-10-08
+  through 2026-10-13; 2,567 with an explicit `+05:30` offset,
+  2026-10-13 onward, one day of overlap) is fully explained by
+  `append_event` gaining IST-aware timestamping that day, not by any
+  unaccounted-for write. No prior test-caused write is visible anywhere
+  in the file's committed history.
+
+**Status: fixed, 2026-11-15**, with two independent, deliberately
+overlapping structural layers (neither alone is a complete fix):
+1. All 7 functions above now take `log_path: Path | None = None` and
+   resolve `fibo_live.config.EVENTS_LOG` FRESH, at call time, via a
+   module-qualified `config.EVENTS_LOG` lookup rather than a bound
+   default -- the same fix already proven for `make_logger`'s
+   `SCHEDULER_LOG`. This alone would already have prevented the near
+   miss above, since `assert_watchlist_current` would then have picked
+   up a session-wide redirect automatically.
+2. `tests/conftest.py` (new file -- none existed in this repo before):
+   an autouse `_redirect_events_log` fixture patches
+   `fibo_live.config.EVENTS_LOG` to a fresh `tmp_path` for every single
+   test, with zero per-test monkeypatching required; a session-scoped
+   `_protect_production_files` fixture makes `events.jsonl`,
+   `scheduler.log`, `warehouse.duckdb`, and `fibo_intraday.duckdb`
+   read-only at the OS level for the whole pytest session (confirmed
+   empirically on this Windows dev machine: a chmod-read-only file
+   blocks both a plain `open(path, "a")` and a write-mode
+   `duckdb.connect(path)`, while a `read_only=True` DuckDB connection is
+   unaffected); and `pytest_sessionstart`/`pytest_sessionfinish` hooks
+   hash the real `events.jsonl` before and after the ENTIRE test run,
+   forcing `session.exitstatus = 1` (confirmed empirically that this
+   actually flips the process exit code even when every individual test
+   passed) if the hash ever differs, regardless of which test file ran
+   when.
+
+**Residual, known, not fixed**: `fibo_live.config.RAW_PRICES_DIR` /
+`RAW_INDEX_DIR` are directories, not files -- chmod's read-only attribute
+is not reliably enforced on a Windows/NTFS directory the way it is on a
+file (confirmed empirically the same day: it did not block file creation
+inside a chmod'd directory), so layer 2 above does not cover them.
+Currently protected only by the two tests that reach that code path
+(`test_holiday_week_oct2026.py`, `test_fibo_evening_staleness_ordering.py`)
+explicitly monkeypatching `fibo_evening.RAW_PRICES_DIR` to a `tmp_path` --
+vigilance-based, the exact shape this bug exists to move away from.
+Making that directory level genuinely tamper-proof would need an ACL
+change (`icacls`), not attempted here. `sync_events_log_to_git`'s real
+`git add`/`commit`/`push` subprocess calls (git_sync.py) are a related,
+currently-unreachable risk: both call sites are gated by
+`if __name__ == "__main__":`, which a test importing the module and
+calling `main()` directly never triggers -- flagged here as an adjacent
+risk worth knowing about, not a gap that needed building against, since
+nothing in the current suite can reach it.
+
+**New test coverage**: `tests/test_events_log_integrity.py` -- 4 tests
+checking the real file directly (never through the redirect fixture):
+every line is valid JSON with required fields, all `event_id`s are
+unique, timestamps are monotonic within each single-writer `kind`
+(`notification`/`session_status` excluded, since both jobs legitimately
+write those), and the file has no uncommitted diff against `HEAD`.
+Verified live: full suite run before and after this fix, 692 passed / 1
+failed (the known, untouched `test_monitor_persistence.py`), hash of
+`data/fibo_live/v1/events.jsonl` identical before and after, `git
+status` clean.

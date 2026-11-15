@@ -438,11 +438,12 @@ def test_morning_main_logs_refused_session_status_when_calendar_missing(tmp_path
                          functools.partial(real_read_events, log_path=events_path))
     monkeypatch.setattr(fibo_morning, "record_session_status",
                          functools.partial(real_record_session_status, log_path=events_path))
-    # assert_watchlist_current's own `log_path` parameter defaults to the
-    # real EVENTS_LOG, bound at function-definition time -- monkeypatching
-    # the read_events/append_event NAMES doesn't change that default, and
-    # an explicit log_path at the call site overrides a functools.partial's
-    # preset. Same fixture shape as holiday_week's own, above.
+    # UPDATE 2026-11-15 (BUGS.md Bug #24): assert_watchlist_current's
+    # `log_path=None` now resolves fibo_live.config.EVENTS_LOG fresh at
+    # call time instead of binding it once at import -- conftest.py's
+    # autouse fixture would already redirect this on its own. Kept as an
+    # explicit rebind so this test's events_path stays shared, consistent
+    # with holiday_week's own fixture above, independent of conftest.py.
     monkeypatch.setattr(fibo_morning, "assert_watchlist_current",
                          functools.partial(fibo_morning.assert_watchlist_current, log_path=events_path))
     monkeypatch.setattr(sys, "argv", ["fibo_morning.py", "--date", "2027-01-04"])

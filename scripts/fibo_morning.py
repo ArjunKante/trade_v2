@@ -129,6 +129,7 @@ from fibo.download import looks_rate_limited
 from fibo.price_scale import to_raw_scale
 from fibo.resolution import compute_r, compute_target, position_size_shares, resolve_trade
 
+import fibo_live.config as fibo_live_config
 from fibo_live.clock import detect_run_mode
 from fibo_live.config import EVENTS_LOG
 from fibo_live.eventlog import append_event, read_events
@@ -223,7 +224,7 @@ def previous_trading_day(d: dt.date) -> dt.date:
         return candidate
 
 
-def assert_watchlist_current(trade_date: dt.date, log_path: Path = EVENTS_LOG) -> dict:
+def assert_watchlist_current(trade_date: dt.date, log_path: Path | None = None) -> dict:
     """The events.jsonl-only replacement for the old
     data_layer.staleness.assert_data_current(warehouse) check, now that
     this script never opens the warehouse. Checks the two facts the
@@ -252,8 +253,11 @@ def assert_watchlist_current(trade_date: dt.date, log_path: Path = EVENTS_LOG) -
     as_of_date. Returns the matching event (the most recently logged, by
     `ts`, if more than one correctly targets trade_date) on success.
 
-    `log_path` defaults to the real events.jsonl; overridable for tests
-    the same way outcomes.py's record_outcome/evaluate already are."""
+    `log_path=None` resolves `fibo_live.config.EVENTS_LOG` fresh at call
+    time, not a value bound once at import (2026-11-15, see
+    eventlog.append_event's docstring for why this matters and
+    tests/conftest.py for the fixture that relies on it)."""
+    log_path = log_path if log_path is not None else fibo_live_config.EVENTS_LOG
     runs = [e for e in read_events(kind="watchlist_run", log_path=log_path)
             if e.get("target_trade_date") == str(trade_date)]
     if not runs:

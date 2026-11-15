@@ -36,7 +36,7 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
-from fibo_live.config import EVENTS_LOG
+import fibo_live.config as config
 from fibo_live.eventlog import append_event, read_events
 
 MISSED = "MISSED"
@@ -45,11 +45,15 @@ NON_TRADING_DAY = "NON_TRADING_DAY"
 
 
 def already_logged_session_status(trade_date: dt.date, session: str, reason: str,
-                                   log_path: Path = EVENTS_LOG) -> bool:
+                                   log_path: Path | None = None) -> bool:
     """True iff an identical (trade_date, session, reason) session_status
     event is already logged -- the dedup key a schedule re-hitting the
     SAME refusal every 15 minutes all morning must match on, so it
-    writes the event once, not nine times."""
+    writes the event once, not nine times.
+
+    `log_path=None` resolves `config.EVENTS_LOG` fresh at call time (see
+    eventlog.append_event's docstring, 2026-11-15)."""
+    log_path = log_path if log_path is not None else config.EVENTS_LOG
     key = str(trade_date)
     for e in read_events(kind="session_status", log_path=log_path):
         if e.get("trade_date") == key and e.get("session") == session and e.get("reason") == reason:
@@ -58,15 +62,16 @@ def already_logged_session_status(trade_date: dt.date, session: str, reason: str
 
 
 def record_session_status(trade_date: dt.date, session: str, status: str, reason: str,
-                           run_mode: str | None = None, log_path: Path = EVENTS_LOG) -> dict | None:
+                           run_mode: str | None = None, log_path: Path | None = None) -> dict | None:
     """Appends one session_status event unless an identical one (same
     trade_date/session/reason) is already logged -- returns None in that
     case rather than writing a duplicate row. `reason` should be the
     same human-readable text already being logged to scheduler.log/
     stdout at the call site, reused verbatim so the two records agree.
 
-    `log_path` defaults to the real events.jsonl; overridable for tests
-    the same way outcomes.py's record_outcome/evaluate already are."""
+    `log_path=None` resolves `config.EVENTS_LOG` fresh at call time (see
+    eventlog.append_event's docstring, 2026-11-15)."""
+    log_path = log_path if log_path is not None else config.EVENTS_LOG
     if already_logged_session_status(trade_date, session, reason, log_path=log_path):
         return None
     return append_event("session_status", {

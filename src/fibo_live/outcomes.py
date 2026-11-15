@@ -32,7 +32,8 @@ import datetime as dt
 import math
 from pathlib import Path
 
-from fibo_live.config import EVAL_MIN_TRADES, EVENTS_LOG, SEALED_AMENDED_MEAN_NET_R
+import fibo_live.config as config
+from fibo_live.config import EVAL_MIN_TRADES, SEALED_AMENDED_MEAN_NET_R
 from fibo_live.costs import amended_cost_rs, band_for_rank
 from fibo_live.eventlog import append_event, read_events
 
@@ -47,7 +48,7 @@ def record_outcome(
     *, entity_id: str, symbol: str, trade_date: dt.date, rank: int | None, triggered: bool, run_mode: str,
     entry_ts=None, entry_price: float | None = None, stop: float | None = None, target: float | None = None,
     qty: int | None = None, exit_ts=None, exit_price: float | None = None, exit_reason: str | None = None,
-    corrects: str | None = None, log_path: Path = EVENTS_LOG,
+    corrects: str | None = None, log_path: Path | None = None,
 ) -> dict:
     """Logs one completed-or-not setup outcome. When triggered=True, computes
     gross_r and net_r (Section 8c amended cost model, src/fibo_live/costs.py)
@@ -55,7 +56,12 @@ def record_outcome(
     logged trade's R is computed by exactly one code path. `run_mode` is
     required, not defaulted -- the caller must have already detected it
     once per run (src/fibo_live/clock.detect_run_mode), not leave it to
-    silently fall back to something here."""
+    silently fall back to something here.
+
+    `log_path=None` resolves `config.EVENTS_LOG` fresh at call time, not a
+    value bound once at import (2026-11-15, see eventlog.append_event's
+    docstring)."""
+    log_path = log_path if log_path is not None else config.EVENTS_LOG
     payload = {
         "entity_id": entity_id, "symbol": symbol, "trade_date": trade_date, "rank": rank,
         "triggered": triggered, "run_mode": run_mode,
@@ -94,7 +100,7 @@ def _stats(net_rs: list[float]) -> dict:
     return {"n": n, "mean_net_r": mean, "t_stat": t_stat}
 
 
-def evaluate(log_path: Path = EVENTS_LOG) -> dict:
+def evaluate(log_path: Path | None = None) -> dict:
     """The gate itself. Returns {"n_completed": int, "evaluated": False} if
     fewer than EVAL_MIN_TRADES triggered outcomes exist in total -- the UI
     must show COUNT ONLY in that case, nothing else.
@@ -107,7 +113,11 @@ def evaluate(log_path: Path = EVENTS_LOG) -> dict:
     (the same caveat Section 9i raised about the amended re-test). If the
     two sets differ by more than MATERIAL_DIFF_FRACTION_OF_BASELINE of the
     sealed amended baseline's own mean, `material_difference` is flagged
-    True -- that divergence is itself a finding, not noise to average away."""
+    True -- that divergence is itself a finding, not noise to average away.
+
+    `log_path=None` resolves `config.EVENTS_LOG` fresh at call time (see
+    record_outcome, above, and eventlog.append_event's docstring)."""
+    log_path = log_path if log_path is not None else config.EVENTS_LOG
     outcomes = [o for o in read_events(kind="outcome", log_path=log_path) if o.get("triggered")]
     n = len(outcomes)
     if n < EVAL_MIN_TRADES:
