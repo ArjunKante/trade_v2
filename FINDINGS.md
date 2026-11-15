@@ -129,6 +129,20 @@ Script: `scripts/run_holdout_study1_bug11_check_versioned.py`. Logged to
 `data/holdout_access_log.txt` as a materiality check on the retired
 window, same discipline as the original.
 
+**This range is driven by individual entities, not evenly, and that
+belongs next to the number**: the three entities added to the exclusion
+set since 2026-09-27 move the margin by more than a full point EACH, in
+alternating directions, not as a smooth drift. AASTHA (`INE2FMX01012`,
+jump 2026-09-28) moved it +1.23pts (3.99 -> 5.22). MOLDTKPAC
+(`INE893J01011`, jump 2026-10-09) moved it -1.65pts (5.22 -> 3.57) --
+the single largest swing of the three, and on its own would have taken
+the margin to within 0.57pts of the 3.0 floor had it landed alone
+rather than alongside AASTHA's offsetting move. CONCORDBIO
+(`INE338H01029`, jump 2026-11-04) moved it +0.43pts (3.57 -> 4.00). The
+3.57-5.22 range is two large, nearly-canceling single-name swings, not
+four entities contributing a little each -- the 4.00 headline reads
+steadier than the mechanism producing it actually is.
+
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 
 This is the finding that matters more than the headline pass, and it is the
