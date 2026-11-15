@@ -1805,3 +1805,64 @@ re-verified 5-regime result, with a docstring making explicit that this
 number is expected to move again as the warehouse grows and should be
 re-checked against the script rather than assumed. Full suite: **693
 passed, 0 failed** -- the first fully green run this session.
+
+**UPDATE, same day: the literal-5 fix above was itself the exact
+mistake it warned against, caught before being asked to investigate
+further.** Asserting a hardcoded `5` is just as fragile as the `3` it
+replaced -- guaranteed to go red again the next time any single entity
+anywhere in the warehouse gets newly flagged by the same-ISIN jump
+guard, indistinguishable from a real regression. Rewritten to
+`test_real_pre_holdout_regimes_are_a_well_formed_partition`: asserts
+the mechanical rule's STRUCTURAL invariants (regimes are contiguous,
+non-overlapping, every year is covered by exactly one regime, every
+year's sign matches its regime's sign, adjacent regimes differ in
+sign) rather than a specific count or boundary list -- true regardless
+of how many regimes the current warehouse produces, so it cannot go
+stale the way the last two versions did.
+
+**Full mechanism, proved directly rather than inferred**: built a
+checkpoint trace, re-running the exclusion-and-regime computation at
+each date a new same-ISIN jump entered the exclusion set
+(2026-09-27/28, 10-09/10, 11-04, 11-16). The count did NOT climb
+steadily -- it held at 3 regimes (2022's mean_persistence a stable
++0.0032 to +0.0034) through 2026-10-10, then jumped discretely to 5 the
+moment ONE entity, CONCORDBIO (INE338H01029), had its own same-ISIN
+jump flagged with `jump_date=2026-11-04` (12 days before this
+investigation, confirmed real and gap_days=2 -- a legitimate detection,
+not a bug in the jump guard). Excluding that one entity removes its
+entire multi-year history from the panel and flips 2022's
+mean_persistence to -0.0022 -- crossing zero by under 0.006, entirely
+attributable to this single entity. Nothing about 2022's own trading
+activity changed; a jump discovered in an unrelated entity 12 days ago
+retroactively reclassified a year that ended three years ago. This is
+unambiguously the "window artifact" shape, not "new regimes occurred in
+Sept-Nov 2026": the new regime boundary sits in 2022, not in the recent
+window where the triggering jump was actually detected.
+
+**Where "~5 regimes needed for a credible read" came from -- traced,
+not assumed**: `NEW_RESEARCH_DIRECTION.md` line 385-387 states it as
+"the threshold stated in advance," with no formula, simulation, or
+citation anywhere in that document. It draws an explicit analogy to
+`FINDINGS.md` Section 12's power problem, but Section 12's own numbers
+(a rigorous variance-only power calculation: ~8-72 years needed to
+detect a 0.01-0.03 true IC difference) are about a completely different
+metric (paired rank-IC difference between two factors) and do not
+produce or imply "5" for counting discrete regime transitions anywhere
+in their derivation. The "~5" figure is asserted, not derived, by this
+document's own account of itself.
+
+**Whether the Hypothesis A-actionable rejection stands -- reported, not
+revised**: its SPECIFIC quantitative framing ("3, under the stated ~5
+threshold") was never on solid ground in either direction -- not
+because 3 vs. 5 is bad arithmetic, but because the "~5" comparison
+point has no derivation to be calibrated against, and the regime count
+being compared to it has now been shown to flip on a single entity's
+data-quality flag discovered weeks after the fact, which is not a
+stable basis for a threshold comparison at any threshold value. The
+rejection's broader QUALITATIVE argument -- too few independent
+regime-transition events (2-4, however exactly counted) to learn a
+reliable regime-length or power estimate, the same fundamental problem
+Section 12 demonstrated for a different metric -- does not depend on
+the exact count or the specific "~5" and is on more defensible ground
+on its own terms. Not acted on here; left for a decision, not resolved
+by this entry.
