@@ -1,0 +1,81 @@
+warning: in the working copy of 'C:/Users/ARJUNK~1/AppData/Local/Temp/claude/C--projects-trade-new/9226b9f3-0dbb-437d-8061-7ca8712366b0/scratchpad/PRE_TASK4__PREREGISTRATION_LEAD_LAG_V1.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'C:/projects/trade-new/PREREGISTRATION_LEAD_LAG_V1.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/C:/Users/ARJUNK~1/AppData/Local/Temp/claude/C--projects-trade-new/9226b9f3-0dbb-437d-8061-7ca8712366b0/scratchpad/PRE_TASK4__PREREGISTRATION_LEAD_LAG_V1.md b/C:/projects/trade-new/PREREGISTRATION_LEAD_LAG_V1.md
+index 2e3de86..d544249 100644
+--- a/C:/Users/ARJUNK~1/AppData/Local/Temp/claude/C--projects-trade-new/9226b9f3-0dbb-437d-8061-7ca8712366b0/scratchpad/PRE_TASK4__PREREGISTRATION_LEAD_LAG_V1.md
++++ b/C:/projects/trade-new/PREREGISTRATION_LEAD_LAG_V1.md
+@@ -1660,17 +1660,39 @@ zero days of live collection as of this writing); this caveat is
+ unchanged and not newly introduced by this amendment.
+ 
+ **DECISION 15 STATUS NOTE (2026-11-14, added by a documentation-repair
+-task).** The **20bps number itself** is original, long-standing project
+-convention (unchanged since before this amendment, inherited from
+-`PROJECT_CONTEXT.md`'s 20-30bps round-trip cost figure) and is not in
+-question here. **What remains OPEN -- Decision 15 -- is the exact
+-*interpretation* of the comparison against that number**:
+-`LEAD_LAG_PORTFOLIO_LEVEL_METHODOLOGY_PROPOSAL.md` Section 11, decision
+-item 15, **recommends**, but the user has **not approved**, a specific
+-rule: `beta > 0` required for a pass (not a magnitude-only `|beta|`
+-comparison); negative `beta` is contrary evidence, never flipped; the
+-comparison is labeled an "effect-size hurdle," explicitly **not** a
+-claim that 20bps represents validated trading costs or net profitability.
++task; corrected 2026-11-14, same day, by a second documentation-repair
++task -- see the superseded wording quoted below).** Two separate things
++must not be conflated, and the correction below exists specifically
++because an earlier version of this note risked conflating them:
++
++1. **The bare numeral "20 bps."** This figure is original, long-standing
++   project convention, inherited from `PROJECT_CONTEXT.md`'s 20-30bps
++   round-trip cost figure, and predates every amendment in this document.
++   **This numeral is unchanged by any amendment and is not altered here.**
++2. **Whether, and how, that numeral functions as an approved
++   primary-gate PASS/FAIL success criterion.** This -- not merely the
++   sign-direction question -- is Decision 15, and **Decision 15 is OPEN.
++   The user has not approved any rule for using 20bps as a gate
++   criterion.** `LEAD_LAG_PORTFOLIO_LEVEL_METHODOLOGY_PROPOSAL.md` Section
++   11, decision item 15, **recommends**, but does not itself approve, a
++   specific construction: `beta > 0` required for a pass (not a
++   magnitude-only `|beta|` comparison); negative `beta` is contrary
++   evidence, **never silently flipped or reinterpreted under an
++   unapproved rule**; the comparison labeled an "effect-size hurdle,"
++   explicitly **not** a claim that 20bps represents validated trading
++   costs or net profitability. **This remains a recommendation only.
++   No primary-gate interpretation of Section 20 may treat this
++   recommendation, or any other specific hurdle construction, as settled
++   until the user explicitly approves one.**
++
++*(Superseded wording, preserved for provenance, not deleted -- this
++phrasing is what the correction above exists to clarify)*: "The **20bps
++number itself** is original, long-standing project convention... and is
++**not in question here**." That sentence remains literally true of the
++bare numeral (item 1 above) but is retracted as the note's lead framing
++because, read in isolation, it risks being misread as settling item 2 --
++whether the hurdle itself is an approved gate criterion -- which it does
++not and never did.
+ **This section does not itself state a sign rule** -- it compares "the
+ model-implied effect at `+/-1` observed sigma" against the floor, which
+ is silent on whether a large-magnitude negative `beta` would count as
+@@ -1752,7 +1774,13 @@ user and left OPEN, not resolved by this document or silently decided by
+ whichever interpretation the implementer finds convenient.** This note
+ does not change conditions 0-6, the alpha, the horizon, or any other gate
+ mechanic -- it only flags that one specific interpretive question
+-(Decision 15) is unresolved and must not be treated as settled.
++(Decision 15) is unresolved and must not be treated as settled. **Clarified
++by a second documentation-repair task, 2026-11-14, same day (Section 18's
++note has the full correction)**: the unresolved question is not only the
++sign-direction choice -- it is whether the 20bps "effect-size hurdle"
++construction, as a primary-gate criterion at all, has been approved. It has
++not. Decision 15 remains OPEN in its entirety, not merely on the
++sign-direction detail.
+ 
+ **A PASS here means**: a statistically and economically significant,
+ null-surviving, incrementally-informative liquidity-tiered return
+@@ -1858,7 +1886,7 @@ silently retuned after Phase 4 output exists:
+ | Corporate-action exclusion window | +/-1 trading day | Section 12 (original) |
+ | Prediction horizons | 5, 15, 30, 60 minutes | Section 10 |
+ | Primary horizon | 60 minutes | Section 10, chosen variance-only |
+-| Economic significance floor | 20 bps (stricter of 20-30bps) -- the **number** is frozen, original project convention; the **sign rule / hurdle interpretation** used to compare `beta` against it is Decision 15, **OPEN, not approved** -- see Section 18's status note and Section 20's gate-interpretation note | Section 18 |
++| Economic significance floor | 20 bps (stricter of 20-30bps) -- the bare **numeral** is unchanged, original project convention, inherited from `PROJECT_CONTEXT.md`. **Whether, and how, this numeral functions as an approved primary-gate PASS/FAIL criterion is Decision 15 -- OPEN, not approved** (not merely the sign-direction detail; the entire "effect-size hurdle" construction, including the proposal's recommended `beta>0` rule, remains an unapproved recommendation). **No primary-gate verdict may treat this row as describing a settled success condition.** See Section 18's and Section 20's status notes. *(Corrected 2026-11-14: an earlier version of this row said "the number is frozen," which risked being read as implying the hurdle itself was settled; retracted in favor of this wording.)* | Section 18 |
+ | Significance level | alpha=0.05, two-sided (unaffected by Decision 16 -- this is the unadjusted level, not the multiplicity-corrected one) | Section 15 |
+ | Power target | 0.80 | Section 17 |
+ | Ledger-registered configurations | 6 (`lead_lag/trial_ledger.json`, `ledger.denominator()` -- unchanged by Decision 16; the ledger is deliberately not edited) | Section 15 |
