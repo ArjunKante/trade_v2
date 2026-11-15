@@ -1866,3 +1866,41 @@ Section 12 demonstrated for a different metric -- does not depend on
 the exact count or the specific "~5" and is on more defensible ground
 on its own terms. Not acted on here; left for a decision, not resolved
 by this entry.
+
+**UPDATE, 2026-11-16: reproducibility impact on the one positive result
+in this repository -- checked, margin held.** The same unpinned-exclusion
+problem that moved the regime count also touches `FINDINGS.md` Section
+2's Bug #11 materiality check (margin 3.87 -> 3.64 at 78 excluded) --
+re-running that exact check today would silently apply 82, not 78, with
+no record of which version produced which number. Re-verified directly,
+window held fixed: margin ranges 3.57-5.22 across every exclusion-set
+version that has existed since 2026-09-27, currently 4.00 -- never
+within a point of the 3.0 pass threshold. Full table in `FINDINGS.md`
+Section 2's own update. **Proposed fix (not implemented, per instruction
+-- report and list blast radius only)**: `same_isin_jump_excluded_
+entities()`'s underlying detector (`unexplained_same_isin_jump_entities`,
+`data_layer/same_isin_jump_guard.py`) already accepts a `before: dt.date`
+cutoff, the same point-in-time convention `lineage_jump_guard` and
+`isin_lineage`'s own `as_of` already use elsewhere in this codebase --
+`same_isin_jump_excluded_entities()` itself just never threads it
+through, always calling with no cutoff at all. Fix would be: add
+`as_of: dt.date | None = None` to that one function, and require every
+caller to pass and record the value it used. Blast radius -- every
+consumer, by which function it actually calls:
+- Via the canonical `monitor.persistence.same_isin_jump_excluded_
+  entities()` (would need an explicit `as_of` added): `src/monitor/
+  web.py` (live `/api/monitor` payload), `scripts/
+  run_momentum_basket_snapshot.py` (**the live forward-paper-trading
+  basket freeze -- highest stakes here**: two basket snapshots months
+  apart could already differ in universe for a reason nobody can
+  reconstruct), `run_momentum_persistence_monitor.py`,
+  `run_momentum_persistence_regime_count.py`,
+  `run_holdout_study1_bug11_check.py` (+ the new `_versioned.py`),
+  `run_momentum_backtest_bug11_check.py`, `run_study2_largecap_bug11_
+  check.py`, `run_portfolio_power_calc.py`.
+- Via the lower-level detector directly, own filtering, separate family
+  (swing project, not momentum): `src/fibo/jump_guard.py` (already
+  passes its own `before=`), `scripts/run_swing_phase3_clean_rerun.py`,
+  `run_swing_phase3_decomposition.py`, `run_swing_v1_checks.py`,
+  `run_swing_v1_holdout.py`, `run_swing_v1_regime_check.py`,
+  `run_swing_v1_regime_check2.py`.

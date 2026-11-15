@@ -91,6 +91,37 @@ movement -- the momentum holdout pass does not rest on this
 contamination. Not re-run further; the six other scripts sharing this
 same gap (BUGS.md Bug #11's update) remain recorded, not fixed.
 
+**UPDATE, 2026-11-16: reproducibility check, same holdout window, newer
+exclusion-set versions -- margin never approached 3.0.** BUGS.md Bug
+#24's follow-up found that `monitor.persistence.same_isin_jump_excluded_
+entities()` reads the full warehouse at call time with no point-in-time
+cutoff, so the exclusion set this check applied (78 entities, 2026-09-27)
+is not the same set a re-run would apply today (82, 2026-11-16) -- a
+reproducibility question the original check could not have anticipated.
+Re-ran the identical holdout window (the original 5 rebalances, through
+2026-04-22 -- held fixed deliberately, since `read_full_entity_panel_
+authorized` has no upper date bound and a plain re-run would also pull
+in a 6th rebalance that did not exist in 2026-09-27's evaluation, a
+second, unrelated variable) at each exclusion-set version that has
+existed since:
+
+| version | excluded | margin |
+|---|---|---|
+| ORIGINAL (published, 0 excluded) | 0 | 3.87 |
+| PUBLISHED (2026-09-27) | 78 | 3.64 |
+| build-time reconstruction | 79* | 3.99 |
+| +1 day | 80 | 5.22 |
+| mid-Oct | 81 | 3.57 |
+| current (2026-11-16) | 82 | 4.00 |
+
+*Reconstructed by filtering today's flagged-jump table on `jump_date <=
+checkpoint` -- no snapshot of the exact original 78 was ever saved, off
+by one entity, immaterial to the conclusion. The margin ranged 3.57-5.22
+across every version checked, never within a point of the 3.0 threshold.
+Script: `scripts/run_holdout_study1_bug11_check_versioned.py`. Logged to
+`data/holdout_access_log.txt` as a materiality check on the retired
+window, same discipline as the original.
+
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 
 This is the finding that matters more than the headline pass, and it is the

@@ -844,3 +844,55 @@ three reasons:
 **No new hypothesis is being started.** The next milestone for this
 project is Monday 2026-10-26's first in-window scheduled Fibo run, not a
 new candidate study.
+
+## Status update, 2026-11-16: Hypothesis A-actionable's rejection restated on derived grounds -- stands, not wrong
+
+The rejection above (Phase 5/7/9: "only 3 mechanical regimes... under
+the ~5 needed for a credible read, fixed as the threshold before this
+was computed") rested on a threshold that turned out to be asserted,
+not derived -- traced back through this document and found nowhere
+with a formula, simulation, or citation (BUGS.md Bug #24's follow-up,
+2026-11-16). Separately, the regime COUNT being compared to that
+threshold moved from 3 to 5 between 2026-09-27 and 2026-11-16 with no
+code change anywhere in the pipeline, proved directly to be caused by
+excluding ONE entity (CONCORDBIO) whose own same-ISIN jump was flagged
+on 2026-11-04 -- 38 days after this document's "3 regimes" figure was
+written. That exclusion retroactively flipped 2022's already-three-
+years-settled classification by crossing zero at a margin under 0.006.
+
+**This does not weaken the rejection. It replaces its justification with
+a stronger one, derived rather than asserted**: a regime-classification
+statistic that flips sign on a single entity's data-quality flag,
+discovered years after the period it reclassifies, cannot be read as a
+stable count at all -- not "3 is under some debatable bar of 5," but
+"the number itself is not a fixed quantity to compare against any bar."
+A-actionable's SAMPLE problem (Phase 5) is therefore not weaker than
+originally stated; it is worse, and for a cleaner reason: there is no
+sample size at which this would stop being true, since the instability
+is in the exclusion input, not merely in having too few historical
+transitions. The LAG problem (Phase 5) is unaffected by any of this.
+
+**Record this as the rejection standing on different ground, not as the
+original rejection having been wrong.** A-actionable remains not
+recommended. Nothing else in Phase 5/7/9's text is edited -- this
+section is appended, per this document's own existing convention
+(see the 2026-09-27 and 2026-10-24 updates above), not a rewrite of what
+was concluded at the time with the information then available.
+
+A second, related pattern was found auditing this document for this
+update (BUGS.md Bug #24's follow-up, same date): `FINDINGS.md` Section
+12's real, derived power-analysis figure (8-72 years, computed for one
+specific comparison -- the momentum+earnings_yield combination's paired
+rank-IC difference) is reused by analogy, without re-derivation, for
+Hypothesis B (Phase 7's table), Hypothesis C (Phase 7's table, "same
+constraint as B, for the same reason"), and then generalized further to
+cover "any of the momentum-modification hypotheses this document
+proposes" (Phase 11 #2) and "a comparable incremental claim" generally
+(Phase 11 #3). Each reuse may well turn out to be directionally right --
+testing an incremental modification of an already-working strategy is
+plausibly bounded the same way regardless of which modification -- but
+none of the three reuses has its OWN measured variance-of-difference
+behind it the way Section 12's original number does. Not corrected here;
+flagged so a future return-level attempt on B or C does not cite "8-72
+years" as if it were calibrated to B or C specifically, rather than
+borrowed from a different comparison by analogy.
