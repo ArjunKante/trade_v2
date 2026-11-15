@@ -8,16 +8,24 @@ name: Test suite
 # contents: read` below narrows further. This workflow cannot reach
 # fibo_morning.yml's dispatch path and has nothing that would let it try.
 #
-# Expect 648 passed / 45 skipped on a fresh checkout. This repo's data/
-# is gitignored except a handful of small, explicitly committed
-# exception files (.gitignore) -- a GitHub-hosted runner never has
-# data/warehouse.duckdb, data/fibo_intraday.duckdb, or the real
-# multi-year data/raw/nse_cm_holidays.pkl. The 45 skips are tests that
-# need one of those and say so explicitly (pytest.skip), rather than
-# failing outright -- confirmed by temporarily hiding all real local
-# data and running the full suite (2026-11-15/16, BUGS.md Bug #24),
-# which is also what found and fixed the one file that used to fail
-# ungated instead of skipping (tests/test_lead_lag_calendar.py).
+# Expect roughly 647-648 passed / 45-46 skipped on a fresh checkout
+# (693 total either way) -- the exact split moved by one between this
+# repo's own Windows dev machine (648/45, found by temporarily hiding
+# all real local data, 2026-11-15/16, BUGS.md Bug #24) and this
+# workflow's first real Linux run (647/46, confirmed live 2026-11-15);
+# not yet root-caused which single test lands differently, but neither
+# number is a failure. This repo's data/ is gitignored except a handful
+# of small, explicitly committed exception files (.gitignore) -- a
+# GitHub-hosted runner never has data/warehouse.duckdb,
+# data/fibo_intraday.duckdb, or the real multi-year
+# data/raw/nse_cm_holidays.pkl. The ~45 skips are tests that need one of
+# those and say so explicitly (pytest.skip), rather than failing
+# outright -- the same hiding-the-data check is also what found and
+# fixed the one file that used to fail ungated instead of skipping
+# (tests/test_lead_lag_calendar.py), and this workflow's own first run
+# is what found and fixed a Python-3.11-only SyntaxError in
+# src/lead_lag/inference.py (BUGS.md Bug #25) that this repo's own 3.13
+# dev machine could never have caught.
 on:
   push:
 
