@@ -70,16 +70,18 @@ convincing and were not.
 | Thing | Status |
 |---|---|
 | Momentum basket | Recorded 2026-10-26, 147 holdings, check-in ~2027-01-27 (calendar-uncertain, 2027 holiday master not loaded) |
-| Fibo forward test | Running. Morning job on GitHub Actions, triggered by cron-job.org, monitored by healthchecks.io. Evening job on the laptop at 18:30, manual if missed. |
-| Options depth collector | Scheduled on the laptop, 10:30/12:30/14:30 |
+| Fibo forward test | Running. Morning job on GitHub Actions, triggered by cron-job.org, monitored by healthchecks.io. Evening job on the laptop at 20:00 (moved from 18:30, 2026-11-15), also monitored by healthchecks.io (dead-man's switch), manual if missed. |
+| Options depth collector | Scheduled on the laptop, 10:30/12:30/14:30, monitored by healthchecks.io (dead-man's switch, added 2026-11-15) |
 | Spread estimator validation | Specified, 24 names selected, awaiting market-hours collection |
 | Historical holdout | **RETIRED.** No sealed window remains for any equity study except IPO listing's unread 199 trades. |
 | Liquidity family | **CLOSED, 2026-11-07.** 4 DEV failures, 2 Phase 1 abandonments, 1 withdrawn measurement. No Study G. See `LIQUIDITY_FAMILY_CLOSED.md`, §10. |
 
 ### Known operational constraints
 
-- Evening job requires the laptop on and logged in at 18:30. Running it late is
-  fine and actually safer for bhavcopy availability.
+- Evening job requires the laptop on and logged in at 20:00 (moved from 18:30,
+  2026-11-15 -- safer for bhavcopy availability and more likely to find the
+  laptop on; OPERATIONS.md's "Evening job dead-man's switch" section). Running
+  it later still is fine.
 - Angel One: ~3 requests/second on candles, undocumented daily quota, 50
   instruments per quote call (error AB4029 above that).
 - Long unattended runs get killed by the environment frequently. Everything

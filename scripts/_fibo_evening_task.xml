@@ -21,7 +21,7 @@
   </Settings>
   <Triggers>
     <CalendarTrigger>
-      <StartBoundary>2026-10-13T18:30:00</StartBoundary>
+      <StartBoundary>2026-11-16T20:00:00</StartBoundary>
       <Enabled>true</Enabled>
       <ScheduleByWeek>
         <DaysOfWeek>

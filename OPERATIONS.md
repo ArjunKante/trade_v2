@@ -1540,3 +1540,235 @@ confidently. Three instances on 2026-11-07: a document described as handed
 over that had never reached the machine, a numbered findings ledger
 referenced before it existed in the repo, and Liquidity E/F Bonferroni
 figures asserted as settled that exist only in chat.
+
+## Evening job dead-man's switch (healthchecks.io), added 2026-11-15
+
+**Same defect shape as the morning job's own heartbeat (above), found one
+layer up, in the place the original fix never reached -- `PROJECT_CONTEXT.md`
+Section 7 finding #4 ("fixed where noticed, not everywhere the pattern
+recurs").** A 2026-11-15 health check of the forward test found the
+evening job (`scripts/fibo_evening.py`, Windows Task Scheduler, 18:30
+IST on the laptop) had produced no watchlist for 7 straight trading days
+(2026-11-06 through 2026-11-13). Of the 10 failure-days found in that
+check, 3 (2026-10-29, 2026-11-11, 2026-11-12) have **zero** entries in
+`data/fibo_live/scheduler.log` -- Task Scheduler never launched
+`python.exe` at all. No exception handler, log line, or email-on-error
+inside the script could ever have detected those three days, because the
+process never started to run any of that code. This is caught not by
+recording it here as a flag -- that alone would just repeat the mistake
+finding #15 names ("a flag recorded in a per-study document is not a
+correction") -- but by escalating it to a monitored, independent check.
+
+**Mechanism**: `src/fibo_live/heartbeat.py`'s `ping_evening_heartbeat`
+does a GET to a healthchecks.io ping URL
+(`FIBO_EVENING_HEALTHCHECK_URL` in `.env`, never committed). Called as
+the **LAST statement** of `fibo_evening.py`'s `main()` -- only on the two
+outcomes that represent a fully successful run (the normal
+watchlist-computed path, and the recognized idempotent-skip path) --
+never from the `run_unattended` wrapper, never at the top of `main()`,
+and never on a stale-data refusal, a no-data skip, or an unhandled
+exception. This is the mirror image of the morning job's own heartbeat,
+deliberately: the morning job pings FIRST, 4x/day, to answer "did a run
+happen at all" regardless of outcome; the evening job runs once/weekday
+and is expected to fully succeed every time, so its ping answers "did it
+reach the end" -- any failure between the start of `main()` and that
+last line, including Task Scheduler never starting the process, leaves
+the check overdue.
+
+**Check configuration** (healthchecks.io project `trade_v2`, check name
+"Fibo evening job"): cron schedule `30 18 * * 1-5`, timezone
+`Asia/Kolkata`, grace time 1 hour (alerts by ~19:30 IST if no ping
+arrived), email notification to the account owner.
+
+**Verified live, 2026-11-15, by test not by reasoning**:
+- A real successful ping was sent from this laptop and confirmed on the
+  healthchecks.io dashboard ("Status: new -> up").
+- Two new integration tests
+  (`tests/test_fibo_evening_heartbeat_wiring.py`) reproduce the two
+  failure shapes actually observed live -- a `GitPullError` from
+  `pull_before_appending` (the 2026-11-06 through 2026-11-13 failures)
+  and a locked-`warehouse.duckdb` `OSError` (2026-10-27, 2026-11-03) --
+  run through the real `run_unattended` wrapper, and assert
+  `requests.get` is never called in either case (monkeypatched to raise
+  if it is). Both pass.
+- Four unit tests (`tests/test_fibo_evening_heartbeat.py`) cover
+  `ping_evening_heartbeat` itself: missing env var, successful ping,
+  non-2xx response, and a network exception -- all fail-soft, never raise.
+- The alert path itself was verified end-to-end, not assumed: an
+  explicit failure signal (`GET .../fail`) was sent to the real check,
+  the dashboard recorded "Status: up -> down", and a "DOWN | Fibo evening
+  job" email was confirmed delivered to the account's inbox at the same
+  timestamp. The check was then restored to "up" with a normal success
+  ping before this entry was written, so Monday 2026-11-16's real
+  18:30 run starts from a clean state.
+- Two pre-existing tests (`tests/test_fibo_evening_staleness_ordering.py`)
+  were found, while adding this, to never have mocked
+  `backfill_index_range` -- they were making a real network call to NSE's
+  index archive on every run, which produced a native access-violation
+  crash live during this change. Unrelated to the heartbeat; fixed in the
+  same commit as adjacent staleness found while executing this work (see
+  "STANDING RULE: adjacent staleness" above), and flagged here rather
+  than silently folded in.
+
+**What this does not catch**: a run that starts, reaches the ping, and
+still produced wrong output -- same stated limitation as the morning
+job's own heartbeat. It also does not catch a healthchecks.io outage or
+an email-delivery failure on the alerting side; that residual is the same
+one the morning job's external-pinger design already accepts (see
+"External pinger" above) and is not re-solved here.
+
+**Grep for the same shape elsewhere, per finding #9 (blast radius in both
+directions) and finding #4 -- fixed in the same pass, not recorded as a
+future candidate** (that would have repeated finding #15's exact
+mistake). See "Options-depth collector dead-man's switch" below for the
+fix. The grep itself, run against this machine's actual live
+`Get-ScheduledTask` list (not just the `*_task.xml` files committed to
+this repo, which can go stale) and this repo's GitHub Actions workflows:
+
+| job | recurring? | verdict |
+|---|---|---|
+| `FiboEvening` | yes, weekdays | covered (above) |
+| `TradeNew_OptionsDepth` | yes, weekdays 10:30/12:30/14:30 | **fixed below** |
+| `TradeNew_BoxTheoryDevRun` | **no** -- one-shot `MSFT_TaskTimeTrigger`, already fired once (2026-10-17), no `NextRunTime` | out of scope -- not a recurring job, box theory is closed (`PROJECT_CONTEXT.md` Section 5) |
+| `TradeNew_OptionsDepthTest` | **no** -- one-shot, already fired once (2026-10-12, killed mid-run per its own `LastTaskResult`), no `NextRunTime` | out of scope -- `test_options_depth.py` is explicitly a one-off manual probe, not a build artifact |
+| `nse-pit-bhavcopy-probe` | yes, daily | out of scope -- runs `C:\projects\trade-info\ops\poll_bhavcopy.py`, a **different project's repo**, not this one |
+| `fibo_morning.yml` (GitHub Actions) | yes, 4x/day via cron-job.org | already covered, before this session (healthchecks.io heartbeat, "External pinger" above) |
+| `probe_github_actions.yml` (GitHub Actions) | **no** -- `workflow_dispatch` only, no `schedule:` | out of scope -- manual-trigger probe, nobody expects it to fire unattended |
+
+No other recurring, in-scope scheduled job with this gap exists as of
+2026-11-15.
+
+## Evening job moved to 20:00 IST (from 18:30), 2026-11-15
+
+**Rationale**: the dead-man's switch above does not ping on a stale-data
+refusal (by design -- a refusal is a real problem, not a success). That
+means a late NSE bhavcopy can, in principle, produce a DOWN alert on top
+of `notify_evening_skipped`'s own email -- and a dead-man's switch that
+cries wolf stops being read. `PROJECT_CONTEXT.md`'s own operational
+constraints already noted "running it late is fine and actually safer
+for bhavcopy availability" before this change. 20:00 also overlaps more
+of the window this laptop is typically on than 18:30 does.
+
+**The historical rate was checked, not assumed, and does not support the
+premise as stated.** `fetch_log` has exactly 14 same-calendar-day NSE
+bhavcopy fetch attempts for the evening job's own trade dates
+(2026-10-08 through 2026-11-05 -- the entire history available; there is
+no larger or independent sample, since the main warehouse's historical
+bhavcopy load was a one-time bulk backfill, not a daily same-day fetch).
+Of those 14:
+
+| trade_date | attempted_at (IST) | status | why |
+|---|---|---|---|
+| 2026-10-11 | 18:33 | no_data | **Sunday** -- not a trading day, a weekend catch-up misfire, not a late bhavcopy |
+| 2026-10-20 | 19:53 | no_data | **confirmed NSE holiday** -- same, not a late bhavcopy |
+| 2026-10-27 | 16:04 | error | DuckDB lock conflict (see "DuckDB lock" section) -- unrelated to bhavcopy timing |
+| remaining 11 | 18:30-22:44 | ok | — |
+
+**Zero of the 11 genuine-trading-day attempts found NSE's bhavcopy
+unavailable**, at attempt times ranging from 18:30 to 22:44 (several
+already well past 20:00, all still succeeded). The two real
+`notify_evening_skipped` emails this forward test has ever sent
+(2026-10-09 "missing bhavcopy", 2026-10-11 "stale data") are not
+late-bhavcopy cases either: 2026-10-09's was Bug #15 (a fetch attempted
+at 00:23, hours before that day's market even opened, wrongly cached as
+a confirmed holiday -- fixed 2026-10-11, cannot recur) and 2026-10-11's
+is the same Sunday misfire as the row above.
+
+**A second reason the feared scenario is rarer than it looks**: an
+ordinary single evening's late bhavcopy does not reach `StaleDataError`
+at all under the current code. `main()`'s backward-walk silently falls
+back to the prior trading day's already-loaded data, which collapses
+`target_trade_date` to a day that the PRIOR evening's run already
+computed a watchlist for -- so `already_has_watchlist_run` recognizes it
+as the idempotent-skip case (which pings the heartbeat as healthy, not a
+refusal) rather than an error. `assert_data_current`'s `StaleDataError`
+only fires past a 3-calendar-day gap (`DEFAULT_MAX_STALENESS_DAYS`) --
+i.e. roughly two consecutive missed days, which has not yet occurred in
+this forward test's history.
+
+**Conclusion, stated against the ~5% concern threshold**: the measured
+same-day failure rate at whatever time the job actually ran (18:30-22:44
+in the available sample) is 0/11 genuine trading days, not ~11%, and the
+mechanism that would have to fail for a refusal to fire at all (two
+consecutive late bhavcopy days) has never been observed. This does not
+mean the 18:30-specific risk is zero going forward -- 11 attempts is a
+thin sample, concentrated in October-November 2026, and says nothing
+about NSE's behavior on circuit-breaker or settlement-complication days
+that have not yet occurred in this window. The move to 20:00 is made
+anyway, because the stated rationale (bhavcopy availability, laptop
+uptime) holds independent of this rate, but it should be read as a
+precaution against a risk that has not materialized yet, not a fix to an
+observed ~11% failure rate -- that figure does not reproduce from this
+project's own `fetch_log`.
+
+**Confirmed unaffected by this change**: `notify_evening_skipped` (the
+email sent on a genuine `StaleDataError` or empty-warehouse refusal,
+`fibo_evening.py`) is independent of both the heartbeat and the schedule
+time -- still called in both refusal branches, unchanged.
+
+**Changed**: healthchecks.io "Fibo evening job" check's cron schedule
+(`30 18 * * 1-5` -> `0 20 * * 1-5`, same timezone `Asia/Kolkata`, same 1
+hour grace); the live `FiboEvening` Windows Task Scheduler trigger
+(`Set-ScheduledTask`, confirmed via `Get-ScheduledTask` --
+`StartBoundary` now `20:00:00`, `DaysOfWeek` and all other settings/
+action/principal unchanged); `scripts/_fibo_evening_task.xml` (the
+committed reference export, re-synced from the live task via `schtasks
+/query /xml` so it stays reproducible); `PROJECT_CONTEXT.md` Section 2's
+two 18:30 references. The "Evening job dead-man's switch" section above
+is left describing 18:30 because that is what was actually true and
+verified at the time it was written (2026-11-15, before this move) --
+not edited, per this project's own discipline against rewriting a
+record after the fact; this section is the amendment.
+
+## Options-depth collector dead-man's switch (healthchecks.io), added 2026-11-15
+
+**Fixed in the same pass the gap was found** (see the table above) --
+`src/options_depth/heartbeat.py`, a DUPLICATE of `src/fibo_live/
+heartbeat.py` (not a cross-package import -- see that module's docstring
+and `options_depth/__init__.py`'s own "nothing in those packages is
+imported or modified here" rule; `options_depth/scheduler_support.py`
+already set this precedent for this exact package).
+
+**Shape, deliberately different from the evening job's**: this collector
+runs 3x/trading day on fixed Task Scheduler triggers (10:30/12:30/14:30
+IST) regardless of NSE's holiday calendar. Pinging only on a fully
+successful snapshot would alert on every single market holiday -- the
+precise "crying wolf" mistake the evening job's 18:30->20:00 move (above)
+was made to avoid. The ping therefore fires on **both** outcomes that
+represent correct, intended behavior: a recorded snapshot, and
+`check_market_hours()` correctly refusing to run (weekend, holiday,
+outside session) -- never on a login failure, a spot-fetch failure, a
+stale-session detection, zero resolved contracts, or zero rows fetched
+across every chunk, all genuine problems that must surface.
+
+**Check configuration** (healthchecks.io project `trade_v2`, check name
+"Options depth collector"): cron schedule `30 10,12,14 * * 1-5` (one cron
+expression, comma-separated hours, matching all three trigger times
+exactly), timezone `Asia/Kolkata`, grace time 30 minutes (tighter than
+the evening job's 1 hour -- pings are only 2 hours apart at this cadence,
+and each run completes in well under a minute), email notification to
+the account owner.
+
+**Verified live, 2026-11-15, by test not by reasoning**, same method as
+the evening job:
+- 4 unit tests (`tests/test_options_depth_heartbeat.py`): missing env
+  var, successful ping, non-2xx response, network exception.
+- 4 integration tests (`tests/test_options_depth_heartbeat_wiring.py`),
+  run through the real `main()`: a non-trading-window refusal pings
+  (proving the holiday case above is actually handled), a login failure
+  and a spot-fetch failure both leave `requests.get` uncalled
+  (monkeypatched to raise if it is), and a full successful run (fake
+  spot + one fake contract + one fake chunk) pings.
+- A real successful ping was sent from this laptop and confirmed on the
+  healthchecks.io dashboard ("Status: new -> up").
+- An explicit failure signal (`GET .../fail`) was sent to the real check;
+  the dashboard recorded "Status: up -> down", and a "DOWN | Options
+  depth collector" email was confirmed delivered to the account's inbox
+  at 20:09, the same timestamp. Restored to "up" with a normal success
+  ping immediately after.
+- Full `fibo`/`options_depth` test selection: 185 passed, 0 failed.
+
+**What this does not catch**: same stated limitation as both other
+heartbeats in this file -- a run that starts, reaches the ping, and still
+recorded wrong data; a healthchecks.io outage; an email-delivery failure.
+

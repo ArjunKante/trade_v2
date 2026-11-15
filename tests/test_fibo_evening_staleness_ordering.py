@@ -110,6 +110,9 @@ def isolated_evening_job(tmp_path, monkeypatch):
     monkeypatch.setattr(fibo_evening, "already_notified", lambda *a, **k: False)
     monkeypatch.setattr(fibo_evening, "record_notification", lambda *a, **k: None)
     monkeypatch.setattr(fibo_evening, "send_email", lambda *a, **k: True)
+    # Never a real network call in a test -- see test_fibo_evening_heartbeat.py
+    # for ping_evening_heartbeat's own coverage.
+    monkeypatch.setattr(fibo_evening, "ping_evening_heartbeat", lambda *a, **k: True)
 
     monkeypatch.setattr(sys, "argv", ["fibo_evening.py", "--date", TUESDAY.isoformat()])
 

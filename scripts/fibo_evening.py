@@ -15,7 +15,7 @@ top-200 universe amendment):
      This is what makes a manual run on a weekend or a holiday -- when
      "today" has no bhavcopy at all -- still find the latest real trading
      day's close instead of exiting with nothing to do (the scheduled
-     Monday 18:30 run was never affected: it always finds data for its
+     Monday 20:00 run was never affected: it always finds data for its
      own calendar day on the first try). The watchlist is then computed
      for the NEXT trading day after whatever day that data turns out to
      be, not for "today" or "--date" literally.
@@ -46,6 +46,13 @@ staleness guard below and load_bhavcopy_to_duckdb's own existing-row skip.
 After every run, the events log is committed and pushed (src/fibo_live/
 git_sync.py), best-effort, never blocking the job on a failed push
 (OPERATIONS.md).
+
+DEAD-MAN'S SWITCH (added 2026-11-15, OPERATIONS.md, PROJECT_CONTEXT.md
+Section 7 findings #4/#15): fibo_live/heartbeat.py pings healthchecks.io
+as the LAST statement of a fully successful run (normal compute path or
+the recognized idempotent-skip path) -- never from run_unattended, never
+at the start. This is what catches the one failure mode nothing else in
+this file can: Task Scheduler never launching python.exe at all.
 """
 import argparse
 import datetime as dt
@@ -68,6 +75,7 @@ from fibo_live.clock import detect_run_mode
 from fibo_live.config import EVENTS_LOG, RAW_INDEX_DIR, RAW_PRICES_DIR, TOP_N, WAREHOUSE_DB
 from fibo_live.eventlog import append_event, read_events
 from fibo_live.git_sync import pull_before_appending, sync_events_log_to_git
+from fibo_live.heartbeat import ping_evening_heartbeat
 from fibo_live.notify import already_notified, record_notification, send_email
 from fibo_live.scheduler_support import make_logger, run_unattended
 from fibo_live.watchlist import build_watchlist
@@ -403,6 +411,10 @@ def main() -> None:
         log(f"watchlist_run already logged targeting {target_trade_date} -- skipping (idempotent). "
             f"Nothing else to do.")
         con.close()
+        # Heartbeat fires here too: the job ran its full course and correctly
+        # recognized nothing new was needed -- a legitimate success outcome,
+        # not a refusal. See fibo_live/heartbeat.py's module docstring.
+        ping_evening_heartbeat(log)
         return
 
     # Checked AFTER fetching, not before: this is what protects the
@@ -450,6 +462,18 @@ def main() -> None:
         log(qualifying.to_string(index=False))
 
     notify_watchlist_digest(target_trade_date, watchlist)
+
+    # LAST statement of a fully successful run, deliberately -- see
+    # fibo_live/heartbeat.py's module docstring and OPERATIONS.md's
+    # "Evening job dead-man's switch" section. Never called from
+    # run_unattended() or at the top of main(): a git-sync failure, a
+    # DuckDB lock, a stale-data refusal, or any unhandled exception above
+    # this line all mean the process never reaches here, so the
+    # healthchecks.io check goes overdue and alerts -- including the one
+    # failure mode (Task Scheduler never launching python.exe at all)
+    # that no log line or exception handler inside this process could
+    # ever have seen.
+    ping_evening_heartbeat(log)
 
 
 if __name__ == "__main__":

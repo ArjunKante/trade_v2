@@ -36,6 +36,13 @@ own clean early return (logged, not raised) -- never an error, never a
 non-zero exit, never a reason Task Scheduler would flag this run as
 failed.
 
+DEAD-MAN'S SWITCH (added 2026-11-15, OPERATIONS.md, PROJECT_CONTEXT.md
+Section 7 findings #4/#9/#15): options_depth/heartbeat.py pings
+healthchecks.io as the LAST statement of a run that recorded rows, and
+also on a correctly-recognized non-trading-window refusal (expected
+behavior, not a failure) -- never on a login/spot/stale-session/
+zero-contracts/zero-rows failure, and never from run_unattended.
+
 Usage: python scripts/snapshot_options_depth.py
 """
 from __future__ import annotations
@@ -50,6 +57,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from fibo.auth import login
 from options_depth.contracts import NIFTY_50_INDEX_TOKEN, contracts_for_snapshot
+from options_depth.heartbeat import ping_options_depth_heartbeat
 from options_depth.quotes import exch_feed_date, parse_full_depth_row
 from options_depth.scheduler_support import make_logger, run_unattended
 from options_depth.writer import append_rows
@@ -71,6 +79,11 @@ def main() -> None:
         log(f"REFUSING TO RUN: {reason}. A snapshot taken when the market "
             f"is shut (or in the first/last 15 minutes) is not recorded. "
             f"Nothing else to do.")
+        # Heartbeat fires here too: Task Scheduler's triggers fire every
+        # weekday regardless of NSE's holiday calendar, so a correctly-
+        # recognized non-trading window is expected, correct behavior, not
+        # a failure -- see heartbeat.py's module docstring.
+        ping_options_depth_heartbeat(log)
         return
 
     result = login()
@@ -146,6 +159,13 @@ def main() -> None:
 
     append_rows(rows)
     log(f"Recorded {len(rows)} of {len(contracts)} contract(s) at {timestamp_ist} IST.")
+
+    # LAST statement of a fully successful run, deliberately -- see
+    # heartbeat.py's module docstring. Never reached by a login failure, a
+    # spot-fetch failure, a stale-session detection, zero resolved
+    # contracts, or zero rows fetched -- all genuine problems that must
+    # leave the healthchecks.io check overdue, not silently "succeed."
+    ping_options_depth_heartbeat(log)
 
 
 if __name__ == "__main__":
