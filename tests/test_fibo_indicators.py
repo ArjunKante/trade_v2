@@ -318,6 +318,30 @@ def test_swing_empty_when_no_down_fractal_precedes_the_high():
     assert result.empty
 
 
+def test_swing_empty_when_no_up_fractal_exists_at_all():
+    """The OTHER way has_swing can be False (fibo_live/watchlist.py's
+    `has_swing = swing is not None`) -- not merely "no down-fractal
+    precedes the high" (tested above) but no SWING HIGH at all. A
+    strictly monotonically rising series never has an interior point
+    exceeding every later point, so up_fractal is never True anywhere --
+    swing_high_idx stays None and the function must return an empty
+    result for this entity, not a NaN row. Added 2026-11-15 after a
+    health check found has_swing had never once been False across 3,600
+    live watchlist rows and asked whether the filter can actually fail
+    or is silently stuck returning True -- this proves the function
+    itself can fail on both code paths; see FIBO_FINDINGS.md for why it
+    apparently never has, live, for this specific universe."""
+    n = 30
+    highs = [100.0 + i for i in range(n)]  # strictly increasing -- no interior point is a local max
+    lows = [h - 2.0 for h in highs]
+    closes = [h - 1.0 for h in highs]
+    df = _ohlc("E1", highs, lows, closes)
+    frac = fractals(df)
+    assert not frac["up_fractal"].any(), "construction must produce zero up-fractals, or this test proves nothing"
+    result = most_recent_confirmed_swing(df, as_of_date=df["trade_date"].iloc[-1])
+    assert result.empty
+
+
 def test_golden_zone_arithmetic():
     zone_low, zone_high = golden_zone(swing_low_price=100.0, swing_high_price=200.0)
     # range = 100; 61.8% retracement = 200 - 61.8 = 138.2; 50% retracement = 150.0

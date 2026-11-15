@@ -1911,3 +1911,45 @@ upgraded to exercise the real retry-then-exhaust path (previously a bare
 `OSError`, now a real `duckdb.IOException` through the actual retry
 function) and still proves the heartbeat is never reached.
 
+## Test output was polluting the real scheduler.log -- fixed 2026-11-15
+
+**Found live, during the 2026-11-15 health check**: `data/fibo_live/
+scheduler.log` mixed SYM1..SYM16 fixture noise, a `RuntimeError:
+simulated network-down failure`, and fake "Angel One login FAILED" lines
+into the same file read during that incident review, briefly costing
+audit time while each was checked and ruled out as test noise rather than
+a real production event.
+
+**Root cause**: `src/fibo_live/scheduler_support.py`'s `make_logger()`
+defaulted to the real `SCHEDULER_LOG` path, bound once at THIS MODULE'S
+OWN import time. `scripts/fibo_morning.py`/`fibo_evening.py` both call
+`log = make_logger()` with no argument at their own module level --
+`tests/test_fibo_morning_idempotency.py` (the SYM1..SYM16 fixture file)
+correctly monkeypatches `append_event`/`read_events` to a tmp_path, but
+never `log`, so every `log()` call reached during those tests wrote
+straight into the real file.
+
+**Fix, and a wrong first attempt corrected before it shipped**: the
+default now resolves lazily, inside `make_logger()`, at call time. The
+first version keyed this on `PYTEST_CURRENT_TEST` -- proven wrong live,
+immediately, by running the exact test that caused the original
+pollution and watching the real log grow by 29 lines anyway: that env var
+is only set once pytest starts RUNNING an individual test, which is
+AFTER every test module (including the one whose import already executed
+`log = make_logger()`) has been imported during collection. Replaced
+with `"pytest" in sys.modules`, true from pytest's own process startup,
+before collection -- re-ran the same test, the real log did not move (a
+before/after `wc -l` comparison, not just a passing test). Duplicated
+into `src/options_depth/scheduler_support.py` (same package-decoupling
+convention as everything else in that package).
+
+**Verified by test**: `tests/test_fibo_scheduler_log_test_isolation.py`
+and `tests/test_options_depth_scheduler_log_test_isolation.py` (2 tests
+each) assert the real mechanism directly, not just the intent. Full
+`fibo`/`options_depth` selection (205 tests) run with the real log's line
+count checked before and after: unchanged.
+
+**Not fixed, out of scope**: the existing historical pollution already in
+`data/fibo_live/scheduler.log` was left as-is -- it is gitignored,
+local-only, and not something this fix should silently edit or truncate.
+

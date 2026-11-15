@@ -1422,3 +1422,47 @@ schedule and exit code asserted) and an upgraded
 retry-then-exhaust path. Full detail in OPERATIONS.md's "warehouse.duckdb
 lock conflict" section.
 
+## Bug #21: test output was polluting the real scheduler.log
+
+**Mechanism**: `src/fibo_live/scheduler_support.py`'s `make_logger()`
+bound its default log path to the real `SCHEDULER_LOG` at the MODULE's
+own import time, not at call time. `scripts/fibo_morning.py`'s module-
+level `log = make_logger()` therefore always wrote to the real file
+unless a caller explicitly overrode it. `tests/
+test_fibo_morning_idempotency.py` (fake SYM1..SYM16 fixtures) correctly
+monkeypatched `append_event`/`read_events` to a tmp_path but never `log`
+-- every `log()` call reached during those tests wrote straight into
+`data/fibo_live/scheduler.log`.
+
+**Blast radius**: confirmed, not assumed, by reading the real log's
+history -- SYM1..SYM16 fixture noise, a `RuntimeError: simulated
+network-down failure`, and fake "Angel One login FAILED" lines, all
+dated 2026-10-16 and 2026-10-27, cost audit time during the 2026-11-15
+health check (each had to be individually checked and ruled out as test
+noise, not a real incident, before the real failures that week could be
+trusted).
+
+**Blast radius, the other direction (finding #9)**: grepped the whole
+`src/` tree for the same `make_logger` pattern. Exactly one other
+instance exists, `src/options_depth/scheduler_support.py` (duplicated by
+design, per that package's own decoupling convention) -- fixed in the
+same pass, not left for later.
+
+**Status: fixed, 2026-11-15, with a wrong first attempt corrected before
+it shipped.** The default now resolves lazily, at call time, inside
+`make_logger()`. The first version keyed this on `PYTEST_CURRENT_TEST` --
+proven wrong LIVE by re-running the exact polluting test and watching the
+real log grow by 29 lines anyway, not caught by reasoning about pytest's
+internals: that env var is only set once pytest starts running an
+individual test, after every test module (including the one whose import
+already executed `log = make_logger()`) was imported during collection.
+Replaced with `"pytest" in sys.modules`, true from pytest's own process
+startup, before collection -- re-verified the same way (before/after line
+count on the real log, not just a passing test). Regression-tested:
+`tests/test_fibo_scheduler_log_test_isolation.py` and `tests/
+test_options_depth_scheduler_log_test_isolation.py`. Full `fibo`/
+`options_depth` selection (205 tests) confirmed the real log's line count
+unchanged before and after. Historical pollution already in the file was
+left as-is (gitignored, local-only; not silently edited). Full detail in
+OPERATIONS.md's "Test output was polluting the real scheduler.log"
+section.

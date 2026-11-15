@@ -103,6 +103,15 @@ def holiday_week(tmp_path, monkeypatch):
     monkeypatch.setattr(fibo_evening, "pull_before_appending", lambda log: None)
     monkeypatch.setattr(fibo_evening, "materialize_adjustment_factors", lambda con: 0)
     monkeypatch.setattr(fibo_evening, "build_watchlist", _fake_build_watchlist)
+    # Pre-existing gap, found while verifying item 8 (2027 holiday master):
+    # despite this file's own docstring claiming "NO live runs: no real
+    # network," backfill_index_range was never mocked, so this test made a
+    # real network call to NSE's index archive on every run -- a native
+    # access violation crash was observed live doing exactly this (same
+    # shape as the fix already applied to
+    # test_fibo_evening_staleness_ordering.py). Stubbed per this project's
+    # "adjacent staleness -- same fact, fix it" standing rule.
+    monkeypatch.setattr(fibo_evening, "backfill_index_range", lambda con, start, end, raw_dir: {"ok": 0, "no_data": 0})
 
     # already_notified/record_notification are left as the REAL functions
     # imported into fibo_evening -- their own dedup logic (kind=

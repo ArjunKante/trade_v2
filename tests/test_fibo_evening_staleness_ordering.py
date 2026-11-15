@@ -94,6 +94,12 @@ def isolated_evening_job(tmp_path, monkeypatch):
     monkeypatch.setattr(fibo_evening, "assert_data_current", fixed_as_of_assert_data_current)
     monkeypatch.setattr(fibo_evening, "materialize_adjustment_factors", lambda con: 0)
     monkeypatch.setattr(fibo_evening, "build_watchlist", _fake_build_watchlist)
+    # Pre-existing gap, found while adding the heartbeat (unrelated to it):
+    # this test never mocked backfill_index_range, so it was making a real
+    # network call to NSE's index archive on every run -- a native access
+    # violation crash was observed live doing exactly this. Stubbed, same
+    # as every other real side effect in this fixture.
+    monkeypatch.setattr(fibo_evening, "backfill_index_range", lambda con, start, end, raw_dir: {"ok": 0, "no_data": 0})
 
     logged_events = []
 
@@ -165,6 +171,12 @@ def test_still_refuses_when_no_fetch_can_cure_the_gap(tmp_path, monkeypatch):
     monkeypatch.setattr(fibo_evening, "assert_data_current", fixed_as_of_assert_data_current)
     monkeypatch.setattr(fibo_evening, "materialize_adjustment_factors", lambda con: 0)
     monkeypatch.setattr(fibo_evening, "build_watchlist", _fake_build_watchlist)
+    # Pre-existing gap, found while adding the heartbeat (unrelated to it):
+    # this test never mocked backfill_index_range, so it was making a real
+    # network call to NSE's index archive on every run -- a native access
+    # violation crash was observed live doing exactly this. Stubbed, same
+    # as every other real side effect in this fixture.
+    monkeypatch.setattr(fibo_evening, "backfill_index_range", lambda con, start, end, raw_dir: {"ok": 0, "no_data": 0})
 
     logged_events = []
     monkeypatch.setattr(fibo_evening, "append_event", lambda kind, payload: logged_events.append({"kind": kind, **payload}))

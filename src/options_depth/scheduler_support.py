@@ -22,22 +22,45 @@ Task Scheduler record this run as failed and, worse, propagating past
 this process in a way that could affect anything else scheduled nearby.
 Caught, logged with its full traceback, swallowed -- the process always
 exits 0.
+
+TEST ISOLATION (added 2026-11-15, duplicated from src/fibo_live/
+scheduler_support.py's own fix -- same package-decoupling convention as
+everything else in this file): `make_logger()`'s default now resolves
+lazily, at call time, keyed on `"pytest" in sys.modules` -- NOT
+`PYTEST_CURRENT_TEST`, which is only set once pytest starts RUNNING a
+test, after every test module (and this one's own module-level `log =
+make_logger()` call site) has already been imported during collection --
+see the fibo_live original fix for the live confirmation that the env-var
+version still leaked. `"pytest" in sys.modules` is true from pytest's own
+startup, before collection, so it is already true at import time too.
+Under pytest, a caller that doesn't pass an explicit `log_path` is
+redirected to the system temp directory instead of the real production
+log, so a test exercising this collector's own code paths can never
+pollute `data/options_depth/scheduler.log`.
 """
 from __future__ import annotations
 
 import datetime as dt
+import sys
+import tempfile
 import traceback
 from pathlib import Path
 
 SCHEDULER_LOG = Path(__file__).resolve().parents[2] / "data" / "options_depth" / "scheduler.log"
+TEST_SCHEDULER_LOG = Path(tempfile.gettempdir()) / "options_depth_test_scheduler.log"
 
 
-def make_logger(log_path: Path = SCHEDULER_LOG):
+def make_logger(log_path: Path | None = None):
     """Returns a log(msg) that prints to stdout (so an interactive run
     still shows output) AND appends every line of msg to log_path, each
     stamped with its own timestamp and flushed immediately -- never
     buffered, since a killed/crashed process must not lose lines it
-    already "logged"."""
+    already "logged".
+
+    `log_path=None` (the default) resolves to TEST_SCHEDULER_LOG under
+    pytest, SCHEDULER_LOG otherwise -- see this module's docstring."""
+    if log_path is None:
+        log_path = TEST_SCHEDULER_LOG if "pytest" in sys.modules else SCHEDULER_LOG
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def log(msg: object = "") -> None:

@@ -21,10 +21,32 @@ anywhere readable) and (b) needlessly worry anyone checking the process
 exit code, even though a single bad run should never block the next
 scheduled one. Caught, logged with its full traceback, and swallowed --
 the process always exits 0.
+
+TEST ISOLATION (added 2026-11-15, OPERATIONS.md): `make_logger()`'s
+default path used to be bound to the real `SCHEDULER_LOG` at this
+module's own import time, so any test that imported `fibo_morning`/
+`fibo_evening` and exercised a code path calling the module-level `log`
+without explicitly monkeypatching it over (most tests correctly do; a few
+historical ones didn't) wrote straight into the real production log --
+confirmed as the source of `data/fibo_live/scheduler.log`'s SYM1..SYM16
+fixture noise and a simulated-failure line that briefly made a 2026-11-15
+health check second-guess a real incident. Fixed by resolving the default
+lazily, at CALL time, keyed on `"pytest" in sys.modules` -- NOT
+`PYTEST_CURRENT_TEST` (tried first, and wrong: that env var is only set
+once pytest starts RUNNING a test, which is after every test MODULE is
+already imported during collection, i.e. after `log = make_logger()`'s
+own module-level call site has already executed and bound the real path
+-- confirmed live, the first version of this fix still leaked 29 lines
+into the real log on its own test run). `"pytest" in sys.modules` is true
+from the moment pytest itself starts up, before collection, so it is
+already true at every module's import time too. An explicit `log_path`
+argument (every test that already does the right thing) is untouched.
 """
 from __future__ import annotations
 
 import datetime as dt
+import sys
+import tempfile
 import traceback
 from pathlib import Path
 
@@ -32,14 +54,22 @@ from fibo_live.config import LIVE_DIR
 from spread_monitor.market_hours import IST
 
 SCHEDULER_LOG = LIVE_DIR.parent / "scheduler.log"  # data/fibo_live/scheduler.log
+TEST_SCHEDULER_LOG = Path(tempfile.gettempdir()) / "fibo_test_scheduler.log"
 
 
-def make_logger(log_path: Path = SCHEDULER_LOG):
+def make_logger(log_path: Path | None = None):
     """Returns a log(msg) that prints to stdout (so an interactive run
     still shows output) AND appends every line of msg to log_path, each
     stamped with its own timestamp and flushed immediately -- never
     buffered, since a killed/crashed process must not lose lines it
-    already "logged"."""
+    already "logged".
+
+    `log_path=None` (the default, and what every module-level `log =
+    make_logger()` call in this codebase uses) resolves to
+    TEST_SCHEDULER_LOG under pytest, SCHEDULER_LOG otherwise -- see this
+    module's docstring."""
+    if log_path is None:
+        log_path = TEST_SCHEDULER_LOG if "pytest" in sys.modules else SCHEDULER_LOG
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def log(msg: object = "") -> None:
