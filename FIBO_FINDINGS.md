@@ -744,3 +744,181 @@ conversion structurally (today's own `adjustment_factors.factor` is 1.0
 by construction, verified directly across all 175 live watchlist rows
 logged since 2026-10-08), so no live-system change is implied by this
 section.
+
+## 14. Valid-observation-day counter (2026-11-15, running figure -- append-only)
+
+**Why this section exists, stated first**: in two months, "0 trades in
+~100 calendar days" will read as decay against Section 13h's TIMING-null
+replication and Section 9's decay-vs-noise diagnostic unless the
+denominator is on record now, before the number gets bigger. Calendar
+days elapsed is not the right denominator for this forward test -- most
+of them were not days the pipeline was actually capable of producing a
+trade (BUGS.md Bug #19: the evening job down for 7 straight trading days,
+2026-11-06 through 2026-11-13; OPERATIONS.md: the morning job's own
+live-monitoring half had never once run successfully before 2026-10-23).
+
+**Definition (frozen, `scripts/fibo_valid_observation_days.py`)**: a
+trading day counts as a VALID OBSERVATION DAY only if (1) the evening job
+produced a fresh watchlist targeting it, AND (2) the morning job reached
+the per-entity setup/trigger-checking stage, LIVE, with a timestamp inside
+the 09:30-11:30 IST entry window the breakout rule actually uses
+(PREREGISTRATION_FIBO.md Section (f)) -- a `setup` event logged outside
+that window (the AXISBANK 2026-10-19 case, discovered 3.5 hours after the
+window closed) does not count, even though a `setup` event exists.
+Weekends and confirmed NSE holidays are excluded from the denominator
+entirely, not counted as invalid.
+
+**2026-11-15 reading** (`python scripts/fibo_valid_observation_days.py
+--through 2026-11-14`): of **25 trading days** since the forward test's
+first watchlist (2026-10-08), **7 are valid observation days**: 2026-10-09,
+10-12, 10-14, 10-26, 11-03, 11-05, 11-06. (This revises an earlier,
+cruder verbal estimate of "5" from the same-day health check that
+preceded this script -- that estimate only checked dates after
+2026-10-23's GitHub Actions fix; two earlier dates, 10-09 and 10-12,
+also had a genuine in-window LIVE setup run and are correctly counted
+here. The script's definition, not the verbal estimate, is the one to
+cite going forward.)
+
+**Trade count against this denominator, restated plainly**: at the
+backtest's own measured rate (`FIBO_FINDINGS.md` Section 13c/13d: 216
+trades / 970 trading days, top-200 universe, same universe size the live
+system uses -- ~0.223 trades/trading-day), 7 valid observation days imply
+an expected **~1.6 trades**. Actual: **0**. **This is uninformative and
+is not evidence about the strategy** -- a mean of ~1.6 is not distinguishable
+from 0 at this sample size for a low-frequency signal that already has
+whole multi-month stretches of zero trades in the backtest itself.
+
+**The ~19-trade decay threshold and ~100-trade verdict floor, restated
+against valid observation days, not calendar days**: Section 9's own
+power calculation needs ~19 forward trades to distinguish a true mean of
++0.47 from +0.07 at this population's per-trade SD; at ~0.223
+trades/valid-day that is **~85 valid observation days**, not calendar
+days. The original TEST PASS floor (100 trades) is **~449 valid
+observation days**. Against the historical ratio measured here (7 valid
+days / 25 calendar trading days = 28%), reaching 85 valid days at that
+ratio would take roughly 300 calendar trading days (~14 months) --
+**but that ratio is exactly what items 1-3 of the 2026-11-15 fix pass
+(dead-man's switches, the git union-merge fix, the DuckDB retry) were
+built to raise toward 100%.** Going forward, the honest statement is: the
+timeline to 19 or 100 informative trades depends on whether those fixes
+hold, not on the 28% ratio measured over a period that pre-dates them.
+This section will be re-run and appended to (never edited in place) as
+that ratio becomes observable post-fix.
+
+**Plainly, for anyone reading only this paragraph**: 0 trades in 7 valid
+observation days, against an expectation of ~1.6, is not evidence that
+the strategy has decayed, failed, or is working. It is not enough
+information either way. Do not cite it as a finding.
+
+## 15. has_swing verified able to fail; it is not silently stuck returning True (2026-11-15, diagnostic, no rule changed)
+
+**The question, from the 2026-11-15 health check**: `has_swing` (the
+"valid 2xATR confirmed swing exists" leg of `qualifies`) has never once
+been `False` across 3,600 live watchlist rows logged since 2026-10-08. Is
+the filter non-binding for this universe, or silently stuck returning
+`True` -- the exact shape Bug #18 turned out to be (two uncross-checked
+methods quietly agreeing by construction, not by correctness)?
+
+**Verified by test, not assumed: `most_recent_confirmed_swing` CAN return
+no row (has_swing=False), on both code paths that produce it.**
+`tests/test_fibo_indicators.py` already had
+`test_swing_empty_when_no_down_fractal_precedes_the_high` (a swing high
+exists but nothing qualifies as its preceding low); a second test was
+added, `test_swing_empty_when_no_up_fractal_exists_at_all` (a strictly
+monotonic series has zero up-fractals anywhere, so there is no swing high
+to even start from). Both pass. The function is not stuck -- it is a
+correctly data-dependent boolean.
+
+**Hand-traced 3 real live rows against the current warehouse, as asked,
+not just reasoned about**: ITC (2026-10-23) and TITAN (2026-10-08) both
+reproduce EXACTLY -- swing_high, swing_low, and ATR match the logged
+event to the decimal. The third, VMM (2026-10-08), did NOT reproduce:
+logged swing_high/low were 115.4/102.34; independent recomputation
+against today's warehouse gives 108.23/98.9.
+
+**That mismatch is explained, not left open**: `prices_eod.fetched_at`
+for VMM's 2026-09-21 through 2026-10-07 rows reads `2026-10-08
+23:38:51`-`23:39:07` -- fetched roughly 54 minutes AFTER the first
+watchlist run that evening (`22:46:05`, which logged the stale
+115.4/102.34 using a panel still missing that two-week stretch). The
+SECOND watchlist run the same evening (`23:42:16`, after the backfill
+completed) already shows 108.23/98.9, and every one of the 17 further
+runs through 2026-11-05 matches it exactly. This was a one-off
+ingestion race on literally the first evening of the forward test, self-
+corrected within the same evening, not a recurring defect -- and not a
+`has_swing` failure either way: `has_swing` was `True` in both the stale
+and the corrected computation. Recorded as a general caution: hand-
+verifying a historical live row against today's warehouse is not
+guaranteed to reproduce the exact inputs that row was computed from, for
+the same reason Section 11 already found for the dev-window backtest
+count (the archive can still be mid-ingestion, or grow/get corrected,
+after the fact) -- pick a row from a settled evening, or cross-check
+`prices_eod.fetched_at` against the event's own `ts` first.
+
+**Why `has_swing` is plausibly genuinely non-binding for THIS universe,
+not broken**: top-200-by-turnover names are liquid, established
+large/mid-caps with years of price history (bar the occasional recent
+listing). A 60-trading-day lookback for a qualifying down-fractal before
+the most recent confirmed up-fractal is a low bar for names that
+trade this actively -- real pullbacks within any 60-day window are
+common. This is a property of the real data for this specific universe
+and period, plausible but not separately proven here; worth re-checking
+if a thinner or more momentum-only universe is ever substituted.
+
+No rule changed. Logged in `experiments_fibo.csv` per this project's
+diagnostic convention.
+
+## 16. qualify -> SETUP_ON stage reconciliation (2026-11-15, diagnostic, no rule changed)
+
+**Per OPERATIONS.md's standing rule ("reconcile stage counts before
+interpreting any result" -- a mismatch is a defect until explained, not
+until it reaches statistical significance)**: the 2026-11-15 health check
+reported live's qualify -> `SETUP_ON` conversion (1/208, 0.5%) as "roughly
+4x stricter" than an informally back-of-envelope backtest rate. That
+comparison itself did not reconcile stage-for-stage and is corrected
+here, not repeated.
+
+**The error in the original comparison**: it compared live's qualify ->
+`SETUP_ON` rate against a backtest qualify -> TRADE rate (a later,
+strictly smaller-denominator stage, since not every `SETUP_ON` day
+triggers) -- an apples-to-oranges stage mismatch, not a finding about the
+live system.
+
+**The corrected, stage-matched comparison, read directly from the sealed
+test's own saved result (`data/fibo_test_results_corrected_scale_amended.pkl`,
+the 216-trade corrected-scale TEST re-run, `FIBO_FINDINGS.md` Section 13),
+not re-derived informally**:
+
+| stage | backtest (TEST, top-200, corrected scale) | live (2026-10-08 to 2026-11-05) |
+|---|---|---|
+| qualifying (entity,day) pairs | 49,139 (`SETUP_OFF` 48,608 + `SETUP_ON_NO_TRIGGER` 227 + `TRADE` 216 + `NO_ORB_DATA` 87 + `DEGENERATE_QTY` 1) | 208 |
+| `SETUP_ON` (ORB overlaps golden zone, triggered or not) | 443 (227 + 216) | 1 |
+| **qualify -> SETUP_ON rate** | **0.902%** | **0.48%** |
+| SETUP_ON -> TRADE (trigger rate given overlap) | 48.8% (216/443) | n/a (the one live SETUP_ON was discovered 3.5 hours after its entry window closed -- Section 1/OPERATIONS.md -- never validly resolved live or dead) |
+| qualify -> TRADE | 0.440% | 0% (0/208) |
+
+**Stage-matched, the gap is NOT 4x -- it is well within n=208 sampling
+noise.** At the backtest's own 0.902% rate, 208 qualifying pairs imply an
+expected **1.88 `SETUP_ON` events** (Poisson); 1 observed is not a
+meaningful deviation from that. A single additional `SETUP_ON` event
+(2 instead of 1) would already put the live rate (0.96%) above the
+backtest's. **Explanation, stated plainly per the standing rule's own
+requirement that an explanation be given, not deferred**: insufficient
+data at n=208, not a discrepancy -- the original "~4x" framing was the
+defect (a stage-mismatched comparison), now corrected; the corrected,
+stage-matched comparison shows no unexplained gap at this sample size.
+
+**Tripwire set, per instruction, not left open-ended**: re-run this exact
+stage-matched comparison once live qualifying rows reach **n=500**. At
+the backtest's 0.902% rate, 500 qualifying pairs imply an expected
+**~4.5 `SETUP_ON` events** -- if the observed count at n=500 is still 0-1
+(materially below ~4.5), that would be the first point this comparison
+actually has the power to flag a real discrepancy rather than restate
+sampling noise, and should be investigated as a defect at that point, not
+waved through again as "still not enough data." `scripts/
+fibo_valid_observation_days.py` (Section 14) tracks the denominator this
+tripwire depends on; this section should be re-run and appended to
+(never edited in place) when `sum(watchlist.qualifies)` across logged
+evening runs reaches 500.
+
+No rule changed. Logged in `experiments_fibo.csv`.

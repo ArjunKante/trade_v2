@@ -69,7 +69,7 @@ convincing and were not.
 
 | Thing | Status |
 |---|---|
-| Momentum basket | Recorded 2026-10-26, 147 holdings, check-in ~2027-01-27 (calendar-uncertain, 2027 holiday master not loaded) |
+| Momentum basket | Recorded 2026-10-26, 147 holdings, check-in ~2027-01-27 (calendar-uncertain -- checked 2026-11-15, not just unaddressed: NSE has not yet published its 2027 trading-holiday calendar at all (confirmed on nseindia.com itself, Year selector offers only 2026), so there is nothing to load yet; re-check monthly from December 2026, OPERATIONS.md) |
 | Fibo forward test | Running. Morning job on GitHub Actions, triggered by cron-job.org, monitored by healthchecks.io. Evening job on the laptop at 20:00 (moved from 18:30, 2026-11-15), also monitored by healthchecks.io (dead-man's switch), manual if missed. |
 | Options depth collector | Scheduled on the laptop, 10:30/12:30/14:30, monitored by healthchecks.io (dead-man's switch, added 2026-11-15) |
 | Spread estimator validation | Specified, 24 names selected, awaiting market-hours collection |
@@ -614,6 +614,27 @@ figures asserted as settled that exist only in chat.
 tested — degenerate confluence, turnover dependence, retest confirmation,
 ascending lows. **All four came back null.** The research browser is for
 understanding what happened, not for generating the next hypothesis.
+
+**2026-11-15:** asserted that late bhavcopy caused ~11% of weekday evening-job
+refusals, and used that rate to justify moving the job to 20:00. The rate
+was never measured. fetch_log shows 0 of 11 genuine trading-day attempts
+found bhavcopy unavailable (attempts spanning 18:30-22:44, all successful),
+and both real evening_skipped emails had other causes (Bug #15; a Sunday
+misfire). Three email events were converted into a causal rate by
+assumption and stated as fact.
+
+This is the same shape as NEW_RESEARCH_DIRECTION.md's 'V8 failed to
+establish a real edge' — an inference from adjacent evidence written in the
+declarative voice of a measurement — and the second instance from me in
+eight days after the Liquidity E/F Bonferroni figures. Caught by the
+standing rule added 2026-11-07 ('a figure is not a project fact until it is
+committed... including instructions that assert a number as settled'),
+applied to my own instruction rather than to a repo document. That is the
+rule working as intended.
+
+The 20:00 move was kept, on grounds independent of the false rate: later is
+safer for bhavcopy availability, and 20:00 is more likely to find the laptop
+on. Recorded as a precaution, not a fix to an observed problem.
 
 ---
 

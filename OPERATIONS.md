@@ -1953,3 +1953,40 @@ count checked before and after: unchanged.
 `data/fibo_live/scheduler.log` was left as-is -- it is gitignored,
 local-only, and not something this fix should silently edit or truncate.
 
+## 2027 NSE holiday master -- checked, not loaded: NSE has not published it yet (2026-11-15)
+
+**Checked at the source, not assumed either way.** NSE's own official
+Holidays page (nseindia.com, Resources > Holidays, Equities segment) has
+a Year selector whose only option is **2026** -- no 2027 entry exists in
+that dropdown at all, confirmed by reading the control's own accessibility
+tree (not a screenshot guess). NSE typically issues its following year's
+trading-holiday circular in December, not six weeks ahead of year-end --
+this is consistent with that pattern, not an anomaly.
+
+**Decision: do not fabricate or guess 2027 dates.** `data/raw/
+nse_cm_holidays.pkl` and `data/raw/nse_cm_holidays_fallback.json` are
+left exactly as they are (years 2016-2026 only). `src/data_layer/
+nse_holidays.py`'s existing `HolidayCalendarMissing` fail-safe (raise,
+never silently assume True or False for an uncovered year) is the
+correct behavior here and needs no change -- a fabricated 2027 calendar
+that turned out wrong would be worse than the current, honest "cannot
+verify" state: it could make `next_trading_day`/`previous_trading_day`
+silently skip a real trading day or silently trade through a real
+holiday, with no error raised to catch it.
+
+**What this means operationally, past 2026-12-31 (six weeks from this
+entry)**: both Fibo jobs' `next_trading_day`/`previous_trading_day`
+degrade to the documented weekend-only fallback the moment they hit a
+2027 date (already-flagged, already-handled degradation, `fibo_evening.py`/
+`fibo_morning.py`'s own docstrings) -- logged as a visible WARNING every
+time, never silent. The momentum basket's ~2027-01-27 check-in date
+(`PROJECT_CONTEXT.md` Section 2) remains calendar-uncertain for the same
+reason, unchanged from before this check -- not resolved, because the
+underlying uncertainty (NSE hasn't published) is real, not a gap in this
+project's own data pipeline.
+
+**Follow-up, not closed here**: re-check NSE's Holidays page once a
+month starting December 2026 until 2027 appears, then re-run the same
+loading step this entry describes. Put this reminder somewhere outside
+this repo too (a calendar, not just this file) -- the same caution
+OPERATIONS.md's PAT-expiry entry already gives for exactly this reason.

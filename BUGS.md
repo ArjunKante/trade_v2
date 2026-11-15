@@ -1466,3 +1466,66 @@ unchanged before and after. Historical pollution already in the file was
 left as-is (gitignored, local-only; not silently edited). Full detail in
 OPERATIONS.md's "Test output was polluting the real scheduler.log"
 section.
+
+## Bug #22: the evening job (and the options-depth collector) had no independent heartbeat -- a local log or a caught exception was the only failure signal
+
+**Mechanism**: `scripts/fibo_evening.py` (Windows Task Scheduler, weekdays
+18:30 IST) and `scripts/snapshot_options_depth.py` (same scheduler,
+10:30/12:30/14:30 IST) each only ever recorded their own outcome locally
+(`data/fibo_live/scheduler.log` / `data/options_depth/scheduler.log`) or
+via a caught-and-swallowed exception (`run_unattended`, by design, so one
+bad run never blocks the next). Neither had any independent, externally
+monitored signal that a run happened at all. The morning job
+(`fibo_morning.yml`) already had exactly this gap once, found and fixed
+via a healthchecks.io heartbeat (OPERATIONS.md's "External pinger"
+sections, live since 2026-10-23) -- `PROJECT_CONTEXT.md` Section 7
+finding #4 ("fixed where noticed, not everywhere the pattern recurs")
+named this defect shape explicitly; it had recurred, one layer up, in
+both remaining scheduled jobs, undetected until the 2026-11-15 health
+check went looking.
+
+**Blast radius, direction one (jobs missing a heartbeat)**: found by
+reading events.jsonl and scheduler.log directly, not assumed. 3 of 10
+failure-days the health check examined (2026-10-29, 2026-11-11,
+2026-11-12) have ZERO entries in `data/fibo_live/scheduler.log` -- Task
+Scheduler never launched `python.exe` at all, a failure mode no local log
+or exception handler inside that process could ever see. The evening job
+was down for 7 straight trading days (2026-11-06 through 2026-11-13)
+before this was noticed. The options-depth collector had the identical
+gap, unnoticed because nothing was looking for it specifically (its only
+indirect signal was `fibo_evening.py`'s own `snapshot_health` log line --
+a check FROM a different job, not a check ON this one's own launch).
+
+**Blast radius, direction two (checked, not assumed, per finding #9 --
+a selection bug that wrongly includes also wrongly excludes): are there
+scheduled jobs this grep could have wrongly waved through as "doesn't
+need one"?** Enumerated every entry in this machine's actual live
+`Get-ScheduledTask` list (not just the `*_task.xml` files committed to
+this repo, which can go stale) and this repo's GitHub Actions workflows:
+
+| job | recurring? | verdict |
+|---|---|---|
+| `FiboEvening` | yes, weekdays | **had the gap -- fixed** |
+| `TradeNew_OptionsDepth` | yes, weekdays 10:30/12:30/14:30 | **had the gap -- fixed** |
+| `TradeNew_BoxTheoryDevRun` | no -- one-shot `MSFT_TaskTimeTrigger`, already fired once (2026-10-17), no `NextRunTime` | correctly excluded: not a recurring job, box theory is closed (`PROJECT_CONTEXT.md` Section 5) |
+| `TradeNew_OptionsDepthTest` | no -- one-shot, already fired once (2026-10-12, killed mid-run), no `NextRunTime` | correctly excluded: `test_options_depth.py` is an explicit one-off manual probe, not a build artifact |
+| `nse-pit-bhavcopy-probe` | yes, daily | correctly excluded: runs `C:\projects\trade-info\ops\poll_bhavcopy.py`, a **different project's repository**, out of this codebase's scope |
+| `fibo_morning.yml` (GitHub Actions) | yes, 4x/day via cron-job.org | already covered before this session (the original heartbeat this bug's shape was first found on) |
+| `probe_github_actions.yml` (GitHub Actions) | no -- `workflow_dispatch` only, no `schedule:` | correctly excluded: manual-trigger probe, nobody expects it to fire unattended |
+
+No recurring, in-scope job was wrongly excluded.
+
+**Status: fixed, 2026-11-15.** `src/fibo_live/heartbeat.py` and
+`src/options_depth/heartbeat.py` (duplicated, not imported, per that
+package's own decoupling convention) -- each pings healthchecks.io only
+on outcomes that represent correct, intended behavior (full success, or a
+legitimate no-op: the evening job's idempotent-skip path, the
+options-depth collector's correctly-recognized non-trading-window
+refusal), never on a genuine failure. Both verified end-to-end, not just
+by code review: a real success ping confirmed on each check's dashboard,
+and a real forced failure signal confirmed BOTH an "up -> down" dashboard
+transition AND an actual delivered email ("DOWN | Fibo evening job" at
+19:11; "DOWN | Options depth collector" at 20:09), then restored to
+"up" before this entry was written. Full detail, including the two
+dead-man's-switch sections, the schedule-move rationale, and the
+retracted ~11%-refusal-rate claim, is in OPERATIONS.md.
