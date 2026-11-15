@@ -1985,8 +1985,98 @@ reason, unchanged from before this check -- not resolved, because the
 underlying uncertainty (NSE hasn't published) is real, not a gap in this
 project's own data pipeline.
 
-**Follow-up, not closed here**: re-check NSE's Holidays page once a
-month starting December 2026 until 2027 appears, then re-run the same
-loading step this entry describes. Put this reminder somewhere outside
-this repo too (a calendar, not just this file) -- the same caution
-OPERATIONS.md's PAT-expiry entry already gives for exactly this reason.
+**The mechanism that actually catches this, added 2026-11-15, is a guard,
+not a reminder** (see "Trading-day logic now refuses loudly on an
+uncovered year" below) -- `PROJECT_CONTEXT.md` Section 7 finding #15
+names exactly why a documented "recheck monthly" intention is not a fix
+on its own: a flag nobody is forced to act on dies. `next_trading_day`
+(evening) and `previous_trading_day` (morning) now REFUSE LOUDLY the
+first time either one is asked to compute past 2026-12-31, instead of
+degrading to the weekend-only heuristic -- the evening refusal leaves
+its dead-man's-switch heartbeat unreached (a healthchecks.io DOWN alert
+the same night), and the morning refusal logs a durable REFUSED
+session_status event, same as every other morning refusal. The system
+tells us in January; nobody has to remember to ask.
+
+**The monthly recheck note above is kept as a convenience, not as the
+mechanism**: re-checking NSE's Holidays page once a month from December
+2026 can resolve this BEFORE the guard would ever fire, avoiding a
+January outage entirely -- worth doing, but the guard is what makes this
+safe even if nobody does.
+
+## Trading-day logic now refuses loudly on an uncovered year, instead of degrading -- 2026-11-15
+
+**Replaced, not just flagged.** `scripts/fibo_evening.py`'s
+`next_trading_day` and `scripts/fibo_morning.py`'s `previous_trading_day`
+both used to catch `HolidayCalendarMissing` (no calendar entry for a
+candidate date's year -- the real, current state for 2027) and degrade to
+the old reactive, fetch_log-only heuristic, logging a WARNING but
+otherwise proceeding as if nothing were wrong. `PROJECT_CONTEXT.md`
+Section 7 finding #15 names this exact shape: a documented intention
+("reload the calendar before it runs out") is not a correction, because
+nothing forces it to happen -- it dies the moment nobody acts on it.
+
+**Fix**: both functions now let `HolidayCalendarMissing` propagate
+uncaught. Each caller handles it as a first-class refusal, not a crash:
+
+- `fibo_evening.py`'s `main()` catches it where `next_trading_day` is
+  called, emails `notify_evening_skipped` (reason "holiday calendar
+  missing"), closes the connection, and returns -- **before** the
+  dead-man's-switch heartbeat call at the end of the function. The
+  healthchecks.io check goes overdue the same evening and alerts, the
+  same mechanism every other evening failure already uses.
+- `fibo_morning.py`'s `main()` catches it around `assert_watchlist_current`
+  (which calls `previous_trading_day` internally) and routes it through
+  `log_refusal` -- the one durable, visible path every other morning
+  refusal (stale watchlist, Angel login failure, etc.) already uses,
+  producing a `REFUSED` `session_status` event the same morning.
+
+**Verified by test**: `tests/test_holiday_week_oct2026.py` gained 4 tests
+replacing 2 that asserted the old degrade behavior -- `next_trading_day`/
+`previous_trading_day` propagate the exception uncaught, the evening
+`main()` never reaches the heartbeat and does send the email, and the
+morning `main()` logs exactly one `REFUSED` session_status event naming
+the holiday-calendar cause. `tests/test_fibo_morning_watchlist_freshness.py`'s
+own calendar-missing test was updated to expect `HolidayCalendarMissing`
+propagating rather than a wrongly-computed `StaleWatchlistError`. Full
+`fibo`/`options_depth` selection (205 tests) and the full repo suite (678
+tests, 1 pre-existing unrelated failure -- `test_monitor_persistence.py`,
+see BUGS.md/this file's own note on it) both pass.
+
+**What this does NOT do**: prevent 2027 from arriving uncovered -- it
+only guarantees the first real computation that needs a 2027 date fails
+loudly and visibly instead of quietly guessing wrong. Loading the actual
+2027 calendar the moment NSE publishes it is still the real fix; see the
+section above.
+
+## research_app.py already opens the warehouse read-only -- and that doesn't eliminate the lock class anyway (2026-11-15)
+
+**Checked, not assumed.** `scripts/research_app.py` imports
+`data_layer.db.get_read_connection` (aliased `get_warehouse_con`) and
+`fibo.intraday_db.get_read_connection` -- both genuinely pass
+`read_only=True` to `duckdb.connect`. There is no `get_connection` (write)
+import anywhere in that file, and no raw `duckdb.connect` call either.
+**Nothing was changed here because there was nothing to change** -- the
+file already does exactly what was asked.
+
+**A second thing worth recording, confirmed live, not assumed**: making
+a reader read-only does NOT eliminate the lock-contention class with a
+WRITER, contrary to the natural assumption. Reproduced directly with two
+concurrent local Python processes on this machine (DuckDB 1.5.5): two
+simultaneous READ-ONLY connections to the same file coexist fine; a
+single READ-ONLY connection already open in one process still blocks a
+second process's READ-WRITE `duckdb.connect()` attempt, with the exact
+same "being used by another process" error the evening job hit live.
+DuckDB's local-file concurrency model here is N-readers-XOR-1-writer, not
+N-readers-AND-1-writer. A long-lived cached connection in
+`research_app.py` -- already read-only -- would still collide with
+`fibo_evening.py`'s write connection if both happened to be open at once.
+
+**Consequence**: `_open_warehouse_with_retry`'s bounded retry (added
+earlier, this file's "warehouse.duckdb lock conflict" section) is not
+"defence in depth" behind a primary fix -- for the specific
+reader-vs-writer collision this machine can produce, it is the only
+mitigation available short of never running `research_app.py` near 20:00,
+or moving to a setup with real multi-process read+write support (outside
+this change's scope, not requested, not built). Kept as originally
+implemented; nothing reverted.

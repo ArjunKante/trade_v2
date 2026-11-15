@@ -19,6 +19,7 @@ Every test writes to its own tmp_path log file via the log_path override
 -- never the real data/fibo_live/v1/events.jsonl.
 """
 import datetime as dt
+import functools
 import json
 import sys
 from pathlib import Path
@@ -29,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import fibo_morning  # noqa: E402
+from fibo_live.eventlog import read_events as real_read_events  # noqa: E402
 
 TRADE_DATE = dt.date(2026, 10, 14)  # a Wednesday -- previous trading day is an ordinary Tuesday, no weekend/holiday involved
 FRIDAY_BEFORE_MONDAY = dt.date(2026, 10, 16)
@@ -47,6 +49,54 @@ def _log_watchlist_run(log_path, target_trade_date, as_of_date, ts: dt.datetime 
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(event) + "\n")
+
+
+def test_two_valid_runs_for_the_same_target_select_the_latest_by_timestamp_not_the_first(tmp_path, monkeypatch):
+    """Reproduces the real shape found 2026-11-15 (FIBO_FINDINGS.md
+    Section 15): the forward test's first evening (2026-10-08) logged two
+    watchlist_run events targeting 2026-10-09, both with the same
+    as_of_date -- the first computed against a panel still mid-ingestion
+    (stale swing values for one entity), the second (56 minutes later,
+    same evening) against the completed one (corrected values). Both
+    assert_watchlist_current and latest_watchlist select by
+    max(..., key=ts) -- "latest run wins", not "first match" -- so the
+    corrected run is what the morning job actually uses. This is the
+    answer to "which one does the morning job select": latest by
+    timestamp, confirmed here, not assumed from reading the code."""
+    log_path = tmp_path / "events.jsonl"
+    as_of = dt.date(2026, 10, 8)
+    target = dt.date(2026, 10, 9)
+
+    _log_watchlist_run(log_path, target, as_of, ts=dt.datetime(2026, 10, 8, 22, 46, 5), run_id="stale-run")
+    _log_watchlist_run(log_path, target, as_of, ts=dt.datetime(2026, 10, 8, 23, 42, 16), run_id="corrected-run")
+
+    def _watchlist_row(run_id, swing_high):
+        return {
+            "event_id": f"w-{run_id}", "ts": dt.datetime(2026, 10, 8, 22, 0).isoformat(), "kind": "watchlist",
+            "run_id": run_id, "entity_id": "E1", "symbol": "VMM", "qualifies": True, "swing_high": swing_high,
+        }
+
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(_watchlist_row("stale-run", 115.4)) + "\n")
+        f.write(json.dumps(_watchlist_row("corrected-run", 108.23)) + "\n")
+
+    latest_run = fibo_morning.assert_watchlist_current(target, log_path=log_path)
+    assert latest_run["run_id"] == "corrected-run", (
+        "assert_watchlist_current must select the LATEST valid run by timestamp, not the first logged"
+    )
+
+    # latest_watchlist (unlike assert_watchlist_current) takes no log_path
+    # parameter -- it always reads via the module-level `read_events`
+    # name, so pointing it at this test's tmp_path means monkeypatching
+    # that name directly, same pattern used throughout this test suite.
+    monkeypatch.setattr(fibo_morning, "read_events", functools.partial(real_read_events, log_path=log_path))
+    watchlist = fibo_morning.latest_watchlist(target)
+
+    assert len(watchlist) == 1
+    assert watchlist.iloc[0]["run_id"] == "corrected-run"
+    assert watchlist.iloc[0]["swing_high"] == 108.23, (
+        "the morning job must use the corrected run's rows, not the stale first run's"
+    )
 
 
 def test_no_watchlist_run_at_all_is_refused(tmp_path):
@@ -133,16 +183,20 @@ def test_thursday_evening_watchlist_is_valid_on_monday_after_a_friday_holiday(tm
     assert latest_run["run_id"] == "run-thursday"
 
 
-def test_friday_holiday_run_is_rejected_without_the_holiday_confirmed(tmp_path, monkeypatch):
-    """The flip side, and the known residual gap this change carries
-    over rather than introduces: if the holiday calendar is NOT
-    available (HolidayCalendarMissing -- the real situation on a GitHub
-    Actions runner today, since data/raw/nse_cm_holidays.pkl is not
-    committed), previous_trading_day falls back to weekend-only and
-    computes Friday, not Thursday, as the expected as_of_date -- so a
-    Thursday-sourced watchlist is (incorrectly, but knowingly) refused
-    in that degraded mode. Documents the gap; does not pretend it's
-    fixed."""
+def test_friday_holiday_run_raises_holiday_calendar_missing_rather_than_degrading(tmp_path, monkeypatch):
+    """The flip side, and a gap this project used to carry rather than
+    fix: if the holiday calendar is NOT available (HolidayCalendarMissing
+    -- the real situation on a GitHub Actions runner for an uncovered
+    year, since data/raw/nse_cm_holidays.pkl is not committed and the
+    fallback JSON covers fewer years), previous_trading_day USED TO fall
+    back to weekend-only and silently compute the wrong expected as_of_date
+    -- a Thursday-sourced watchlist would be wrongly refused, or worse,
+    a wrong one could be wrongly accepted, with no visible signal either
+    way. 2026-11-15 (OPERATIONS.md, PROJECT_CONTEXT.md Section 7 finding
+    #15): this now REFUSES LOUDLY instead -- HolidayCalendarMissing
+    propagates out of assert_watchlist_current uncaught, and main() (see
+    test_holiday_week_oct2026.py's own coverage) turns that into a durable
+    REFUSED session_status event, not a silent wrong guess."""
     log_path = tmp_path / "events.jsonl"
 
     def raise_missing(d):
@@ -152,7 +206,7 @@ def test_friday_holiday_run_is_rejected_without_the_holiday_confirmed(tmp_path, 
 
     _log_watchlist_run(log_path, MONDAY, THURSDAY_BEFORE_HOLIDAY_FRIDAY,
                         ts=dt.datetime.combine(THURSDAY_BEFORE_HOLIDAY_FRIDAY, dt.time(18, 30)), run_id="run-thursday")
-    with pytest.raises(fibo_morning.StaleWatchlistError):
+    with pytest.raises(fibo_morning.HolidayCalendarMissing):
         fibo_morning.assert_watchlist_current(MONDAY, log_path=log_path)
 
 

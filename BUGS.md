@@ -1529,3 +1529,32 @@ transition AND an actual delivered email ("DOWN | Fibo evening job" at
 "up" before this entry was written. Full detail, including the two
 dead-man's-switch sections, the schedule-move rationale, and the
 retracted ~11%-refusal-rate claim, is in OPERATIONS.md.
+
+## Bug #23: an uncovered holiday-calendar year degraded silently instead of refusing
+
+**Mechanism**: `scripts/fibo_evening.py`'s `next_trading_day` and
+`scripts/fibo_morning.py`'s `previous_trading_day` both caught
+`HolidayCalendarMissing` (no calendar entry for a candidate date's year)
+and degraded to the old reactive, fetch_log-only heuristic -- logged as a
+WARNING, but otherwise indistinguishable from a correct run to anything
+not reading logs. 2027 is exactly such a year (confirmed unpublished by
+NSE as of 2026-11-15, OPERATIONS.md's "2027 NSE holiday master" section).
+
+**Why this is the same shape as finding #15, not a new class of
+mistake**: a documented "recheck the calendar monthly" intention is not a
+correction on its own -- nothing forces it to happen, and the first
+version of this entry's own fix pass initially proposed exactly that as
+the mitigation before being corrected to a code guard instead.
+
+**Status: fixed, 2026-11-15.** Both functions now let
+`HolidayCalendarMissing` propagate uncaught. `fibo_evening.py`'s `main()`
+catches it, emails `notify_evening_skipped`, and returns before the
+dead-man's-switch heartbeat call -- an uncovered year becomes a
+healthchecks.io DOWN alert the same evening. `fibo_morning.py`'s `main()`
+catches it and routes it through `log_refusal`, the same durable
+`REFUSED` `session_status` path every other morning refusal already
+uses. Regression-tested: 4 new tests in `tests/test_holiday_week_oct2026.py`
+(replacing 2 that asserted the old degrade behavior) and an updated
+assertion in `tests/test_fibo_morning_watchlist_freshness.py`. Full
+detail in OPERATIONS.md's "Trading-day logic now refuses loudly on an
+uncovered year" section.

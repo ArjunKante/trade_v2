@@ -868,6 +868,27 @@ if a thinner or more momentum-only universe is ever substituted.
 No rule changed. Logged in `experiments_fibo.csv` per this project's
 diagnostic convention.
 
+**Follow-up, same day: does the morning job pick the stale or the
+corrected run when two exist for the same target?** The day-1 ingestion
+race above means two `watchlist_run` events can legitimately exist for
+the same `target_trade_date` -- worth checking directly whether the
+freshness rule's "dates, not completeness" check could let a stale one
+win. It cannot: both `assert_watchlist_current` and `latest_watchlist`
+(`scripts/fibo_morning.py`) select `max(..., key=lambda e: e["ts"])` --
+**latest by timestamp, not first match** -- confirmed by a new test
+reproducing the exact VMM shape (`tests/
+test_fibo_morning_watchlist_freshness.py::
+test_two_valid_runs_for_the_same_target_select_the_latest_by_timestamp_not_the_first`):
+two `watchlist_run` events for the same target/as_of, the second with
+corrected swing values, and both selection functions return the second
+one's data. This is not a live defect -- a correction is always appended
+LATER in wall-clock time than the run it corrects (event `ts` is
+monotonic at append time for real runs), so "latest wins" and "most
+complete wins" coincide in practice. The theoretical residual (a
+correction logged with an EARLIER timestamp than the run it corrects,
+which "latest by ts" would get wrong) does not arise from any real code
+path in this project and is not constructed against here.
+
 ## 16. qualify -> SETUP_ON stage reconciliation (2026-11-15, diagnostic, no rule changed)
 
 **Per OPERATIONS.md's standing rule ("reconcile stage counts before

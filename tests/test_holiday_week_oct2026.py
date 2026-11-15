@@ -48,7 +48,7 @@ from data_layer.staleness import assert_data_current as real_assert_data_current
 import fibo_evening  # noqa: E402
 import fibo_morning  # noqa: E402
 from fibo_live.eventlog import append_event as real_append_event, read_events as real_read_events  # noqa: E402
-from fibo_live.session_status import NON_TRADING_DAY  # noqa: E402
+from fibo_live.session_status import NON_TRADING_DAY, REFUSED  # noqa: E402
 from fibo_live.session_status import record_session_status as real_record_session_status  # noqa: E402
 
 MONDAY = dt.date(2026, 10, 19)
@@ -340,17 +340,58 @@ def test_full_holiday_week_end_to_end(holiday_week, monkeypatch):
     assert latest["run_id"] == runs[0]["run_id"]
 
 
-# --- next_trading_day's degraded fallback, explicitly tested -------------
+# --- next_trading_day / previous_trading_day now REFUSE LOUDLY instead of
+# --- degrading when a candidate's year isn't covered by any calendar
+# --- (2026-11-15, OPERATIONS.md's "2027 NSE holiday master" section;
+# --- PROJECT_CONTEXT.md Section 7 finding #15 -- a documented "reload
+# --- this before it runs out" intention is exactly the pattern that dies
+# --- the moment nobody acts on it, so the code refuses instead).
 
-def test_next_trading_day_degrades_to_reactive_check_and_warns_when_calendar_missing(tmp_path, monkeypatch):
-    """A candidate day in a year no calendar covers (e.g. 2027 -- absent
-    from the committed fallback as of this writing) must fall back to
-    the OLD reactive fetch_log-only check, AND log a clear, visible
-    warning every time it does -- a silent degradation would defeat the
-    whole point of flagging this gap."""
-    con = get_connection(tmp_path / "w.duckdb")
-    friday_uncovered = dt.date(2027, 1, 1)
-    con.execute("INSERT INTO fetch_log VALUES (?, ?, 'no_data', 0, now())", [SOURCE_UDIFF, friday_uncovered])
+def test_next_trading_day_propagates_holiday_calendar_missing_uncaught(monkeypatch):
+    """next_trading_day used to catch HolidayCalendarMissing and degrade
+    to a reactive, fetch_log-only check. It must now do nothing of the
+    sort -- the exception propagates straight out, so main() (tested
+    below) is forced to handle it as a refusal, not a silent fallback."""
+    def raise_for_2027(d):
+        if d.year == 2027:
+            raise HolidayCalendarMissing(f"no entry for {d.year}")
+        return False
+
+    monkeypatch.setattr(fibo_evening, "is_nse_holiday", raise_for_2027)
+
+    with pytest.raises(HolidayCalendarMissing):
+        fibo_evening.next_trading_day(dt.date(2026, 12, 31))
+
+
+def test_previous_trading_day_propagates_holiday_calendar_missing_uncaught(monkeypatch):
+    """Same contract, fibo_morning's own copy."""
+    def raise_for_2027(d):
+        if d.year == 2027:
+            raise HolidayCalendarMissing(f"no entry for {d.year}")
+        return False
+
+    monkeypatch.setattr(fibo_morning, "is_nse_holiday", raise_for_2027)
+
+    with pytest.raises(HolidayCalendarMissing):
+        fibo_morning.previous_trading_day(dt.date(2027, 1, 4))
+
+
+def test_evening_main_refuses_loudly_and_never_pings_the_heartbeat_when_calendar_missing(tmp_path, monkeypatch):
+    """The end-to-end contract: an uncovered year must become a
+    notify_evening_skipped email AND leave the dead-man's-switch heartbeat
+    unreached -- never a silently-computed watchlist for the wrong day."""
+    warehouse_path = tmp_path / "w.duckdb"
+    con = get_connection(warehouse_path)
+    con.execute(f"INSERT INTO prices_eod VALUES {ROW.format(isin='ISIN1', trade_date='2026-12-31')}")
+    con.close()
+
+    monkeypatch.setattr(fibo_evening, "WAREHOUSE_DB", warehouse_path)
+    monkeypatch.setattr(fibo_evening, "RAW_PRICES_DIR", tmp_path / "raw")
+    monkeypatch.setattr(fibo_evening, "pull_before_appending", lambda log: None)
+    monkeypatch.setattr(fibo_evening, "load_bhavcopy_to_duckdb", lambda con, trade_date, raw_dir, series_include=None: 0)
+    monkeypatch.setattr(fibo_evening, "backfill_index_range", lambda con, start, end, raw_dir: {"ok": 0, "no_data": 0})
+    monkeypatch.setattr(fibo_evening, "assert_data_current",
+                         lambda con, as_of=None, max_staleness_days=3: dt.date(2026, 12, 31))
 
     def raise_for_2027(d):
         if d.year == 2027:
@@ -358,42 +399,64 @@ def test_next_trading_day_degrades_to_reactive_check_and_warns_when_calendar_mis
         return False
 
     monkeypatch.setattr(fibo_evening, "is_nse_holiday", raise_for_2027)
-    warnings = []
-    monkeypatch.setattr(fibo_evening, "log", lambda msg="": warnings.append(str(msg)))
 
-    result = fibo_evening.next_trading_day(
-        con, friday_uncovered - dt.timedelta(days=1), known_through=friday_uncovered
+    pinged = []
+    monkeypatch.setattr(fibo_evening, "ping_evening_heartbeat", lambda *a, **k: pinged.append(True))
+
+    emails = []
+    monkeypatch.setattr(fibo_evening, "send_email",
+                         lambda subject, body, log=None: emails.append((subject, body)) or True)
+    monkeypatch.setattr(fibo_evening, "already_notified", lambda *a, **k: False)
+    monkeypatch.setattr(fibo_evening, "record_notification", lambda *a, **k: None)
+
+    monkeypatch.setattr(sys, "argv", ["fibo_evening.py", "--date", "2026-12-31"])
+
+    fibo_evening.main()  # must return cleanly -- refusal, not a crash
+
+    assert pinged == [], "heartbeat must never be reached when the holiday calendar can't cover the target year"
+    assert any("holiday calendar" in subj.lower() for subj, _ in emails), (
+        f"expected a notify_evening_skipped email naming the holiday-calendar refusal, got: {emails}"
     )
-    con.close()
-
-    assert result == friday_uncovered + dt.timedelta(days=3), (
-        "must still skip the confirmed-via-fetch_log holiday (Friday) and the weekend after it, "
-        "landing on the following Monday"
-    )
-    assert any("cannot confirm" in w and str(friday_uncovered) in w for w in warnings), (
-        f"expected a clear warning naming the uncovered date, got: {warnings}"
-    )
 
 
-def test_next_trading_day_treats_uncovered_year_as_ordinary_without_a_fetch_log_signal(tmp_path, monkeypatch):
-    """Same degraded (calendar-missing) mode, but with nothing in
-    fetch_log either -- must default to treating the day as an ordinary
-    trading day (never silently skip it), the same stance this gap has
-    always had."""
-    con = get_connection(tmp_path / "w2.duckdb")
-    monday_uncovered = dt.date(2027, 1, 4)  # not pre-seeded in fetch_log at all
+def test_morning_main_logs_refused_session_status_when_calendar_missing(tmp_path, monkeypatch):
+    """Same contract on the morning side: log_refusal (the one durable,
+    visible path every other morning refusal already uses), not a
+    silent weekend-only guess."""
+    events_path = tmp_path / "events.jsonl"
+
+    def fake_watchlist_run(**kwargs):
+        return real_append_event("watchlist_run", kwargs, log_path=events_path)
+
+    # A real watchlist_run exists targeting 2027-01-04 -- freshness itself
+    # would otherwise pass; this isolates the calendar-missing path.
+    fake_watchlist_run(target_trade_date="2027-01-04", as_of_date="2027-01-01", run_id="r1")
+
+    monkeypatch.setattr(fibo_morning, "append_event",
+                         functools.partial(real_append_event, log_path=events_path))
+    monkeypatch.setattr(fibo_morning, "read_events",
+                         functools.partial(real_read_events, log_path=events_path))
+    monkeypatch.setattr(fibo_morning, "record_session_status",
+                         functools.partial(real_record_session_status, log_path=events_path))
+    # assert_watchlist_current's own `log_path` parameter defaults to the
+    # real EVENTS_LOG, bound at function-definition time -- monkeypatching
+    # the read_events/append_event NAMES doesn't change that default, and
+    # an explicit log_path at the call site overrides a functools.partial's
+    # preset. Same fixture shape as holiday_week's own, above.
+    monkeypatch.setattr(fibo_morning, "assert_watchlist_current",
+                         functools.partial(fibo_morning.assert_watchlist_current, log_path=events_path))
+    monkeypatch.setattr(sys, "argv", ["fibo_morning.py", "--date", "2027-01-04"])
 
     def raise_for_2027(d):
         if d.year == 2027:
             raise HolidayCalendarMissing(f"no entry for {d.year}")
         return False
 
-    monkeypatch.setattr(fibo_evening, "is_nse_holiday", raise_for_2027)
-    monkeypatch.setattr(fibo_evening, "log", lambda msg="": None)
+    monkeypatch.setattr(fibo_morning, "is_nse_holiday", raise_for_2027)
 
-    result = fibo_evening.next_trading_day(
-        con, monday_uncovered - dt.timedelta(days=1), known_through=monday_uncovered
-    )
-    con.close()
+    fibo_morning.main()  # must return cleanly -- refusal, not a crash
 
-    assert result == monday_uncovered
+    statuses = real_read_events(kind="session_status", log_path=events_path)
+    assert len(statuses) == 1
+    assert statuses[0]["status"] == REFUSED
+    assert "holiday calendar" in statuses[0]["reason"].lower()

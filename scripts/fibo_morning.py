@@ -198,29 +198,28 @@ def previous_trading_day(d: dt.date) -> dt.date:
     was an NSE holiday.
 
     That calendar (data/raw/nse_cm_holidays.pkl) is deliberately NOT
-    committed to git (see nse_holidays.py's own docstring) -- a GitHub
-    Actions runner's fresh checkout never has a copy. When it's missing
-    (HolidayCalendarMissing), this falls back to the same weekend-only
-    heuristic scripts/fibo_evening.py's own next_trading_day already
-    uses for anything it can't otherwise confirm -- a known, already-
-    flagged gap (fibo_live/clock.py, config.py), not a new one. In that
-    degraded mode, a weekday NSE holiday landing on a day this runs
-    without the calendar file would be mistaken for an ordinary trading
-    day, and assert_watchlist_current below would wrongly refuse a
-    genuinely fresh watchlist computed around it. Flagged, not fixed
-    here -- fixing it needs the calendar to actually reach that runner,
-    a separate change."""
+    committed to git (see nse_holidays.py's own docstring); a GitHub
+    Actions runner's fresh checkout relies on the committed fallback JSON
+    instead (nse_holidays.py's `_load`), which covers fewer years. When
+    NEITHER covers `candidate`'s year (HolidayCalendarMissing), this used
+    to fall back to a weekend-only heuristic, silently -- a documented
+    intention to keep the fallback JSON current is exactly the pattern
+    PROJECT_CONTEXT.md Section 7 finding #15 names (a flag nobody is
+    forced to act on dies). REFUSES LOUDLY instead, 2026-11-15 on
+    (OPERATIONS.md's "2027 NSE holiday master" section): HolidayCalendarMissing
+    now propagates uncaught. The caller (main(), below) catches it and
+    calls log_refusal, the same durable, visible path every other morning
+    refusal already uses -- an uncovered year becomes a REFUSED
+    session_status event the same morning, not a silently-wrong
+    NON_TRADING_DAY/trading-day guess discovered later."""
     candidate = d - dt.timedelta(days=1)
     while True:
         if candidate.weekday() >= 5:  # Saturday=5, Sunday=6
             candidate -= dt.timedelta(days=1)
             continue
-        try:
-            if is_nse_holiday(candidate):
-                candidate -= dt.timedelta(days=1)
-                continue
-        except HolidayCalendarMissing:
-            pass  # cannot confirm either way -- see docstring above
+        if is_nse_holiday(candidate):  # raises HolidayCalendarMissing if candidate.year is uncovered -- see docstring
+            candidate -= dt.timedelta(days=1)
+            continue
         return candidate
 
 
@@ -686,6 +685,12 @@ def main() -> None:
             f"targeting {trade_date}, logged {latest_run['ts']}.")
     except StaleWatchlistError as e:
         log_refusal(trade_date, run_mode, str(e))
+        return
+    except HolidayCalendarMissing as e:
+        # REFUSE LOUDLY, don't degrade -- see previous_trading_day's own
+        # docstring. Same durable session_status path every other morning
+        # refusal uses, not a silent weekend-only fallback.
+        log_refusal(trade_date, run_mode, f"holiday calendar missing: {e}")
         return
 
     watchlist = latest_watchlist(trade_date)

@@ -147,7 +147,7 @@ def _open_warehouse_with_retry(path, log):
     sys.exit(1)
 
 
-def next_trading_day(con, d: dt.date, known_through: dt.date) -> dt.date:
+def next_trading_day(d: dt.date) -> dt.date:
     """Next trading day after `d`: skips Saturday/Sunday, and skips a
     weekday CONFIRMED an NSE holiday by data_layer.nse_holidays.
     is_nse_holiday (the full local pkl if present, else the committed
@@ -164,18 +164,22 @@ def next_trading_day(con, d: dt.date, known_through: dt.date) -> dt.date:
     is_nse_holiday up front is what lets Monday's own run see Tuesday's
     holiday in advance and target Wednesday directly instead.
 
-    DEGRADES to the OLD reactive-only check, one candidate day at a
-    time, when is_nse_holiday raises HolidayCalendarMissing for that
-    candidate's year (e.g. 2027, absent from the committed fallback as
-    of this writing, see data/raw/nse_cm_holidays_fallback.json) --
-    logged as a visible WARNING every time, never a silent degradation.
-    In that fallback mode this function is exactly as holiday-blind as
-    it always was: it can only skip a day up to `known_through` that
-    this run's own backward walk (or an earlier run's) already confirmed
-    has no published bhavcopy; a day beyond `known_through` with no
-    calendar coverage is simply assumed an ordinary trading day, the
-    same known, flagged gap this project has always carried for an
-    uncovered year.
+    REFUSES LOUDLY, 2026-11-15 on (OPERATIONS.md's "2027 NSE holiday
+    master" section, PROJECT_CONTEXT.md Section 7 finding #15): used to
+    DEGRADE to the old reactive-only, fetch_log-based check, one
+    candidate day at a time, whenever is_nse_holiday raised
+    HolidayCalendarMissing for a candidate's year -- logged as a visible
+    WARNING, but silently correct-looking to anything not reading logs. A
+    documented intention to reload the calendar before it runs out is
+    exactly the pattern finding #15 names (a flag that needs a human to
+    act on it dies the moment nobody does). Replaced with a hard refusal:
+    HolidayCalendarMissing now propagates out of this function uncaught.
+    The caller (main(), below) catches it there, emails
+    notify_evening_skipped, and returns BEFORE the dead-man's-switch
+    heartbeat call -- so an uncovered year turns into a healthchecks.io
+    DOWN alert the same night, not a silent degradation discovered weeks
+    later. See data_layer.nse_holidays for why a year ever goes
+    uncovered, and OPERATIONS.md for the 2027-specific status.
 
     Only used for the idempotency guard below and the report line; the
     watchlist itself is always computed from `data_date`, the actual
@@ -185,23 +189,9 @@ def next_trading_day(con, d: dt.date, known_through: dt.date) -> dt.date:
         if nxt.weekday() >= 5:  # Saturday=5, Sunday=6
             nxt += dt.timedelta(days=1)
             continue
-        try:
-            if is_nse_holiday(nxt):
-                nxt += dt.timedelta(days=1)
-                continue
-        except HolidayCalendarMissing:
-            log(f"WARNING: next_trading_day cannot confirm whether {nxt} is an NSE holiday -- "
-                f"no calendar entry for {nxt.year} (neither the local pkl nor the committed "
-                f"fallback covers it). Falling back to the reactive, fetch_log-only check for "
-                f"this date -- a real holiday that year will only be caught AFTER a fetch "
-                f"attempt against it confirms no bhavcopy was published, not in advance.")
-            if nxt <= known_through:
-                no_data = con.execute(
-                    "SELECT 1 FROM fetch_log WHERE trade_date = ? AND status = 'no_data' LIMIT 1", [nxt]
-                ).fetchone()
-                if no_data is not None:
-                    nxt += dt.timedelta(days=1)
-                    continue
+        if is_nse_holiday(nxt):  # raises HolidayCalendarMissing if nxt.year is uncovered -- see docstring
+            nxt += dt.timedelta(days=1)
+            continue
         return nxt
 
 
@@ -447,7 +437,18 @@ def main() -> None:
             f"NSE's index-close file may not be published yet, or the fetch failed as no_data. "
             f"Anything reading index_eod for {data_date} right now would see stale/missing data.")
 
-    target_trade_date = next_trading_day(con, data_date, known_through=requested_date)
+    try:
+        target_trade_date = next_trading_day(data_date)
+    except HolidayCalendarMissing as e:
+        # REFUSE LOUDLY, don't degrade -- see next_trading_day's own
+        # docstring. Returning here, before the heartbeat ping at the end
+        # of this function, is what turns an uncovered year into a
+        # healthchecks.io DOWN alert instead of a silent weekend-only
+        # fallback nobody notices until a real holiday slips through.
+        log(f"REFUSING TO COMPUTE: {e}")
+        notify_evening_skipped(requested_date, "holiday calendar missing", str(e))
+        con.close()
+        return
     # Detected once, from the clock (src/fibo_live/clock.py), against the
     # actual data date rather than requested_date -- this job runs after
     # close by design, so it is expected to read REPLAY almost always;
