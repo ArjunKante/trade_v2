@@ -530,8 +530,8 @@ parameter must be set by:
 |---|---|---|
 | A-descriptive | Compute the persistence statistic historically (already done for this document: 3 mechanical regimes, 8 pre-holdout years). | **None needed.** It asserts nothing about the future, so there is nothing to validate -- reportable as understanding, never as a result. |
 | A-actionable | Same computation, used to characterize whether degradation historically preceded drawdowns. | **Forward-only, and long.** Not a holdout-consuming claim at all -- it is a descriptive log, validated by whether it shows degradation before/during a FUTURE momentum drawdown. No existing holdout is spent. **But the sample problem is severe, not a minor caveat**: only 3 mechanical regimes exist in 8 pre-holdout years (2 transitions), under the ~5 needed for a credible read, fixed as the threshold before this was computed. This is the same fundamental power problem `FINDINGS.md` Section 12 already proved fatal for a different incremental claim, not a version of Hypothesis A that avoids it. Validating a rare-event leading indicator at this event rate may take a full further market cycle or more, not months. |
-| B: loss-avoidance construction | Decile decomposition of already-existing historical returns (cheap, immediate, no holdout touch). | **No reachable clean validation path for a return-level claim.** This is an incremental modification of an already-working strategy -- `FINDINGS.md` Section 12's own power analysis (8-72 years for a comparable incremental claim) applies with full force here, for the identical statistical reason (the binding constraint is the variance of the difference, not the effect size). The only claim this hypothesis can honestly support is the STRUCTURAL one (concentration/HHI reduction), which is measurable immediately and does not require years of forward return data. Stated explicitly: if pursued past the development check, it is pursued as a risk-construction change, never presented as a validated return improvement. |
-| C: fundamentals risk filter | Requires building the missing point-in-time historical screener first (real, scoped, not yet started -- Bug #12). Once built: concentration/HHI check on already-existing historical rebalance dates, no holdout touch. | Same constraint as B, for the same reason -- a return-level claim is not reachable at any practical horizon. The structural (concentration-reduction) claim is the only one with a clean, fast validation path, and only after the missing infrastructure is built. |
+| B: loss-avoidance construction | Decile decomposition of already-existing historical returns (cheap, immediate, no holdout touch). | **UNVERIFIED-UNTESTABLE, not untestable [corrected 2026-11-16, see end-of-document update -- `FINDINGS.md` Section 12's 8-72-year figure was derived for a different comparison and has not been re-measured for this one].** This is an incremental modification of an already-working strategy, and the SAME KIND of constraint (variance of the difference, not effect size) plausibly applies -- but the specific 8-72-year range has not been shown to transfer. Before any return-level attempt: compute this hypothesis's OWN variance of the difference and OWN MDE first (Phase 6's existing threshold-derivation rule, applied here, not a new rule). The only claim this hypothesis can honestly support without that work is the STRUCTURAL one (concentration/HHI reduction), which is measurable immediately and does not require years of forward return data. Stated explicitly: if pursued past the development check, it is pursued as a risk-construction change, never presented as a validated return improvement. |
+| C: fundamentals risk filter | Requires building the missing point-in-time historical screener first (real, scoped, not yet started -- Bug #12). Once built: concentration/HHI check on already-existing historical rebalance dates, no holdout touch. | **UNVERIFIED-UNTESTABLE, not untestable [corrected 2026-11-16, see end-of-document update]** -- not "same constraint as B, for the same reason": that reused B's borrowed figure a second time without its own measurement either. Before any return-level attempt: compute this hypothesis's OWN variance of the difference and OWN MDE first (same rule as B, Phase 6's existing threshold-derivation rule, not a new one). The structural (concentration-reduction) claim is the only one with a clean, fast validation path, and only after the missing infrastructure is built. |
 
 **No candidate here requires touching the V1 holdout beyond what is
 already documented, requires a new V1 variant run against the V1 holdout,
@@ -640,10 +640,16 @@ this is the mechanism both Project 1's sign reversal and swing V1's
 holdout failure share, at two different horizons, in two independent
 codebases. Testing an incremental modification of an already-working
 strategy is bounded by the variance of the difference, not the size of
-the improvement, and this bound (8-72 years, `FINDINGS.md` Section 12) is
-severe enough to rule out return-level validation for any of the
-momentum-modification hypotheses this document proposes -- structural
-(non-return) claims are the only ones left reachable.
+the improvement -- the SPECIFIC bound measured for one such test (8-72
+years, `FINDINGS.md` Section 12, the earnings_yield paired rank-IC
+comparison) does NOT by itself establish that bound for Hypothesis B or
+C; neither has had its own variance of the difference measured
+**[corrected 2026-11-16, see end-of-document update: this line
+previously stated the borrowed figure as if it applied to "any of the
+momentum-modification hypotheses this document proposes" -- it is
+UNVERIFIED-UNTESTABLE for B and C specifically, not untestable, until
+each computes its own MDE]**. Structural (non-return) claims remain the
+only ones reachable without that prerequisite work.
 
 ### 3. What we must not do
 
@@ -657,8 +663,12 @@ momentum-modification hypotheses this document proposes -- structural
   cleared strong-looking in-sample bars and both still failed
   out-of-sample.
 - Claim a return-level improvement for Hypothesis B or C validated on any
-  timeframe shorter than the decades `FINDINGS.md` Section 12 already
-  measured as necessary for a comparable incremental claim.
+  timeframe shorter than its OWN computed MDE/variance-of-difference
+  requirement -- NOT "the decades `FINDINGS.md` Section 12 already
+  measured as necessary," which was measured for the earnings_yield
+  comparison, not for B or C **[corrected 2026-11-16, see end-of-document
+  update]**. Compute B's or C's own number before citing any duration at
+  all.
 - Spend the one remaining project-wide holdout slot on another
   short-horizon variant. **(Superseded 2026-09-27: there is no remaining
   slot at all now -- `FINDINGS.md` Section 7 records the historical
@@ -891,8 +901,35 @@ proposes" (Phase 11 #2) and "a comparable incremental claim" generally
 (Phase 11 #3). Each reuse may well turn out to be directionally right --
 testing an incremental modification of an already-working strategy is
 plausibly bounded the same way regardless of which modification -- but
-none of the three reuses has its OWN measured variance-of-difference
-behind it the way Section 12's original number does. Not corrected here;
-flagged so a future return-level attempt on B or C does not cite "8-72
-years" as if it were calibrated to B or C specifically, rather than
-borrowed from a different comparison by analogy.
+none of the four reuses has its OWN measured variance-of-difference
+behind it the way Section 12's original number does.
+
+**Correction made at all four sites (not re-derived -- that would just
+be a fifth unearned transfer of the same number)**: each now reads
+UNVERIFIED-UNTESTABLE rather than untestable, with the same stated
+prerequisite -- any attempt at Hypothesis B or C must compute its OWN
+variance of the difference and its OWN MDE before proceeding. This is
+Phase 6's existing threshold-derivation rule applied here, not a new
+rule: Phase 6 already requires any threshold to be "derived from the
+DEVELOPMENT-period distribution of the statistic it applies to,"
+computed before use -- the 8-72-year figure was derived that way for
+the earnings_yield comparison, and simply never was for B or C. All
+four hypotheses this bound touched should now read as unresolved, not
+settled. See PROJECT_CONTEXT.md §7 finding #16 ("a derived figure
+borrowed by analogy is an asserted figure") -- this is the second
+confirmed instance of that pattern in this document, after the V8
+passage below.
+
+**Audit correction, same date**: the V8 "failed to establish a real
+edge" passage (the "first" instance of this pattern, Phase 3/Phase 11
+#5) reads as already-hedged today only because the 2026-11-07 commit
+("Resolve the three trial-table disagreements; V8 do-not-revive flag")
+added that hedge. Before that commit, both occurrences stated plainly
+"both cleared the 100th percentile pre-holdout, both failed to
+establish a real edge" -- an unguarded instance, not a hedged one, at
+the time this document was first written and for six weeks after. An
+earlier audit pass that read only the current text and concluded "this
+is not a violation" would have been checking today's corrected wording
+against today's date, not the document's actual history -- corrected
+here so this record does not imply the document never had the problem
+at that location.

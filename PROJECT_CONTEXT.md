@@ -521,6 +521,17 @@ It is not: a flag needs an escalation path to OPERATIONS.md or §7, or it
 dies where it was written. Found 2026-11-07 while building the §3 trial
 table, weeks after the flags were written.
 
+**16. A derived figure borrowed by analogy is an asserted figure.** The
+8-72 year power range in `FINDINGS.md` Section 12 is real and correctly
+derived for one specific comparison — the earnings_yield paired rank-IC
+difference. It was then reused in four places in
+`NEW_RESEARCH_DIRECTION.md` to declare other momentum-modification
+hypotheses untestable, with no re-measurement of their own variance of
+the difference. This is more dangerous than a plainly asserted
+threshold, because citing a genuine calculation makes the claim read as
+measured. A power figure is a property of a specific comparison, not of
+a family of them. Found 2026-11-16.
+
 ---
 
 ## 8. THE STRUCTURAL FINDING
