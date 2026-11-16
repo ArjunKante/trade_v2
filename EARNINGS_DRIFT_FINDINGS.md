@@ -110,3 +110,60 @@ were wrong.
 **Post-earnings-drift family: CLOSED at trial 1.** No Study 2. The
 family's own trial count is 1 (Phase 0 + DEV together, per the explicit
 instruction recorded when the Phase 0 MDE was corrected).
+
+---
+
+## Pre-committed: descriptive measurement, momentum_12_1 overlap
+
+**This is NOT a new trial. Nothing about the closed study above is
+varied, re-run, or reopened by this measurement. No combined strategy is
+being proposed or licensed by any result below -- the momentum+
+fundamentals combination study already found combinations in this repo
+need 8-72 years to size (`FINDINGS.md` Section 12). The only purpose is
+to know whether the earnings-drift selection signal is distinct from
+momentum_12_1, the one strategy in this repo that has passed a sealed
+holdout, because that bears on how any FUTURE selection-type result here
+should be read -- not on reopening this one.**
+
+**Pre-committed, before the number exists**: a high overlap does not
+reopen earnings drift and does not license a combined strategy, for the
+reason stated above. A low overlap would say the two selection
+mechanisms are picking different things, which is informative on its own
+terms but, equally, licenses nothing by itself.
+
+**Exact specification, frozen now:**
+
+1. **Population**: the closed study's own final DEV universe (108,473
+   events), deduplicated to one row per `(entity_id, d0)` first --
+   same-day co-filed variants (Bug #26's own finding: FY-end filings
+   produce up to 4 identical-return duplicates) would otherwise inflate
+   the correlation sample and double/quadruple-count overlap hits for no
+   new information. `is_top_decile` and `event_return` are unchanged
+   from the closed study's own ranking (Stage 2).
+2. **Momentum factor**: `factors.momentum.compute_momentum_12_1`, over
+   `read_entity_panel()` (the same `entity_prices_daily` panel, no
+   holdout authorization needed -- nothing past `SEALED_HOLDOUT_START`
+   is read, since that table is already truncated there). No jump-date
+   guard passed, matching exactly how `scripts/run_holdout_study1.py`
+   itself calls it -- this measurement is against momentum AS ACTUALLY
+   RUN, not an improved version of it.
+3. **Momentum top-decile membership, "at the same date"**: momentum's
+   own rebalance schedule (`all_dates[::63]`, identical construction to
+   `run_holdout_study1.py`), cross-sectional top decile (`DECILE_FRAC=
+   0.10`) among entities with a valid momentum value, valid 20-day
+   liquidity tercile, and valid forward return (the `clean` population,
+   same as the momentum study's own selection) at each rebalance date.
+   For each earnings event, use the LATEST momentum rebalance date on or
+   before `d0` (point-in-time, no lookahead) -- i.e., whichever momentum
+   portfolio would actually have been held on that date.
+4. **Rank correlation**: momentum_12_1's own dense daily value (not
+   rebalance-restricted) AT `d0`, Spearman-correlated against
+   `event_return`, computed separately within each of the 36 quarters.
+5. **Report**: the distribution (mean, median, min, max) of (a) the
+   per-quarter overlap fraction -- of each quarter's earnings-top-decile
+   events, what fraction were also in momentum's own top decile at `d0`
+   -- and (b) the per-quarter Spearman correlation. No aggregate
+   single-number headline computed in place of the distribution.
+
+Script, to be written and run after this commit:
+`scripts/earnings_drift_momentum_overlap.py`.
