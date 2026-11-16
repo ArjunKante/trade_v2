@@ -167,3 +167,29 @@ terms but, equally, licenses nothing by itself.
 
 Script, to be written and run after this commit:
 `scripts/earnings_drift_momentum_overlap.py`.
+
+### Result
+
+52,421 deduplicated earnings events (one row per `entity_id`/`d0`),
+against 37 momentum rebalance dates over the same panel.
+
+**Overlap**: mean **7.7%**, median 7.9%, range 0.9%-12.7% across 31
+quarters with both a defined earnings top decile and a defined momentum
+rebalance in effect. A momentum top decile is, by construction, ~10% of
+its own eligible population at every rebalance -- an overlap of 7.7% is
+at or slightly *below* what pure chance would produce, not above it.
+
+**Rank correlation** (event_return vs momentum_12_1 at `d0`): mean
+**0.030**, median 0.042, range -0.078 to +0.240 across 32 quarters.
+Centered near zero, no quarter far from it.
+
+**Reading, per the pre-commitment above**: the earnings-drift selection
+signal is **not meaningfully related to momentum_12_1** -- overlap is at
+chance levels and the rank correlation is weak and centered on zero.
+Whatever the earnings top decile was actually selecting (Gate condition
+2b's own TIMING-null result already says it wasn't really the
+announcement either), it was not a disguised version of momentum. This
+does not reopen the closed study and licenses no combined strategy; it
+says that a future selection-type result in this repo should not be
+assumed to be "secretly momentum" without checking, the same way this
+one checked out not to be.
