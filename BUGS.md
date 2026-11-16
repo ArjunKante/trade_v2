@@ -2101,3 +2101,115 @@ only flaw is one old jump) or keeping the per-window check
 script must still do explicitly, which is the exact "must be remembered"
 problem this proposal was meant to solve. Flagged, not resolved; no code
 changed.
+
+## Bug #26 follow-up 2: a third option (mask, don't delete) -- and a correction to the follow-up above
+
+**Requested 2026-11-16.** Masking (set the contaminated row's price to
+NaN, keep the row) was not in the original two options. Checked
+directly, not assumed: **masking is strictly safer than deletion for
+row-index alignment, but it does not give the "NaN propagates
+naturally" protection the proposal expected for this project's actual
+factor code, and it would not have caught Bug #26 on its own.**
+
+**Why not.** `compute_momentum`/`compute_forward_return` are TWO-POINT
+`.shift()`-based ratios (`value = close[t-skip] / close[t-skip-window]
+- 1`), never a day-by-day compounded product. NaN at a masked row `j`
+only propagates into a downstream value when `j` is itself one of the
+two shifted reference rows for that output -- a small minority of the
+rows a window of width W actually touches. For every output row whose
+window spans OVER `j` without landing on it as an endpoint, BOTH
+reference prices read are perfectly valid, non-NaN numbers, and their
+ratio still reflects the uncorrected price-level jump sitting between
+them. **This is exactly Bug #26's own shape**: KAUSHALYA's transition
+sits at 2024-02/03, strictly between `t0`=2023-05-30 and
+`tf`=2024-04-30 -- neither endpoint. Masking the transition's own row
+would have left both of Bug #26's endpoint lookups untouched and NaN-free,
+and the 189x contamination would have passed through exactly as it did.
+The project's EXISTING protection (`_max_gap_in_window`, a rolling-MAX
+over a boolean flag across the full lookback window) already solves the
+"window-spanning, not endpoint" problem correctly -- but it is a
+separate, explicit, window-size-aware check, not something masking
+makes unnecessary. A masked panel and an unmasked panel look identical
+to `_max_gap_in_window` unless `unexplained_jump_dates` is still passed
+to it explicitly -- masking the PRICE does not feed that check at all.
+
+**What masking breaks that deletion does not.** Deletion is all-or-
+nothing per entity; no row survives partially, so no aggregate can
+"quietly heal" over a gap. Masking leaves the row in place with a NaN
+field, and many common pandas idioms do NOT propagate that NaN loudly:
+a `.rolling(W, min_periods=k)` with `k<W` (this project's own
+`_max_gap_in_window` uses `min_periods=1`) or any `skipna=True`
+aggregate will silently compute a result from whatever non-NaN values
+remain in the window, with no error and no warning -- a false sense
+that "NaN handles it" when the computation actually healed over the
+contamination unnoticed. Deletion cannot do this; there is no row to
+work around. Row-count-based logic (this project's own join-attrition
+checks, including `scripts/earnings_drift_dev_stage1_universe.py`'s own
+`len(dates) - idx - 1 < HORIZON`) is exactly backwards: masking
+preserves row counts correctly (the trading day happened; only the
+price is bad), while deletion would have silently shifted every later
+row's index distance for that entity -- this is the one place masking
+is unambiguously the correct choice over deletion, consistent with
+Section 0 above.
+
+**Cost versus the ~30% figure.** Masking invalidates individual FLAGGED
+ROWS, not whole entities -- on the order of 45-90 rows total (one per
+lineage transition, a handful per same-ISIN jump), against a panel of
+~3.46 million rows: **under 0.01% of the panel by row count**, vastly
+cheaper than entity-level deletion's ~30%. But cheap-by-row-count and
+effective-by-coverage are different claims: because of the two-point-
+ratio mechanics above, this cheapness does not translate into
+protection for the dominant computation pattern (momentum, forward
+return, and Bug #26's own construction) without ALSO changing those
+functions to check "is there a masked NaN anywhere in my window" --
+which is a second, necessary layer, not a byproduct of masking alone.
+Where masking DOES help for free: any computation that reads a specific
+date directly (Bug #26's own `c0/c1/c2/c_entry/c_exit` lookups would
+correctly see NaN if the EXACT flagged date were one of those lookups --
+narrower coverage than the window-spanning case, but real).
+
+**No code changed.**
+
+## Bug #26 follow-up 3: Study 1's lineage exposure -- answered precisely, and a correction
+
+**Asked 2026-11-16: is `run_holdout_study1.py` exposed to zero-gap
+LINEAGE jumps outside the 78-entity same-ISIN set?**
+
+**Yes. Count: 40 entities, never measured.**
+
+Of the 45 currently-flagged unexplained lineage transitions
+(`lineage_jump_guard.unexplained_jump_boundaries`), **41 have a
+calendar gap of 5 days or less** (mostly exactly 1 day -- an ISIN
+re-issue with continuous trading, no halt at all) and are therefore
+**not** caught by `factors/momentum.py`'s incidental `STALE_GAP_DAYS`
+protection. Of those 41, exactly **1** overlaps with the 78-entity tight
+same-ISIN pin (`gap_days<=5`, pinned 2026-09-27). **40 are a genuinely
+distinct, never-measured exposure.**
+
+**Correction to the follow-up above (Bug #26 follow-up 1), not an
+edit** -- that entry stated "all 14 known lineage-jump transitions have
+a 29-2622-day calendar gap... comfortably past `STALE_GAP_DAYS=5`,"
+citing `run_lineage_jump_fix_impact.py`'s own measurement, and used
+this to conclude Study 1 is incidentally protected against lineage-type
+jumps generally. **That was true of the 14-entity population that
+script measured against, and is false of the current, full 45-entity
+population**: only 4 of 45 have a wide gap (7, 26, 245, 559 days --
+KAUSHALYA among them, correctly protected); the other 41 do not. The
+14-entity figure was a snapshot from an earlier, smaller backfill state,
+treated here as if it still described today's data without
+re-checking it first -- the same failure shape `PROJECT_CONTEXT.md`'s
+own Section 9 already names twice (the 3-regime/5-regime drift,
+Bug #24 follow-up). Recorded as a third instance of that shape, from
+this session, on this same bug.
+
+**Cost of measuring it, not done here, per instruction**: build a
+sibling script to the existing `run_holdout_study1_bug11_check.py`
+(itself a known-cost, already-run pattern), excluding these 40 entities
+instead of/alongside the 78. Computationally cheap -- the same full
+continuous-simulation backtest this project already reruns routinely
+for materiality checks. The real cost is conceptual, not computational:
+it is another read of the retired historical holdout, which this
+project already treats as a materiality check rather than a new spend
+(`FINDINGS.md` Section 7, the existing Bug #11 check's own precedent) --
+it would need its own `data/holdout_access_log.txt` entry on that same
+basis. **Not run.**
