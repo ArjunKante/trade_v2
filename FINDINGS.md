@@ -15,6 +15,15 @@ configuration.
 
 **Yes, on a thin sample.**
 
+**The holdout margin is stated as a range, permanently, as of
+2026-11-16 -- see this section's own final entry, below the 2026-11-16
+lineage-contamination check, before relying on any single number in
+the table immediately following.** Primary **3.50 points**; range
+**3.50-5.97** depending on correction method, plus a separate
+3.57-5.22 exclusion-set-instability diagnostic on top of that. The
+3.87 below is the ORIGINAL, uncorrected figure -- historically accurate
+as the first number ever reported, not the one to cite today.
+
 | | pre-holdout backtest (2017-2024) | holdout (2025-2026) |
 |---|---|---|
 | Momentum CAGR (net) | 30.43% | 14.72% |
@@ -305,6 +314,25 @@ lineage entities, the precise form; 5.97 under the conservative
 entity-level form)**. `PROJECT_CONTEXT.md` Section 4 is NOT amended to
 state zero clean passes -- this branch of the pre-commitment does not
 apply.
+
+**THE MARGIN IS NOW STATED AS A RANGE, PERMANENTLY, AND NO FURTHER
+POINT ESTIMATE SHOULD BE PRODUCED, 2026-11-16.** Six measured values
+exist on record (3.87, 3.64, 3.63, 3.50, 5.97, and the separate
+3.57-5.22 exclusion-set-sensitivity diagnostic) -- every one defensible
+under its own stated method at the time it was computed, none of them
+"the number." **Primary: 3.50** (window-level correction for both known
+contaminations -- the most precise analysis choice, and, as it happens,
+the lowest measured value, which is itself worth noting rather than
+treating as suspicious: the more careful the correction, the smaller
+the margin got, consistently, across every correction applied so far).
+Full range: **3.50-5.97**, plus the 3.57-5.22 diagnostic layered on top
+of the pre-lineage-correction state. `PROJECT_CONTEXT.md` Section 4
+carries the same range. **The next person to recompute this will get
+yet another number -- `same_isin_jump_excluded_entities()` still reads
+the live warehouse with no pinned version, and any further contamination
+class found would add another correction method with its own defensible
+granularity choice. That is a property of the measurement, not news,
+and is not grounds for another re-run.**
 
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 
@@ -600,8 +628,9 @@ and the earnings-drift seal.
 
 - **Thin sample.** 5 holdout periods (fewer than the ~6-7 pre-registered;
   universe 1,131-1,292 names/period, decile 114-130, 604 selection slots,
-  336 distinct entities -- Section 2's own span statement), margin 3.87
-  points against a 3.0-point threshold -- a different period
+  336 distinct entities -- Section 2's own span statement), margin
+  **3.50-5.97 points** (Section 2's own permanent range, primary 3.50)
+  against a 3.0-point threshold -- a different period
   boundary could plausibly flip the pass/fail call. A pass at this sample
   size is weak evidence, exactly as `PREREGISTRATION.md` stated before the
   result existed, and that statement binds now that it passed, not only if

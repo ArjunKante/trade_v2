@@ -212,9 +212,30 @@ append-only; corrections are new rows.
 Buy the top decile by `momentum_12_1` (12-month return skipping the most
 recent month), hold 63 trading days, equal weight, long only.
 
-**Sealed holdout: 14.72% vs 10.85% CAGR, +3.87 points, all three
-pre-registered conditions passed.** Large-cap replication +6.56 points (CV
-only).
+**Sealed holdout, margin stated as a range, permanently -- no further
+point estimate should be produced** (`FINDINGS.md` Section 2): **primary
+3.50 points** (window-level correction for both known contaminations --
+the most precise analysis choice and the lowest of the measured values),
+full range **3.50 to 5.97** depending on correction method, with a
+separate exclusion-set-instability diagnostic spanning 3.57-5.22 on top
+of that. Every value below was measured, defensible under its own stated
+method, and is not "the number":
+
+| value | method |
+|---|---|
+| 3.87 | original, no contamination correction applied |
+| 3.64 | 78-entity same-ISIN exclusion, pinned to the 2026-09-27 read date (the original record) |
+| 3.63 | same as above, reproduced 2026-11-16 (1-entity reconstruction difference from 3.64, immaterial) |
+| **3.50** | **+ the 40-entity lineage-jump correction, WINDOW-LEVEL (precise: masks only the contaminated momentum/forward-return windows)** |
+| 5.97 | + the 40-entity lineage-jump correction, ENTITY-LEVEL (conservative: drops the entities outright, matching the 78-entity precedent) |
+| 3.57-5.22 | separate diagnostic: the same-ISIN mechanism's own instability across exclusion-set snapshot dates, window held fixed |
+
+**The next person to recompute this will get yet another number. That
+is a property of the measurement -- an unpinned live detector plus a
+margin sensitive to single-entity contribution concentration (top 10 of
+336 entities = 63% of compounded return) -- not news, and not a reason
+to run it again.** Large-cap replication +6.56 points (CV only, not
+subject to this same correction history).
 
 **The sealed holdout spans 5 rebalance periods over ~13 months
 (2025-04-11 to 2026-04-22), universe 1,131-1,292 names per period,
@@ -224,24 +245,21 @@ within a period share the same market. The result was pre-registered
 and all three conditions passed; this is stated so the sample size is
 visible next to the margin rather than having to be derived.**
 
-**Verified against the Bug #11 same-ISIN exclusion AS OF THE EXCLUSION
-SET'S STATE ON 2026-09-27 (the holdout read date, 78 entities excluded):
-margin 3.87 -> 3.64, still clearing the 3.0 threshold.** This is the
-record -- the figure a re-run on that date would reproduce. Max drawdown
-actually *worsened* when those entities were excluded, which argues
-against them flattering the result.
-
-**Separate sensitivity diagnostic, not a replacement for the record
-above and not to be re-run as an "update" each time it is checked**:
-`same_isin_jump_excluded_entities()` reads the full warehouse at call
-time with no pinned version, so applying the SAME exclusion mechanism
-at later snapshot dates that did not exist on 2026-09-27 moves the
-margin to +3.57-+5.22 (`FINDINGS.md` Section 2). A single entity has
-been observed moving the margin by 1.65 points (MOLDTKPAC,
-`INE893J01011`) while the buffer above the 3.0 threshold across that
-range is only 0.57 to 1.00 points -- the result is not robust to one
-further adverse addition of a size already seen. The record stays
-3.64, dated 2026-09-27; this diagnostic does not update it.
+**Why the range, not a single record.** Two independent contaminations
+have now been found and corrected (Bug #11, same-ISIN; Bug #26,
+lineage-transition), each with its own defensible correction method
+(entity-level vs window-level), on top of an exclusion mechanism
+(`same_isin_jump_excluded_entities()`) that reads the live warehouse
+with no pinned version and drifts as ordinary backfill continues. Max
+drawdown *worsened* when the 78 same-ISIN entities were excluded, which
+argues against contamination flattering the result generally -- but the
+point estimate itself has never been a stable thing to report, only a
+range bounded by stated methods. A single entity has been observed
+moving the margin by 1.65 points (MOLDTKPAC, `INE893J01011`) against a
+buffer as thin as 0.57-1.00 points in the exclusion-set diagnostic above
+-- the margin is sensitive to single-name contribution concentration by
+construction (top 10 of 336 entities = 63% of compounded return), not a
+sign any one correction was done wrong.
 
 **Never run live until 2026-10-26.** One basket now recorded with a January
 check-in. **Pre-committed interpretation recorded before that check-in**
