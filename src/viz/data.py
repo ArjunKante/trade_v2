@@ -162,6 +162,44 @@ def fetch_raw_hourly_bars(
     return {"days": hourly_days, "combined": combined, "missing_days": multi["missing_days"]}
 
 
+def fetch_raw_5min_bars(
+    warehouse_con: duckdb.DuckDBPyConnection, intraday_con: duckdb.DuckDBPyConnection,
+    entity_id: str, trade_date: dt.date, n_lookback_days: int,
+) -> dict:
+    """5-minute-candle view of the SAME window `fetch_raw_multi_day_bars`
+    fetches, built on top of it exactly as `fetch_raw_hourly_bars` is --
+    the difference being that 09:15-15:30 (375 minutes) divides evenly
+    into 5-minute buckets (75 per day, no remainder), unlike 1-hour
+    buckets' partial 15:15-15:30 tail. So there is no partial-bucket
+    case here, no `bucket_end` column is needed, and the result renders
+    with `build_plotly_chart` directly (the same fixed-width-bar
+    renderer the 1-minute view already uses) rather than
+    `build_hourly_chart`'s fractional-bucket positioning.
+
+    Returns the same shape as `fetch_raw_multi_day_bars`: {"days":
+    [{"date": date, "bars": DataFrame[ts, open, high, low, close,
+    volume], "scale_label": str}, ...], "combined": one concatenated
+    DataFrame with the same columns plus `trade_date`, "missing_days":
+    [date, ...]}."""
+    from box_theory.bars import aggregate_to_5min
+
+    multi = fetch_raw_multi_day_bars(warehouse_con, intraday_con, entity_id, trade_date, n_lookback_days)
+
+    bucketed_days = []
+    combined_frames = []
+    for day in multi["days"]:
+        bucketed = aggregate_to_5min(day["bars"])
+        if bucketed.empty:
+            continue
+        bucketed = bucketed.drop(columns=["is_green", "is_red"])
+        bucketed["trade_date"] = day["date"]
+        bucketed_days.append({"date": day["date"], "bars": bucketed, "scale_label": day["scale_label"]})
+        combined_frames.append(bucketed)
+
+    combined = pd.concat(combined_frames, ignore_index=True) if combined_frames else pd.DataFrame()
+    return {"days": bucketed_days, "combined": combined, "missing_days": multi["missing_days"]}
+
+
 SMA_WINDOW = 50  # same as poc.trend.SMA_WINDOW -- the trend filter's own window
 
 

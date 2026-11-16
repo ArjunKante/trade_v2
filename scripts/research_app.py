@@ -10,9 +10,18 @@ never recomputes a result that would change what a study already
 concluded; strategy adapters (src/viz/<study>_adapter.py) recompute
 overlays PURELY FOR DISPLAY from the same pure functions the real
 backtest used, the identical thing the CLI (scripts/plot_trade.py)
-already does. **No sealed TEST window is ever read here** -- every
-per-study date picker below is hard-bounded to that study's own DEV
-window, sourced from that study's own test_seal module, not re-typed.
+already does. **No sealed TEST window is ever read here, with ONE
+deliberate, explicit exception**: Fibo's TEST window (`fibo_test`),
+which `FIBO_FINDINGS.md` Section 13 has already read three times and
+whose verdict is already closed and recorded -- shown here as a
+materiality/sanity-check view, the same discipline this project already
+applies to re-reading other retired windows (`data/holdout_access_log.
+txt`), never as an open question. Its own banner carries the standing
+rule: nothing seen in that view may change the running forward test
+except through a new, separately pre-registered trial. Every OTHER
+per-study date picker below remains hard-bounded to that study's own
+DEV window, sourced from that study's own test_seal module where one
+exists, not re-typed.
 """
 from __future__ import annotations
 
@@ -31,7 +40,8 @@ from fibo.intraday_db import get_read_connection as get_intraday_con
 
 from viz.chart_plotly import build_daily_chart, build_hourly_chart, build_plotly_chart
 from viz.data import (
-    adjust_raw_level_for_daily_chart, fetch_daily_bars, fetch_raw_hourly_bars, fetch_raw_multi_day_bars,
+    adjust_raw_level_for_daily_chart, fetch_daily_bars, fetch_raw_5min_bars, fetch_raw_hourly_bars,
+    fetch_raw_multi_day_bars,
 )
 from viz.overlay import Band, Level
 
@@ -660,6 +670,93 @@ def _poc_dev_bounds() -> tuple[dt.date, dt.date]:
 
 
 # ---------------------------------------------------------------------
+# Fibo -- DEV, TEST (sealed, deliberate exception, see module docstring),
+# and LIVE (data/fibo_live/v1/events.jsonl). All three loaders/adapters
+# live in viz.fibo_adapter, never recomputed from raw data here -- see
+# that module's own docstring for why.
+# ---------------------------------------------------------------------
+
+@st.cache_data
+def _load_fibo_dev_trades() -> pd.DataFrame:
+    from viz.fibo_adapter import load_dev_trades
+    return load_dev_trades()
+
+
+@st.cache_data
+def _load_fibo_dev_verdict() -> dict:
+    from viz.fibo_adapter import fibo_dev_verdict
+    return fibo_dev_verdict()
+
+
+def _fibo_dev_bounds() -> tuple[dt.date, dt.date]:
+    from viz.fibo_adapter import fibo_dev_bounds
+    return fibo_dev_bounds()
+
+
+@st.cache_data
+def _fibo_dev_adapter_cached(_warehouse_con, _intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    from viz.fibo_adapter import build_fibo_dev_overlay
+    return build_fibo_dev_overlay(_warehouse_con, _intraday_con, entity_id, trade_date)
+
+
+def _fibo_dev_adapter(warehouse_con, intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    return _fibo_dev_adapter_cached(warehouse_con, intraday_con, entity_id, trade_date)
+
+
+@st.cache_data
+def _load_fibo_test_trades() -> pd.DataFrame:
+    from viz.fibo_adapter import load_test_trades
+    return load_test_trades()
+
+
+@st.cache_data
+def _load_fibo_test_verdict() -> dict:
+    from viz.fibo_adapter import fibo_test_verdict
+    return fibo_test_verdict()
+
+
+def _fibo_test_bounds() -> tuple[dt.date, dt.date]:
+    from viz.fibo_adapter import fibo_test_bounds
+    return fibo_test_bounds()
+
+
+@st.cache_data
+def _fibo_test_adapter_cached(_warehouse_con, _intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    from viz.fibo_adapter import build_fibo_test_overlay
+    return build_fibo_test_overlay(_warehouse_con, _intraday_con, entity_id, trade_date)
+
+
+def _fibo_test_adapter(warehouse_con, intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    return _fibo_test_adapter_cached(warehouse_con, intraday_con, entity_id, trade_date)
+
+
+def _load_fibo_live_trades() -> pd.DataFrame:
+    """Deliberately NOT @st.cache_data -- see viz.fibo_adapter.
+    load_live_trades's own docstring: this file grows daily and must
+    never show stale in an open session."""
+    from viz.fibo_adapter import load_live_trades
+    return load_live_trades()
+
+
+def _load_fibo_live_verdict() -> dict:
+    from viz.fibo_adapter import fibo_live_verdict
+    return fibo_live_verdict()
+
+
+def _fibo_live_bounds() -> tuple[dt.date, dt.date]:
+    from viz.fibo_adapter import fibo_live_bounds
+    return fibo_live_bounds()
+
+
+def _fibo_live_adapter(warehouse_con, intraday_con, entity_id: str, trade_date: dt.date) -> dict:
+    # Not cached either, for the same reason as the trades loader above --
+    # a SETUP_ON entry can go from PENDING to a real outcome within the
+    # same trading day this app might be left open across.
+    from viz.fibo_adapter import build_fibo_live_overlay
+    return build_fibo_live_overlay(warehouse_con, intraday_con, entity_id, trade_date)
+
+
+# ---------------------------------------------------------------------
 # Study registry -- every study the user asked for is listed; only ones
 # with BOTH exported trade records AND a built viz adapter are usable.
 # ---------------------------------------------------------------------
@@ -770,15 +867,44 @@ STUDIES: dict[str, dict] = {
         "lookback_days": 0,
         "daily_default_before": 20, "daily_default_after": 20,
     },
-    "fibo": {
-        "label": "Fibo (ORB + golden zone)",
-        "available": False,
-        "unavailable_reason": (
-            "Trade records exist (`data/fibo_step5_dev_results.pkl`, DEV only, 67 trades) but no "
-            "`src/viz/fibo_adapter.py` has been built yet. **Note**: `data/fibo_test_results.pkl` "
-            "(188 trades) looks like the sealed TEST window's own results -- this tool will never "
-            "load that file, even once a Fibo adapter exists."
-        ),
+    "fibo_dev": {
+        "label": "Fibo DEV (ORB + golden zone)",
+        "available": True,
+        "trades_loader": _load_fibo_dev_trades,
+        "verdict_loader": _load_fibo_dev_verdict,
+        "adapter": _fibo_dev_adapter,
+        "dev_bounds": _fibo_dev_bounds,
+        "outcome_col": "outcome",
+        "net_r_col": "net_r",
+        "lookback_days": 0,
+        "daily_default_before": 60, "daily_default_after": 0,  # SWING_LOOKBACK_DAYS, fibo.indicators
+        "default_chart_mode": "5-minute",
+    },
+    "fibo_test": {
+        "label": "Fibo TEST -- SEALED WINDOW (read 3x already, see banner)",
+        "available": True,
+        "trades_loader": _load_fibo_test_trades,
+        "verdict_loader": _load_fibo_test_verdict,
+        "adapter": _fibo_test_adapter,
+        "dev_bounds": _fibo_test_bounds,
+        "outcome_col": "outcome",
+        "net_r_col": "net_r",
+        "lookback_days": 0,
+        "daily_default_before": 60, "daily_default_after": 0,
+        "default_chart_mode": "5-minute",
+    },
+    "fibo_live": {
+        "label": "Fibo LIVE forward test (data/fibo_live/v1/events.jsonl)",
+        "available": True,
+        "trades_loader": _load_fibo_live_trades,
+        "verdict_loader": _load_fibo_live_verdict,
+        "adapter": _fibo_live_adapter,
+        "dev_bounds": _fibo_live_bounds,
+        "outcome_col": "outcome",
+        "net_r_col": "net_r",
+        "lookback_days": 0,
+        "daily_default_before": 60, "daily_default_after": 0,
+        "default_chart_mode": "5-minute",
     },
     "box_v1": {
         "label": "Box theory V1",
@@ -822,7 +948,10 @@ STUDIES: dict[str, dict] = {
 # ---------------------------------------------------------------------
 
 st.sidebar.title("Research Browser")
-st.sidebar.caption("Closed studies only. Read-only. No sealed TEST window is ever reachable here.")
+st.sidebar.caption(
+    "Closed studies only. Read-only. No sealed TEST window is ever reachable here, EXCEPT Fibo's "
+    "(already read 3x, verdict closed and recorded -- see its own persistent banner)."
+)
 
 study_key = st.sidebar.selectbox(
     "Study", list(STUDIES.keys()), format_func=lambda k: STUDIES[k]["label"],
@@ -867,6 +996,15 @@ if study_key in ("poc", "poc_v2", "poc_v3"):
         "the two units are not interchangeable, only V2 and V3 compare directly to each other."
     )
 
+if trades.empty:
+    # Only reachable for fibo_live today (every other study's trade list
+    # is a frozen, non-empty historical file) -- the live forward test
+    # can genuinely start from zero rows before its first SETUP_ON is
+    # logged, and "populate as they arrive" means this must not crash.
+    st.title(study["label"])
+    st.info(f"No trades recorded yet. {verdict['summary']}")
+    st.stop()
+
 entities = sorted(trades["entity_id"].unique())
 # Pre-seed the WIDGETS' OWN session_state keys, once, before they ever
 # render -- this is the only point in the script where that's legal.
@@ -878,7 +1016,18 @@ entities = sorted(trades["entity_id"].unique())
 # because index=/value= are first-render-only once a key owns the slot).
 if "entity_id_widget" not in st.session_state or st.session_state["entity_id_widget"] not in entities:
     st.session_state["entity_id_widget"] = entities[0]
-if "trade_date_widget" not in st.session_state:
+# Re-validate against THIS study's own bounds on every switch, not just
+# "has a value ever been set" -- found live switching from any other
+# study (all DEV windows 2016-2022ish, overlapping) to fibo_test (TEST
+# window 2023-2026, disjoint from every one of them): the carried-over
+# date from the PREVIOUS study violated the new min_value/max_value and
+# st.sidebar.date_input raised StreamlitValueBelowMinError before this
+# line ever got a chance to reset it. entity_id_widget's own check above
+# already guarded the equivalent case for the entity dropdown; this one
+# never needed it before because no two studies' date ranges were ever
+# disjoint until Fibo's TEST window existed.
+if ("trade_date_widget" not in st.session_state
+        or not (dev_start <= st.session_state["trade_date_widget"] <= dev_end)):
     st.session_state["trade_date_widget"] = trades["trade_date"].iloc[0]
 
 
@@ -902,28 +1051,41 @@ def _on_table_select() -> None:
 
 
 entity_id = st.sidebar.selectbox("Stock (entity_id)", entities, key="entity_id_widget")
+if study_key == "fibo_test":
+    _date_help = (f"Bounded to Fibo's own SEALED TEST window ({dev_start} to {dev_end}) -- "
+                  f"see this study's persistent banner above before reading anything into these charts.")
+elif study_key == "fibo_live":
+    _date_help = f"Bounded to the live forward test's own dates so far ({dev_start} to {dev_end})."
+else:
+    _date_help = (f"Bounded to this study's own DEV window ({dev_start} to {dev_end}) -- "
+                  f"the sealed TEST window is never reachable here.")
 trade_date = st.sidebar.date_input(
-    "Date", min_value=dev_start, max_value=dev_end, key="trade_date_widget",
-    help=f"Bounded to this study's own DEV window ({dev_start} to {dev_end}) -- "
-         f"the sealed TEST window is never reachable here.",
+    "Date", min_value=dev_start, max_value=dev_end, key="trade_date_widget", help=_date_help,
 )
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Chart mode")
-_CHART_MODES = ["1-minute", "1-hour (POC window)", "Daily (trend filter context)"]
+_CHART_MODES = ["1-minute", "5-minute", "1-hour (POC window)", "Daily (trend filter context)"]
 _default_chart_mode = study.get("default_chart_mode", "1-minute")
 if study_key == "poc_v3":
     st.sidebar.caption(
         "V3's own strategy confirmed on HOURLY candles -- defaulting to the 1-hour view so the "
         "chart shows the actual signal traded, not a finer timeframe the strategy never looked at."
     )
+if study_key in ("fibo_dev", "fibo_test", "fibo_live"):
+    st.sidebar.caption(
+        "Defaulting to 5-minute -- the trade day's shape without the full 1-minute noise. Daily (60 "
+        "days before/after by default) shows the swing the golden zone was drawn from, plus the daily "
+        "Alligator."
+    )
 chart_mode = st.sidebar.radio(
     "View", _CHART_MODES, index=_CHART_MODES.index(_default_chart_mode),
     key=f"chart_mode_{study_key}",  # per-study widget identity -- switching studies must not carry
                                      # one study's remembered choice onto another's different default
-    help="1-minute: the trade itself. 1-hour: the POC lookback window with its intraday shape "
-         "still visible (for V3, this is the EXACT candles the strategy confirmed on). Daily: the "
-         "50-day moving average the trend filter actually used -- invisible on both intraday views.",
+    help="1-minute: the trade itself, finest detail. 5-minute: the same day, less noise. 1-hour: the "
+         "POC lookback window with its intraday shape still visible (for V3, this is the EXACT candles "
+         "the strategy confirmed on). Daily: the 50-day moving average the trend filter actually used "
+         "(plus, for Fibo, the daily Alligator) -- invisible on every intraday view.",
 )
 st.sidebar.caption("Chart supports pan (click-drag) and zoom (scroll or the toolbar) natively.")
 
@@ -931,6 +1093,7 @@ default_lookback = study.get("lookback_days", 0)
 show_lookback = False
 lookback_days = default_lookback
 hourly_lookback_days = default_lookback
+five_min_lookback_days = default_lookback
 daily_before_days = study.get("daily_default_before", 80)
 daily_after_days = study.get("daily_default_after", 0)
 if chart_mode == "1-minute":
@@ -945,6 +1108,14 @@ if chart_mode == "1-minute":
             value=default_lookback,
             help=f"Defaults to this study's own window ({default_lookback} days) -- widen for more context.",
         )
+elif chart_mode == "5-minute":
+    st.sidebar.subheader("Lookback window (5-minute)")
+    five_min_lookback_days = st.sidebar.number_input(
+        "Lookback days (trading days before the trade day)", min_value=0, max_value=10,
+        value=default_lookback,
+        help="Each day is 75 candles (09:15-15:30, no partial bucket) -- capped at 10 lookback days "
+             "(11 total) to keep the chart to ~825 candles.",
+    )
 elif chart_mode == "1-hour (POC window)":
     st.sidebar.subheader("Lookback window (1-hour)")
     hourly_lookback_days = st.sidebar.number_input(
@@ -974,6 +1145,14 @@ outcome_col, net_r_col = study["outcome_col"], study["net_r_col"]
 outcomes = sorted(trades[outcome_col].unique())
 selected_outcomes = st.sidebar.multiselect("Outcome", outcomes, default=outcomes)
 r_min, r_max = float(trades[net_r_col].min()), float(trades[net_r_col].max())
+if r_min == r_max:
+    # st.slider rejects min_value == max_value outright -- found live,
+    # fibo_live, with its current single NO_TRIGGER row (net_r filled to
+    # a 0.0 placeholder, see viz.fibo_adapter.load_live_trades's own
+    # docstring on why). A tiny, symmetric widening keeps the slider
+    # legal without changing what it actually filters -- there is still
+    # only one real value in the data.
+    r_min, r_max = r_min - 0.01, r_max + 0.01
 r_range = st.sidebar.slider("Net R range", min_value=r_min, max_value=r_max, value=(r_min, r_max))
 
 filtered = trades[
@@ -1031,11 +1210,17 @@ with col_chart:
                 hi_adj = adjust_raw_level_for_daily_chart(warehouse_con, entity_id, trade_date, hi_raw)
                 bands_for_daily.append(Band(lo_adj, hi_adj, zlabel, color="gold", alpha=0.18))
 
+            extra_lines_for_daily = None
+            if study_key in ("fibo_dev", "fibo_test", "fibo_live"):
+                from viz.fibo_adapter import fibo_daily_alligator_lines
+                extra_lines_for_daily = fibo_daily_alligator_lines(warehouse_con, entity_id, daily["bars"])
+
             try:
                 fig = build_daily_chart(
                     daily["bars"], entity_id, trade_date, daily["scale_note"],
                     poc_price_adjusted=poc_adj, prev_high_adjusted=prev_high_adj,
                     levels=levels_for_daily or None, bands=bands_for_daily or None,
+                    extra_lines=extra_lines_for_daily,
                 )
                 st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
             except ValueError as e:
@@ -1044,6 +1229,28 @@ with col_chart:
             st.caption(
                 f"Note: the 1-minute adapter has nothing for this entity-day (status={result['status']}) -- "
                 "the daily view above is fetched independently and may still show context."
+            )
+    elif chart_mode == "5-minute":
+        five_min = fetch_raw_5min_bars(warehouse_con, intraday_con, entity_id, trade_date, five_min_lookback_days)
+        combined = five_min["combined"]
+        if combined.empty:
+            st.info("Nothing to plot on the 5-minute view: no archive data in this window.")
+        else:
+            scale_label = (
+                f"RAW rupee scale, {len(five_min['days'])} day(s) shown "
+                f"({'; '.join(d['scale_label'] for d in five_min['days'][-1:])})"
+            )
+            if five_min["missing_days"]:
+                st.caption(f"No archive data for: {', '.join(str(d) for d in five_min['missing_days'])} -- skipped.")
+            try:
+                fig = build_plotly_chart(combined, entity_id, trade_date, scale_label, overlay=result["overlay"])
+                st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True})
+            except ValueError as e:
+                st.warning(str(e))
+        if bars_empty:
+            st.caption(
+                f"Note: the 1-minute adapter has nothing for this entity-day (status={result['status']}) -- "
+                "the 5-minute view above is fetched independently and may still show context."
             )
     elif chart_mode == "1-hour (POC window)":
         hourly = fetch_raw_hourly_bars(warehouse_con, intraday_con, entity_id, trade_date, hourly_lookback_days)

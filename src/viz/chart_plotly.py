@@ -404,6 +404,7 @@ def build_daily_chart(
     daily_bars: pd.DataFrame, entity_id: str, trade_date: dt.date, scale_note: str,
     poc_price_adjusted: float | None = None, prev_high_adjusted: float | None = None,
     levels: list[Level] | None = None, bands: list[Band] | None = None,
+    extra_lines: list[dict] | None = None,
 ) -> go.Figure:
     """Daily-candle view for seeing the context a daily-timeframe
     condition (the 50-day trend filter, in particular; or, for the
@@ -419,6 +420,16 @@ def build_daily_chart(
     RAW-scale level through unconverted and have it silently plot at the
     wrong level. The two legacy params and the generic lists are
     additive, not exclusive -- a caller may use either or both.
+
+    `extra_lines`: generic hook for a study's own daily-timeframe line
+    SERIES (not a flat level) -- e.g. Fibo's daily Alligator (jaw/teeth/
+    lips). Each dict: {"name": str, "color": str, "values": array-like
+    aligned ROW-FOR-ROW with `daily_bars` (same length and order, NaN
+    where undefined) -- a caller gets this alignment by computing its
+    indicator on the exact same trimmed window `daily_bars` represents,
+    never by merging on date here. This function draws the series as-is
+    and does not know what it represents; study-specific meaning stays
+    in the adapter that builds it.
 
     If `daily_bars` carries an `is_hindsight` column (any True rows --
     `fetch_daily_bars`'s own `n_after` parameter), that region is shaded
@@ -472,6 +483,11 @@ def build_daily_chart(
         fig.add_hline(y=lvl.price, line_color=_color(lvl.color), line_dash=dash, line_width=1.3,
                        annotation_text=f"{lvl.label} {lvl.price:.2f}", annotation_position="right",
                        annotation_font_color=_color(lvl.color), annotation_font_size=10)
+    for line in (extra_lines or []):
+        fig.add_trace(go.Scatter(
+            x=x, y=line["values"], mode="lines",
+            line=dict(color=_color(line["color"]), width=1.3), name=line["name"],
+        ))
 
     trade_rows = bars.index[dates.dt.date == trade_date]
     if len(trade_rows):

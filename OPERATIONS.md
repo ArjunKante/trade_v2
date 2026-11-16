@@ -2220,3 +2220,38 @@ requested**: a periodic snapshot/copy of `warehouse.duckdb` for
 this collision class outright (no shared file handle at all). Noted here
 as the next step if the TTL proves insufficient in practice, and left
 there.
+
+## Fibo TEST window is now visible in research_app.py -- a deliberate exception, with a standing rule (2026-11-16)
+
+`scripts/research_app.py` added three Fibo entries (`fibo_dev`,
+`fibo_test`, `fibo_live`, `src/viz/fibo_adapter.py`). `fibo_test` is a
+deliberate exception to this tool's own rule that no sealed TEST window
+is ever reachable -- justified because `FIBO_FINDINGS.md` Section 13 has
+already read this window three times and its verdict is already closed
+and recorded (PASS under the measured cost model, FAIL under the
+refuted pessimistic one, NO EDGE under the strict original rule --
+Section 13j); showing it here is a materiality/sanity-check view, the
+same discipline this project already applies to re-reading other
+retired windows (`data/holdout_access_log.txt`), never an open
+question.
+
+**STANDING RULE, same text as the UI's own persistent banner on
+`fibo_test`**: any rule change suggested by looking at these charts must
+be registered as a NEW trial with its own pre-registration. It must NOT
+modify the running forward test (`scripts/fibo_evening.py`/
+`fibo_morning.py`). This window has already been read three times
+(Section 6b original, Section 9 first amendment, Section 13 twice); a
+fourth read that changes the live strategy's own rules would not be a
+materiality check, it would be exactly the "see the failure, then go
+measure the input" sequence Section 9h already named as this project's
+own recurring risk, now with a UI that makes looking easier and
+therefore the temptation to act on what is seen correspondingly larger.
+This rule binds regardless of how compelling a pattern looks on a chart.
+
+Data sources, never recomputed live: DEV = `data/fibo_step5_dev_results_
+corrected_scale.pkl` (120 trades). TEST = `data/fibo_test_results_
+corrected_scale_amended.pkl` (216 trades, `net_r_amended` column --
+confirmed by direct recomputation to reproduce Section 13d's own
++0.2679/t=4.661 exactly before this was built). LIVE = `data/fibo_live/
+v1/events.jsonl`, read fresh every call (the one source here that is
+supposed to change daily).
