@@ -227,6 +227,41 @@ turnover predicts, not a discrepancy.
 > it lands, and should be recorded as one data point rather than read
 > as confirmation or refutation.
 
+**PRE-COMMITTED, 2026-11-16, before the Bug #26 lineage-contamination
+check below is run:**
+
+**WHAT THIS IS**: a contamination check on a recorded result, in the
+same category as the exclusion-set reproducibility check above. It is
+NOT a re-test and NOT a new hypothesis. Nothing about the strategy may
+vary -- same rules, same windows, same universe construction. The only
+change is removing data now known to be defective (`BUGS.md` Bug #26's
+own follow-up 3: 40 entities with an unexplained, zero-gap lineage-
+transition jump, never previously excluded from this holdout).
+
+**Method -- both reported, they answer different questions:**
+(a) WINDOW-LEVEL, the precise correction: exclude any momentum or
+forward-return window that SPANS a flagged lineage transition, keeping
+that entity's clean windows. This is the correct granularity, per the
+finding that the transition sits between endpoints, not at one.
+(b) ENTITY-LEVEL, the conservative one: exclude all 40 entities
+outright, matching the 78-entity precedent. If (a) and (b) disagree
+materially, that itself is informative and will be stated as such.
+
+**Both directions, before the number exists:**
+
+If the margin stays above 3.0 under both corrections: the result
+stands, and the margin is restated to include this exclusion alongside
+the same-ISIN one. It does not become "more robust" -- it becomes
+correctly stated.
+
+If the margin falls below 3.0 under either correction: the recorded
+pass was produced partly by contaminated data. That does not mean
+momentum fails; it means THIS TEST did not establish it, the holdout is
+spent, and it cannot be re-established. The project would then have
+ZERO clean passes, and `PROJECT_CONTEXT.md` Section 4 must say so in
+its first line. No re-litigating, no appeal to the original check
+having passed, no third correction.
+
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 
 This is the finding that matters more than the headline pass, and it is the
