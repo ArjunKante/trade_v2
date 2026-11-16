@@ -77,8 +77,9 @@ convincing and were not.
 | Fibo forward test | Running. Morning job on GitHub Actions, triggered by cron-job.org, monitored by healthchecks.io. Evening job on the laptop at 20:00 (moved from 18:30, 2026-11-15), also monitored by healthchecks.io (dead-man's switch), manual if missed. |
 | Options depth collector | Scheduled on the laptop, 10:30/12:30/14:30, monitored by healthchecks.io (dead-man's switch, added 2026-11-15) |
 | Spread estimator validation | Specified, 24 names selected, awaiting market-hours collection |
-| Historical holdout | **RETIRED.** No sealed window remains for any equity study except IPO listing's unread 199 trades. |
+| Historical holdout (18-month, `SEALED_HOLDOUT_START`) | **RETIRED.** No window remains under THIS seal for any equity study except IPO listing's unread 199 trades. Two newer, separate seals now exist (next two rows) -- "no sealed window remains" no longer describes the project as a whole, only this specific retired resource. |
 | Earnings-event data (post-earnings-drift family) | **Still SEALED, still unread.** `known_date >= 2025-07-01` in `fundamentals_filings`/`fundamentals_xbrl_facts`. **Family CLOSED at trial 1, 2026-11-16** -- DEV failed Gate conditions 1 (CI includes zero) and 2 (TIMING null at the 0th percentile, decisively), per `EARNINGS_DRIFT_FINDINGS.md`. No sealed read happened and none will. `EARNINGS_DRIFT_PHASE0.md` Section 0, `data/holdout_access_log.txt`. |
+| Second momentum holdout window, declared 2026-11-16 | **SEALED, unread for evaluation.** `trade_date >= 2026-04-23` (day after Study 1's first-holdout last rebalance). Not read until >=5 rebalance periods accumulate (~mid-2027), then once, under a preregistration written first. One rebalance (2026-07-23) was partially, accidentally previewed in-session before this seal was declared -- disclosed, not hidden, `FINDINGS.md` Section 7. |
 | Liquidity family | **CLOSED, 2026-11-07.** 4 DEV failures, 2 Phase 1 abandonments, 1 withdrawn measurement. No Study G. See `LIQUIDITY_FAMILY_CLOSED.md`, §10. |
 
 ### Known operational constraints

@@ -538,6 +538,62 @@ through the now-retired window, for the audit trail -- those entries no
 longer represent a resource being preserved, only a record of when data
 was read.
 
+**A second sealed momentum window, declared 2026-11-16, in its own
+commit, before anything else and before any further run on current
+data.**
+
+**Everything from 2026-04-23 onward (the day after the first holdout's
+last rebalance, 2026-04-22) is sealed for the momentum family.** Not to
+be read for evaluation until it has accumulated at least 5 rebalance
+periods -- roughly mid-2027 at the 63-trading-day cadence -- then read
+ONCE, under a preregistration written before that read, the same
+discipline as the first holdout.
+
+**Rationale.** The first holdout was 5 rebalances over ~13 months,
+essentially one regime (`FINDINGS.md` Section 3: all three momentum
+wins came in falling markets, both losses in rising ones -- one regime
+shape, not a tested cross-regime claim). A second window of comparable
+size, in whatever regime arrives next, is worth far more than any
+further re-analysis of the first -- it is new evidence, not a different
+cut of the same evidence. It costs nothing to seal now and cannot be
+created retroactively; every day this window goes undeclared is a day
+closer to someone reading it informally without having decided to.
+
+**This is distinct from the live forward basket recorded 2026-10-26**
+(`PROJECT_CONTEXT.md`'s own live-state table, January 2027 check-in
+pre-committed above). That is one basket, real holdings, a single
+observation by construction. This is an independent historical check,
+evaluated once a full comparable sample accumulates. Both are useful;
+neither substitutes for the other.
+
+**Disclosure, not a clean confirmation -- checked precisely, not
+assumed.** Asked whether anything in the Bug #26 lineage check
+(immediately above) read past 2026-04-22: **the final, reported
+margins (3.63/3.50/5.97) did not** -- `ORIGINAL_HOLDOUT_LAST_DATE =
+2026-04-22` is enforced on the `in_holdout` filter used for every
+reported figure. **But an earlier run in this same session did.**
+Before that pin was added, a first (buggy) version of `scripts/
+run_holdout_study1_lineage_check.py` iterated the live panel's own
+rebalance schedule, which has grown a 6th rebalance (2026-07-23) since
+the first holdout was recorded -- that run computed and printed
+2026-07-23's own momentum top-decile composition (22 total entity-
+rebalance hits from the 40 lineage entities across all 6 dates, 4 of
+them at 2026-07-23 specifically) and folded its realized 63-day forward
+return into a 6-rebalance margin (7.31/7.22/9.24 across the three
+variants) before the bug was caught and fixed. **That output already
+exists in this session's own transcript** -- it is disclosed here
+rather than treated as if it didn't happen. This is a small, partial,
+accidental pre-seal exposure of ONE rebalance's composition and
+return, not an evaluation and not a conclusion drawn from it -- the
+same "partial, not zero" honesty standard `EARNINGS_DRIFT_PHASE0.md`
+Section 0 used for its own seal. Whether the eventual 2027
+preregistration should discount or exclude 2026-07-23 specifically on
+this basis is a decision for whoever writes that preregistration, not
+resolved here.
+
+Recorded in `data/holdout_access_log.txt` alongside the retired window
+and the earnings-drift seal.
+
 ## 8. What this is not
 
 **Not a green light to trade.** Specifically:
