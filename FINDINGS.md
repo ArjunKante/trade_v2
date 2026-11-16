@@ -94,54 +94,78 @@ movement -- the momentum holdout pass does not rest on this
 contamination. Not re-run further; the six other scripts sharing this
 same gap (BUGS.md Bug #11's update) remain recorded, not fixed.
 
-**UPDATE, 2026-11-16: reproducibility check, same holdout window, newer
-exclusion-set versions -- margin never approached 3.0.** This Bug #11
-holdout margin is a RANGE, not a point: **+3.57 to +5.22 across
-exclusion-set versions 78-82, currently +4.00 -- the floor of that range
-is still above the 3.0 threshold.** Treat it as that range wherever it
-is cited, not as "3.64." BUGS.md Bug
-#24's follow-up found that `monitor.persistence.same_isin_jump_excluded_
-entities()` reads the full warehouse at call time with no point-in-time
-cutoff, so the exclusion set this check applied (78 entities, 2026-09-27)
-is not the same set a re-run would apply today (82, 2026-11-16) -- a
-reproducibility question the original check could not have anticipated.
-Re-ran the identical holdout window (the original 5 rebalances, through
-2026-04-22 -- held fixed deliberately, since `read_full_entity_panel_
-authorized` has no upper date bound and a plain re-run would also pull
-in a 6th rebalance that did not exist in 2026-09-27's evaluation, a
-second, unrelated variable) at each exclusion-set version that has
-existed since:
+**UPDATE, 2026-11-16: the record stays anchored to the read date; a
+separate sensitivity diagnostic was run alongside it, and is NOT a
+replacement for the record.**
 
-| version | excluded | margin |
+**THE RECORD**: margin 3.87 -> 3.64 at the exclusion set's state on
+**2026-09-27** (78 entities, the holdout read date), still clearing the
+3.0 threshold. This is the pre-registered result and does not change.
+
+**THE DIAGNOSTIC** (descriptive, run on the already-retired window,
+nothing about the strategy varied, not to be re-run as a recurring
+"update"): `same_isin_jump_excluded_entities()` reads the full
+warehouse at call time with no point-in-time cutoff, so the SAME
+mechanism applied at later snapshot dates -- dates that did not exist
+on 2026-09-27, using information not available at read time -- produces
+a different number each time it is asked. That is what the table below
+measures: not a newer, better value, but how sensitive the mechanism
+itself is. Window held fixed (the original 5 rebalances, through
+2026-04-22) so only the exclusion-set snapshot varies:
+
+| snapshot date (not the holdout window) | excluded | margin |
 |---|---|---|
-| ORIGINAL (published, 0 excluded) | 0 | 3.87 |
-| PUBLISHED (2026-09-27) | 78 | 3.64 |
-| build-time reconstruction | 79* | 3.99 |
-| +1 day | 80 | 5.22 |
-| mid-Oct | 81 | 3.57 |
-| current (2026-11-16) | 82 | 4.00 |
+| ORIGINAL (no exclusion applied at all) | 0 | 3.87 |
+| **2026-09-27 (the record, read date)** | **78** | **3.64** |
+| 2026-09-27, reconstructed* | 79 | 3.99 |
+| 2026-09-28 | 80 | 5.22 |
+| 2026-10-10 | 81 | 3.57 |
+| 2026-11-16 | 82 | 4.00 |
 
 *Reconstructed by filtering today's flagged-jump table on `jump_date <=
 checkpoint` -- no snapshot of the exact original 78 was ever saved, off
-by one entity, immaterial to the conclusion. The margin ranged 3.57-5.22
-across every version checked, never within a point of the 3.0 threshold.
-Script: `scripts/run_holdout_study1_bug11_check_versioned.py`. Logged to
+by one entity, immaterial to the conclusion. Script:
+`scripts/run_holdout_study1_bug11_check_versioned.py`. Logged to
 `data/holdout_access_log.txt` as a materiality check on the retired
 window, same discipline as the original.
 
-**This range is driven by individual entities, not evenly, and that
-belongs next to the number**: the three entities added to the exclusion
-set since 2026-09-27 move the margin by more than a full point EACH, in
-alternating directions, not as a smooth drift. AASTHA (`INE2FMX01012`,
-jump 2026-09-28) moved it +1.23pts (3.99 -> 5.22). MOLDTKPAC
-(`INE893J01011`, jump 2026-10-09) moved it -1.65pts (5.22 -> 3.57) --
-the single largest swing of the three, and on its own would have taken
-the margin to within 0.57pts of the 3.0 floor had it landed alone
-rather than alongside AASTHA's offsetting move. CONCORDBIO
-(`INE338H01029`, jump 2026-11-04) moved it +0.43pts (3.57 -> 4.00). The
-3.57-5.22 range is two large, nearly-canceling single-name swings, not
-four entities contributing a little each -- the 4.00 headline reads
-steadier than the mechanism producing it actually is.
+**State the diagnostic against the threshold, not just as a range**: a
+single entity has been observed moving the margin by **1.65 points**
+(MOLDTKPAC, `INE893J01011`, snapshot 2026-10-10) while the buffer above
+the 3.0 threshold across these snapshots is only **0.57 to 1.00
+points**. A single further adverse addition of a size already seen
+would exceed that buffer. The result is not robust to the exclusion
+mechanism's own instability, even though the record itself (3.64, dated
+2026-09-27) stands and is not changed by this.
+
+**Which entities drive it, not an even four-way split**: AASTHA
+(`INE2FMX01012`, flagged 2026-09-28) moved the margin +1.23pts (3.99 ->
+5.22). MOLDTKPAC (`INE893J01011`, flagged 2026-10-09) moved it -1.65pts
+(5.22 -> 3.57) -- the single largest swing, and on its own would have
+left only a 0.57pt buffer had it landed alone rather than alongside
+AASTHA's offsetting move. CONCORDBIO (`INE338H01029`, flagged
+2026-11-04) moved it +0.43pts (3.57 -> 4.00). Two large, nearly-
+canceling single-name swings, not four entities contributing a little
+each.
+
+**UPDATE, 2026-11-16, second diagnostic: contribution concentration of
+the RECORDED holdout result itself** (descriptive only, on the
+already-spent window, same discipline as above -- momentum being
+winner-driven is expected, this is the number on record rather than an
+inference). Decomposed the primary, unexcluded holdout's own
+compounded gross return (12.88% over the 5 rebalances) by entity,
+exact (every entity's dollar contribution sums to the total, nothing
+left over): **top 1 contributor = 9.3% of total growth, top 5 = 38.3%,
+top 10 = 63.0%**, out of 336 distinct entities ever selected across the
+5 rebalances. The single largest contributor was GABRIEL
+(`INE524A01029`, 9.3%), followed by POWERINDIA (`INE07Y701011`, 8.7%)
+and LAURUSLABS (`INE947Q01010`, 7.7%). "Share of the margin" is
+approximated by share of the momentum side's own return, not a full
+two-sided attribution -- the benchmark side is an equal-weighted
+average over 1100-1300 names each period, so no single name can move
+it much by construction; concentration is a momentum-side property.
+Script: `scripts/run_holdout_study1_contribution_concentration.py`,
+output in `data/holdout_study1_contribution_concentration.csv`.
 
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 

@@ -209,14 +209,24 @@ recent month), hold 63 trading days, equal weight, long only.
 pre-registered conditions passed.** Large-cap replication +6.56 points (CV
 only).
 
-Verified against the Bug #11 same-ISIN exclusion: margin is +3.57 to +5.22
-across exclusion-set versions 78-82 (currently +4.00), not a fixed 3.64 --
-that exclusion set reads the full warehouse at call time with no pinned
-version, so its own count has moved since the original 2026-09-27 check,
-and the margin moves with it (`FINDINGS.md` Section 2's 2026-11-16 update).
-The floor of that range still clears the 3.0 threshold with room. Max
-drawdown actually *worsened* when these entities were excluded, which
-argues against them flattering the result.
+**Verified against the Bug #11 same-ISIN exclusion AS OF THE EXCLUSION
+SET'S STATE ON 2026-09-27 (the holdout read date, 78 entities excluded):
+margin 3.87 -> 3.64, still clearing the 3.0 threshold.** This is the
+record -- the figure a re-run on that date would reproduce. Max drawdown
+actually *worsened* when those entities were excluded, which argues
+against them flattering the result.
+
+**Separate sensitivity diagnostic, not a replacement for the record
+above and not to be re-run as an "update" each time it is checked**:
+`same_isin_jump_excluded_entities()` reads the full warehouse at call
+time with no pinned version, so applying the SAME exclusion mechanism
+at later snapshot dates that did not exist on 2026-09-27 moves the
+margin to +3.57-+5.22 (`FINDINGS.md` Section 2). A single entity has
+been observed moving the margin by 1.65 points (MOLDTKPAC,
+`INE893J01011`) while the buffer above the 3.0 threshold across that
+range is only 0.57 to 1.00 points -- the result is not robust to one
+further adverse addition of a size already seen. The record stays
+3.64, dated 2026-09-27; this diagnostic does not update it.
 
 **Never run live until 2026-10-26.** One basket now recorded with a January
 check-in.
