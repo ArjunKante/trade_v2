@@ -229,7 +229,11 @@ further adverse addition of a size already seen. The record stays
 3.64, dated 2026-09-27; this diagnostic does not update it.
 
 **Never run live until 2026-10-26.** One basket now recorded with a January
-check-in.
+check-in. **Pre-committed interpretation recorded before that check-in**
+(`FINDINGS.md` Section 2, 2026-11-16): the holdout's own return is
+concentrated enough (top 10 of 336 entities = 63% of compounded return)
+that a single basket is an extremely weak test either way -- read
+before the outcome, not fitted to it afterward.
 
 ### Fibonacci/ORB intraday — passes with four caveats
 

@@ -148,6 +148,20 @@ AASTHA's offsetting move. CONCORDBIO (`INE338H01029`, flagged
 canceling single-name swings, not four entities contributing a little
 each.
 
+**This and the contribution-concentration diagnostic below are the SAME
+fact, not two independent observations -- stated explicitly so a future
+reader does not take them as corroborating each other.** A margin in
+which the top 10 of 336 entities carry 63% of compounded return is
+*necessarily* a margin a single entity's removal can move by points:
+concentration and single-name sensitivity are the same property of the
+same distribution, read two ways. The exclusion-set sweep found this
+empirically, from the outside, by watching what happened when specific
+entities entered an unrelated (same-ISIN-jump) exclusion list; the
+contribution decomposition below finds the identical property directly,
+from the inside, by ranking the real selections by their own return.
+Neither corroborates the other independently -- they are one
+right-skewed distribution, observed twice.
+
 **UPDATE, 2026-11-16, second diagnostic: contribution concentration of
 the RECORDED holdout result itself** (descriptive only, on the
 already-spent window, same discipline as above -- momentum being
@@ -165,7 +179,38 @@ two-sided attribution -- the benchmark side is an equal-weighted
 average over 1100-1300 names each period, so no single name can move
 it much by construction; concentration is a momentum-side property.
 Script: `scripts/run_holdout_study1_contribution_concentration.py`,
-output in `data/holdout_study1_contribution_concentration.csv`.
+output in `data/holdout_study1_contribution_concentration.csv`. **Same
+fact as the exclusion-set sensitivity above, not separate
+corroborating evidence** -- see that paragraph's note.
+
+**Reconciliation, checked rather than assumed (336 distinct entities
+out of how many slots)**: the HOLDOUT window itself has only **5
+rebalance periods** (2025-04-11 through 2026-04-22, ~13 months at the
+63-day cadence) -- not the ~8-year, ~32-period PRE-HOLDOUT development
+window this could be confused with. Eligible universe per period:
+1131-1292 names (whole-market, Study 1's own construction); decile
+(10%): 114-130 names/period; **total selection slots: 604**, not
+~5,900. Median number of periods a selected name appears in: **1**
+(mean 1.80; 170 names appeared exactly once, 94 twice, 47 three times,
+20 four times, 5 in all five). This reconciles cleanly with the
+`mom_turnover` already recorded per period in `data/
+holdout_study1_records.csv` (46-55% of the decile turns over every
+rebalance) -- roughly half the names change each period, so across
+only 5 periods, 336 distinct out of 604 slots is the arithmetic that
+turnover predicts, not a discrepancy.
+
+**PRE-COMMITTED INTERPRETATION, recorded 2026-11-16, before the
+2026-10-26 live basket's outcome is known:**
+
+> The 2026-10-26 basket's 63-day outcome will be high variance and
+> dominated by a small number of holdings. Historically the top 1
+> entity accounted for 9.3% of compounded return, the top 5 for 38.3%
+> and the top 10 for 63.0%, out of 336 distinct entities ever selected.
+> A single basket is therefore an extremely weak test: a good outcome
+> may reflect one or two names running, and a poor outcome may reflect
+> their absence, with neither saying much about the strategy. Recorded
+> 2026-11-16, before the outcome is known, so that it cannot be offered
+> afterwards as an explanation for whichever result arrives.
 
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 
