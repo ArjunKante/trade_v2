@@ -2255,3 +2255,28 @@ confirmed by direct recomputation to reproduce Section 13d's own
 +0.2679/t=4.661 exactly before this was built). LIVE = `data/fibo_live/
 v1/events.jsonl`, read fresh every call (the one source here that is
 supposed to change daily).
+
+## New standing rule: every preregistration states its own "Hypothesis source" (2026-11-16)
+
+`PREREGISTRATION_TEMPLATE.md` (new -- no canonical template existed
+before this; the structure is drawn from the common pattern already
+shared by all 22 existing `PREREGISTRATION_*.md` files, every one of
+which already had its own "Provenance" section, just never a structured,
+greppable field within it). Added one new required field at the top of
+Provenance: **Hypothesis source**, a short checklist (structural/
+decomposition, literature-sourced, a finding in a different closed study,
+a diagnostic/bug investigation, "suggested by browsing closed-study
+trades in the research app," or other) that must be stated plainly, not
+left to be reconstructed later from prose.
+
+**Why now**: `scripts/research_app.py` just gained a Fibo adapter with
+browsable charts over closed-study trades, including the sealed TEST
+window -- exactly the shape of access this project's own trial-counting
+record already shows produces hypotheses (four chart observations, four
+nulls so far), and that record is only visible because each one was
+written down as such at the time, not reconstructed afterward. The
+banner on `fibo_test` tells a reader not to act on idle pattern-spotting
+from a chart; this field is what records it when someone does anyway --
+the part that actually matters for trial counting, not a second warning.
+Every future preregistration must fill this field in, same discipline as
+every other frozen-before-the-read requirement in this project.
