@@ -695,6 +695,15 @@ single number existed, the same way the Liquidity E/F pre-checks and the
 this project had already written down and then had to be reminded to apply
 to itself.
 
+**Earnings drift DEV**: pre-committed that the liquid-bands condition was
+the most likely failure mode. Liquid bands came back STRONGER than the
+full universe. That is six consecutive wrong mechanism predictions. The
+pattern is specific, not random: in four of the six I named costs or
+liquidity as the binding constraint and the actual cause was structural
+(position sizing, follow-through, entry timing, timing-window latency).
+Treat any prediction of mine that friction is the binding constraint as
+carrying negative information value until that record changes.
+
 ---
 
 ## 10. WHAT IS STILL OPEN
