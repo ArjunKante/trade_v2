@@ -228,3 +228,104 @@ Directly counted: `fundamentals_xbrl_facts` rows with
 across the repo for the same stale claim — see that commit's message for
 the specific sites found and fixed.
 
+---
+
+## Correction to Section 5's MDE (appended, Section 5 above left unedited)
+
+**The original Section 5 computation measured the wrong quantity.** It
+computed the cross-sectional standard deviation of the 60-day forward
+return *level* and fed that into a two-sample MDE formula. The study this
+family would eventually run tests a *difference* — top decile minus the
+rest, within the same quarter. A market-wide shock inflates quarter-level
+variance on a level; it mostly **cancels** in a within-quarter difference,
+because both legs of the spread sit in the same quarter and share that
+shock. Computing the level's variance when the test statistic is a spread
+overstates the effective dispersion, and therefore overstates the MDE, by
+construction — independent of what the actual numbers come out to.
+
+**This was identifiable before the result existed, not after.**
+`PROJECT_CONTEXT.md`'s own standing finding #3 reads, verbatim: *"Variance
+of the difference, not effect size, is the binding constraint."* → *"compute
+MDE before finalising any comparison study."* That finding already names
+the exact failure mode — using the wrong variance in an MDE calculation —
+as a recurring, previously-paid-for mistake (momentum+fundamentals needed
+8–72 years; portfolio construction needed 10–20x). The original Section 5
+computed a *level's* variance for a study whose binding statistic is a
+*difference*. Checking the computation against finding #3's own title
+would have caught this without running anything.
+
+### The corrected computation
+
+Per the pre-committed procedure: decile membership assigned **at random**
+(never from the real announcement return — this measures the null, not
+drift), the top-decile-minus-rest mean 60-day-return spread computed
+within each quarter, the cross-quarter standard deviation of that spread
+used as `sigma_period` in this project's own existing one-sample MDE
+machinery (`src/portfolio/power.py::minimum_detectable_difference`, which
+every prior power calc in this project already uses), repeated over 200
+random assignments, raw and winsorized (clip at the 1st/99th percentile:
+[-48.9%, +108.8%]). Script: `scripts/earnings_drift_phase0_mde_correction.py`.
+
+Of the 115,817 survivors (unchanged from Section 1), 36 distinct quarters
+have at least one surviving event (not 38 — two of the 38 calendar
+quarters in the filings-only count have zero events that clear the
+join), so `n=36`, `df=35`. ~322 events per quarter fall in the random
+"top decile."
+
+| | SD of quarterly null spread | MDE (80% power, quarter-clustered, df=35) |
+|---|---|---|
+| **Raw** | mean 3.71%, range 2.20%–15.11% across 200 draws (std-across-draws 1.54pp) | mean 1.78%, range 1.06%–7.26% |
+| **Winsorized** | mean 1.39%, range 0.92%–1.93% across 200 draws (std-across-draws 0.18pp) | mean 0.67%, range 0.44%–0.93% |
+
+**Which I would use, and why: winsorized.** Two reasons, not one:
+
+1. **Stability.** The raw estimate swings 7x in MDE terms (1.06%–7.26%)
+   depending on which draw happened to place a handful of extreme events
+   in the random "top decile" versus "the rest" for a given quarter. A
+   number that moves 7x based on the luck of a random split is not a
+   number a go/no-go decision can be hung on, independent of which value
+   in that range looks more convenient.
+2. **Substantive, not just statistical.** Section 5's own original run
+   already found the 60-day level distribution dominated by a handful of
+   corporate-action-scale return artifacts (max observed: +18,939%, on 4
+   rows belonging to a single entity — not a return any real strategy
+   would hold into, and very likely a data artifact rather than genuine
+   price action). Every surviving strategy in this project is built on
+   bounded position sizing; winsorizing approximates what a real,
+   risk-limited implementation would actually realize far better than the
+   raw tail does.
+
+### Verdict
+
+**Plausible PEAD effect band: 1%–3% over 60 days. Round-trip cost band:
+0.2%–0.3%.**
+
+The winsorized MDE (mean 0.67%, range 0.44%–0.93%) sits **below the
+entire plausible PEAD effect band**, not above it. The raw MDE (mean
+1.78%, range 1.06%–7.26%) straddles the band depending on the draw, which
+is itself the reason not to use it (above).
+
+Under the methodology I would actually trust (winsorized), **this is not
+"exceeds plausible effects"** (the Section 5 verdict, now retracted as
+resting on the wrong variance) **and it is not "marginal, near the top of
+the plausible range" either** — both of the user's own pre-stated closing
+conditions. A PEAD-sized effect, if one exists, would be statistically
+detectable at 80% power from the data already in hand. This does not mean
+the effect exists, and it does not mean the idea is validated: it means
+Phase 0's power objection to this family is **lifted**, which is the
+opposite of what the uncorrected Section 5 concluded. Phase 0's own scope
+limit still applies unchanged — this does not authorize running the study,
+computing announcement-return-vs-forward-return, or writing anything
+beyond a preregistration. If one is written, it still needs its own
+power section, its own decision rule, and its own accounting for the
+instability documented above (the raw/winsorized gap is itself a design
+question that preregistration would have to resolve before any read,
+not after).
+
+**Trial count**: counted as **one trial** for the post-earnings-drift
+family, per explicit user instruction, regardless of outcome — Section 5's
+original (wrong-variance) computation and this correction are one Phase 0
+feasibility episode, not two, since the correction was "one corrected
+computation, not a search" rather than a second attempt at a different
+configuration.
+
