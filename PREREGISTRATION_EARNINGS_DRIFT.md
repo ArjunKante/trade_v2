@@ -91,6 +91,41 @@ nothing else in this document changed.
 
 ---
 
+## Amendment 2 (2026-11-16, before DEV runs): exclude jump-contaminated windows
+
+Investigated the +18,939% 60-day-return outlier before relying on
+winsorization, per instruction. Full writeup: `BUGS.md` Bug #26.
+Findings, in brief: the outlier is a genuine entity (KAUSHALYA,
+`INE234I01010`), 4 distinct same-day filings (not a pipeline
+duplicate), and the magnitude comes from an **unexplained isin-lineage
+jump** (`lineage_jump_guard`, Bug #1's own detector, boundary_ratio
+89.83, no corporate-actions record) that this study's return
+construction never checked for. **51 of 115,817 survivors exceed a
+500% return -- a class, not one row -- and 50 of those 51 are flagged
+by an existing jump guard** (lineage or same-ISIN, either one); the one
+unflagged case is a genuine, gradual COVID-era microcap rally, no
+single-day jump involved. Measured directly: **1,519 of 115,817
+survivor windows (1.3%) contain an unexplained jump under either
+guard**, and only 40% of those are removed as a side effect of the
+frozen winsorization rule -- winsorization is not a substitute for
+excluding them, and is not being changed (Section 6 stands as frozen).
+
+**Fix, added to the universe (Section 1), not a change to winsorization**:
+exclude any event whose `[t0, tf]` 60-day window contains an unexplained
+jump under **either** `lineage_jump_guard` or the FULL `same_isin_
+jump_guard` output (any `gap_days`, not just the 78-entity tight-gap
+pin) -- in addition to, not instead of, the existing 78-entity canonical
+pin. Justified on grounds independent of this study's own outcome:
+`factors/momentum.py` already applies the equivalent check for its own
+comparable-horizon forward return; omitting it here was an oversight in
+this study's own construction, not a considered design choice, and
+leaving it unfixed would mean knowingly computing DEV on data already
+shown to be partly contaminated.
+
+Section 1's universe paragraph below reflects this addition.
+
+---
+
 ## Flags: specification does not fit the data as given -- not resolved here
 
 Per instruction, these are surfaced, not worked around. Each is a place
@@ -151,6 +186,12 @@ in this document.
   before=date(2026, 9, 28))` -- the 78-entity snapshot, pinned (Flag 2
   above), the same mechanism and snapshot `FINDINGS.md` Section 2 already
   uses for Bug #11.
+- **(Amendment 2)** `lineage_jump_guard.unexplained_jump_boundaries()` and
+  the FULL (unfiltered-by-`gap_days`) `same_isin_jump_guard.
+  find_unexplained_same_isin_jumps()` output, applied per-event-window
+  rather than per-entity -- the same two detectors `factors/momentum.py`
+  already relies on for its own comparable-horizon forward return
+  (`_is_unexplained_jump_row`), now applied here too. `BUGS.md` Bug #26.
 - Turnover-tercile liquidity-band construction (20-day rolling median
   turnover, per-day tercile cut), same as
   `scripts/run_survivorship_quantification.py`'s `_liq`/`_tercile`.
@@ -181,6 +222,12 @@ declaration). Excludes:
   survivorship-skewed (median turnover ~1,000x lower, ~90% no longer
   trading).
 - The 78-entity same-ISIN exclusion set, pinned as of 2026-09-27 (Flag 2).
+- **(Amendment 2) Any event whose `[t0, tf]` 60-day window contains an
+  unexplained jump under `lineage_jump_guard` or the full
+  `same_isin_jump_guard` output** (any `gap_days`, not just the 78-entity
+  tight-gap pin above) -- a per-window exclusion, additional to the
+  per-entity pin, since the same entity can have other, uncontaminated
+  windows elsewhere in time. `BUGS.md` Bug #26.
 
 **Event return (ranking signal)**: market-adjusted return across 3
 trading sessions -- day 0, day 0+1, day 0+2 -- each session's raw return
@@ -441,3 +488,31 @@ Not run. The order, once approved:
     closes automatically -- no sealed read, no human decision needed.
 12. If all conditions hold, present the DEV result for human approval
     before touching `known_date >= 2025-07-01`.
+
+## Section 11: hand-trace -- five events, by hand, before any aggregate
+
+Per this project's own standing discipline (`PROJECT_CONTEXT.md` Section
+3, "Hand-tracing": five trades traced by hand against raw data before
+any aggregate, covering the awkward cases). Full numbers recorded in
+`EARNINGS_DRIFT_PHASE0.md`'s own hand-trace section; summarized here:
+
+1. **Pre-15:30 announcement** (`INE614B01018`, known 2017-01-24 12:04) --
+   day 0 = the announcement's own session. Correctly skips the Republic
+   Day holiday (2017-01-26) between day 1 and day 2.
+2. **Post-15:30 announcement** (`INE628A01036`, known 2017-01-27 17:30) --
+   day 0 = the next trading day (2017-01-30), not the announcement date.
+3. **Non-trading-day announcement** (`INE617A01013`, known 2017-02-11, a
+   Saturday) -- day 0 = the next trading day (2017-02-13).
+4. **Entry lands after a holiday** (`INE858F01012`, known 2017-02-21) --
+   day 0+2 = 2017-02-23; the next calendar day (2017-02-24, Maha
+   Shivaratri) is not a trading day; entry correctly skips to 2017-02-27,
+   a 4-calendar-day gap, not the 1-3 day gap a plain weekend would give.
+5. **One of the 1,097 excluded rows** (`INE220001015`, Nova Iron & Steel)
+   -- zero `isin_lineage` rows for this ISIN, confirmed directly; the
+   exclusion fires (this event never reaches the universe at all).
+
+All five traced against the real NSE trading calendar (`index_eod`, not
+`entity_prices_daily`'s own calendar, which is truncated at
+2025-03-18 and would misclassify genuine trading days near the end of
+DEV as holidays) -- `entity_prices_daily` is still the source for all
+price levels once a date is confirmed as a real trading day.

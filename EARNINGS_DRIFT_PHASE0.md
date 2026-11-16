@@ -329,3 +329,113 @@ feasibility episode, not two, since the correction was "one corrected
 computation, not a search" rather than a second attempt at a different
 configuration.
 
+---
+
+## Investigation: the +18,939% outlier, before relying on winsorization
+
+Full bug writeup: `BUGS.md` Bug #26. Numbers recorded here per
+instruction.
+
+**The one row.** Entity `INE234I01010` (KAUSHALYA Infrastructure
+Development Corp.), 4 filings broadcast 2023-05-30 -- Q4 Consolidated,
+Q4 Non-Consolidated, Annual Consolidated, Annual Non-Consolidated.
+**Genuinely distinct filings** (checked `period_end`, `reporting_quarter`,
+`consolidated`, `seq_number`: 1150739-1150742, four different documents),
+not a pipeline duplicate -- Indian companies routinely co-file all four
+variants at FY-end; this project's event construction does not currently
+deduplicate by announcement day, so this one day gets 4 votes instead
+of 1 (noted, not fixed here). `t0` = 2023-05-30 (close ₹4.00), `tf` =
+2024-04-30 (close ₹761.55) -- the 189.4x move (+18,939%).
+
+**Root cause, traced, not assumed.** `prices_eod` has zero rows for
+this ISIN between 2024-01-12 and 2024-05-10 -- the real feed went dark.
+`entity_prices_daily` is nonetheless densely populated across exactly
+that gap, because `isin_lineage` maps a second ISIN (`INE234I01028`,
+transition `known_date` 2024-03-04) to the same `entity_id`, and the
+materialize join stitches both ISINs' price series into one continuous
+entity. `corporate_actions` has zero rows for either ISIN across the
+transition; `adjustment_factors.factor` is 1.0 throughout (no correction
+applied). `lineage_jump_guard.find_unexplained_jumps()` (Bug #1's own
+detector) already flags this exact transition: `boundary_ratio=89.83`,
+`has_nearby_ca_record=False` -- an ~90x unexplained jump, almost
+certainly an uncaptured corporate restructuring or ISIN-reissue with a
+share-count change.
+
+**Class size: 51 of 115,817 survivors exceed a 500% 60-day return** (25
+distinct entity/announcement-day pairs). **50 of 51 are flagged by an
+existing jump guard** (`lineage_jump_guard` or the full `same_isin_
+jump_guard` output, either one, any `gap_days`) -- a real, already-
+instrumented class, not noise. The one unflagged row (`INE294G01026`/
+ROML, +996%, 2020-11 to 2021-05) has no single-day ratio above 1.05
+anywhere in its window -- checked directly, a genuine gradual COVID-era
+microcap rally.
+
+**Blast radius, measured, both directions.** Of the 115,817 survivors,
+**1,519 (1.3%) have a 60-day window containing an unexplained jump**
+under either guard: 18 events / 8 entities via `lineage_jump_guard`,
+1,501 events / 476 entities via the full `same_isin_jump_guard` output
+(the 78/82-entity canonical pin, `gap_days<=5`, catches almost none of
+these -- KAUSHALYA's own flagged same-isin-adjacent jumps have
+`gap_days` 61-146, all above that cutoff). Checked whether this
+threatens the already-committed MDE above: of the 1,519 contaminated
+events, 603 (40%) are already removed as a side effect of the frozen
+within-quarter 1st/99th-percentile winsorization rule; **916 (60%) are
+not** -- their net 60-day return is modest enough to pass through
+winsorization untouched while still containing an unrelated price
+discontinuity. Winsorization is not a substitute for excluding these.
+
+**Winsorization is unchanged, per instruction** -- this investigation is
+about knowing what it covers, not about changing it. The fix is a new
+universe-construction exclusion, added to `PREREGISTRATION_EARNINGS_
+DRIFT.md` as Amendment 2 before DEV runs: drop any event whose window
+contains an unexplained jump under either guard, in addition to the
+existing 78-entity pin.
+
+---
+
+## Hand-trace: five events, by hand, against raw data, before any aggregate
+
+All five checked against the real NSE trading calendar (`index_eod`),
+not `entity_prices_daily`'s own calendar (truncated at 2025-03-18, which
+would misclassify real trading days near the end of DEV as holidays).
+
+**1. Pre-15:30 announcement.** `INE614B01018`, known_date 2017-01-24,
+broadcast 12:04:39. Day 0 = 2017-01-24 (the announcement's own session,
+since before 15:30). Day 0+1 = 2017-01-25. Day 0+2 = 2017-01-27 --
+correctly skips 2017-01-26 (Republic Day, an NSE holiday), not
+misread as the next calendar day. Entry = 2017-01-30 (gap from day 0+2:
+3 calendar days, an ordinary weekend). Exit (60 trading days later) =
+2017-04-28. `p_entry`=₹105.82, `p_exit`=₹148.86, return = **+40.7%**.
+
+**2. Post-15:30 announcement.** `INE628A01036`, known_date 2017-01-27,
+broadcast 17:30:08. Day 0 = 2017-01-30 (the NEXT trading day, not the
+announcement date, since broadcast after 15:30). Day 0+1 = 2017-01-31.
+Day 0+2 = 2017-02-01. Entry = 2017-02-02 (1-day gap). Exit = 2017-05-04.
+`p_entry`=₹493.40, `p_exit`=₹540.93, return = **+9.6%**.
+
+**3. Non-trading-day announcement.** `INE617A01013`, known_date
+2017-02-11 (a Saturday), broadcast 20:19:16. Day 0 = 2017-02-13 (the
+next trading day -- the non-trading-day branch fires regardless of the
+broadcast time-of-day on a Saturday). Day 0+1 = 2017-02-14. Day 0+2 =
+2017-02-15. Entry = 2017-02-16 (1-day gap). Exit = 2017-05-18.
+`p_entry`=₹810.70, `p_exit`=₹906.20, return = **+11.8%**.
+
+**4. Entry lands after a holiday.** `INE858F01012`, known_date
+2017-02-21, broadcast 15:29:17 (43 seconds before the 15:30 cutoff --
+day 0 = the announcement's own session). Day 0+1 = 2017-02-22. Day 0+2
+= 2017-02-23. The next calendar day, 2017-02-24 (Maha Shivaratri), is
+NOT a trading day; entry correctly skips to 2017-02-27 -- a 4-calendar-
+day gap, distinguishable from the 1-3 day gap a plain weekend would
+produce, confirming the holiday is actually being skipped rather than
+assumed away. Exit = 2017-05-26. `p_entry`=₹57.80, `p_exit`=₹64.60,
+return = **+11.8%**.
+
+**5. One of the 1,097 excluded rows.** `INE220001015` (Nova Iron & Steel
+Ltd, symbol NOVAIRNSTL). Confirmed directly: **zero** `isin_lineage`
+rows exist for this ISIN -- the exclusion fires at the join step, before
+any ranking or return computation; this event never reaches the
+universe. 59 distinct ISINs behind the full 1,097-row exclusion
+(multiple filings per excluded ISIN); this is one of them, traced by
+hand to confirm the mechanism, not merely asserted from the earlier
+count.
+
