@@ -49,7 +49,11 @@ convincing and were not.
   through ISIN changes, corporate actions and split adjustment
 - 1-minute intraday bars, 2016-10-04 onward (Angel One's archive floor),
   top-200 universe
-- Fundamentals from XBRL filings (balance-sheet data only reaches FY2022-23)
+- Fundamentals from XBRL filings (annual balance-sheet data near-universal
+  from FY2022-23 onward; tops out around FY2024/period_end 2024-03-31 for
+  nearly all companies, max period_end found 2024-12-31 for non-March
+  fiscal-year-end filers -- corrected 2026-11-16, was stated as "only
+  reaches FY2022-23," see `EARNINGS_DRIFT_PHASE0.md` for the count)
 - NIFTY options EOD, 2016-2026, 5.6M rows
 - IPO listing-day 1-minute bars, 498 usable mainboard listings
 
