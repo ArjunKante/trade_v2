@@ -1912,3 +1912,106 @@ consumer, by which function it actually calls:
   `run_swing_phase3_decomposition.py`, `run_swing_v1_checks.py`,
   `run_swing_v1_holdout.py`, `run_swing_v1_regime_check.py`,
   `run_swing_v1_regime_check2.py`.
+
+## Bug #26: the earnings-drift Phase 0 scripts computed 60-day forward returns without either jump guard -- 1,519 of 115,817 windows contaminated
+
+**Found 2026-11-16**, investigating the +18,939% 60-day-return outlier
+driving `EARNINGS_DRIFT_PHASE0.md`'s raw-MDE instability, at the user's
+explicit request before relying on winsorization to cover it.
+
+**The one row, traced**: entity `INE234I01010` (KAUSHALYA Infrastructure
+Development Corp.), 4 filings broadcast 2023-05-30 (Q4 Consolidated, Q4
+Non-Consolidated, Annual Consolidated, Annual Non-Consolidated --
+**genuinely distinct filings, not a pipeline duplicate**; Indian
+companies routinely co-file all four variants at FY-end, and this
+project's event construction does not currently deduplicate by
+announcement day, so one contaminated day gets 4 votes instead of 1 --
+noted, not fixed here, out of scope for this investigation). `t0` =
+2023-05-30 (close ₹4.00), `tf` = 2024-04-30 (close ₹761.55) -- the
+189.4x move. `prices_eod` has **zero rows for this ISIN between
+2024-01-12 and 2024-05-10** (the real feed went dark); `entity_prices_
+daily` is nonetheless densely populated across exactly that gap,
+because `isin_lineage` maps a SECOND isin (`INE234I01028`, transition
+`known_date` 2024-03-04) to the same `entity_id`, and the materialize
+join (`entity_panel.py`) silently stitches both ISINs' price series
+together as one continuous entity. `corporate_actions` has zero rows
+for either ISIN across the transition; `adjustment_factors.factor`
+is `1.0` throughout (no correction ever applied). **This is already a
+named, detected case**: `lineage_jump_guard.find_unexplained_jumps()`
+(Bug #1's own detector) flags this exact transition --
+`boundary_ratio=89.83`, `has_nearby_ca_record=False` -- i.e. an ~90x
+unexplained jump, almost certainly a corporate restructuring or
+ISIN-reissue with a share-count change that was never captured as a
+`corporate_actions` row, the same underlying mechanism as Bug #1
+(MAJESCO) and Bug #11, just at a lineage-transition boundary rather
+than a same-ISIN one.
+
+**Class size, not one row**: 51 of 115,817 survivor events exceed a
+500% 60-day return (25 distinct entity/announcement-day pairs, each
+multiplied by its co-filed variants). **50 of 51 are flagged by one of
+this project's two existing jump guards** (`lineage_jump_guard` or
+`same_isin_jump_guard`, either one, any `gap_days`) -- a real class
+with a known, already-instrumented cause, not noise. The one
+unflagged row (`INE294G01026`/ROML, +996% over 2020-11 to 2021-05) has
+no single-day ratio above 1.05 anywhere in its window -- a genuine,
+gradual COVID-era microcap rally, not an artifact.
+
+**The actual bug**: `scripts/earnings_drift_phase0.py` and
+`scripts/earnings_drift_phase0_mde_correction.py` compute every 60-day
+forward return directly from `entity_prices_daily` and apply **neither**
+jump guard -- not `lineage_jump_guard` (Bug #1), and not even
+`same_isin_jump_guard` (Bug #11), despite `PREREGISTRATION_EARNINGS_
+DRIFT.md` Section 1 naming the latter (the 78-entity, `gap_days<=5`
+"canonical" pin) as part of the universe. `src/factors/momentum.py`
+already guards exactly this shape for its own comparable (63-trading-
+day) forward-return horizon (`_is_unexplained_jump_row`, "a hard
+boundary regardless of calendar gap size"); the earnings-drift scripts
+never adopted the equivalent check. Separately: the 78-entity canonical
+pin itself is a **narrow** subset of `same_isin_jump_guard`'s own full
+output -- it only keeps jumps with `gap_days<=5` (`JUMP_GAP_DAYS_CUTOFF`,
+`src/monitor/persistence.py`), by design, for a different reason
+(filtering same-ISIN detections down to the no-real-gap MAJESCO shape).
+The full, untightened same-isin-guard population is **714 distinct
+ISINs** with an unexplained jump somewhere in their history -- KAUSHALYA
+itself is not even IN the 78/82-entity canonical set (its own flagged
+same-isin-adjacent jumps have `gap_days` 61-146, all above the cutoff).
+A 60-day forward-return window can straddle a jump of ANY `gap_days`,
+tight or wide, same-isin or lineage-transition -- the canonical pin was
+never designed to protect this horizon and does not.
+
+**Blast radius, both directions, measured not assumed**:
+- **Under-exclusion (the direction that matters)**: of the 115,817
+  survivor events, **1,519 (1.3%) have a 60-day window containing an
+  unexplained jump** under either guard -- 18 events / 8 entities via
+  `lineage_jump_guard`, 1,501 events / 476 entities via the FULL
+  `same_isin_jump_guard` output (not the 78/82-entity tight-gap subset,
+  which catches essentially none of these). None of these 1,519 are
+  excluded by anything in the currently-committed preregistration or
+  Phase 0 scripts.
+- **Does this threaten the already-committed Phase 0 MDE?** Checked
+  directly: of the 1,519 contaminated events, 603 (40%) are already
+  removed as a side effect of the frozen within-quarter 1st/99th
+  percentile winsorization rule (Section 6) -- they are extreme enough
+  to be clipped regardless of cause. **916 (60%) are NOT clipped** --
+  their net 60-day return is modest enough to pass through winsorization
+  untouched while still containing an unrelated, unexplained price
+  discontinuity somewhere inside the window. Winsorization is not a
+  substitute for excluding these; it coincidentally removes under half
+  of them.
+- **Scope beyond this one study**: `scripts/earnings_drift_phase0.py`
+  and `_mde_correction.py` are the only callers of a raw forward-return
+  construction added this session; no other script in this project
+  computes a `entity_prices_daily`-based forward return over a
+  comparable horizon without going through `factors/momentum.py` (which
+  already guards this) or one of the swing-project scripts (which
+  already pass `before=` to the lower-level detector directly). This
+  bug is new-study-specific, not a defect in `lineage_jump_guard` or
+  `same_isin_jump_guard` themselves -- both detectors worked correctly
+  the moment they were actually queried.
+
+**Fix, applied as `PREREGISTRATION_EARNINGS_DRIFT.md` Amendment 2
+(not here)**: exclude any event whose `[t0, tf]` window contains an
+unexplained jump under either guard, any `gap_days`, in addition to
+(not instead of) the existing 78-entity canonical same-ISIN pin and the
+unchanged winsorization rule. Status: **fixed in the preregistration
+before DEV ran**, per that document's own Amendment 2.
