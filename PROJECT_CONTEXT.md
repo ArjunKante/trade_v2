@@ -209,6 +209,14 @@ recent month), hold 63 trading days, equal weight, long only.
 pre-registered conditions passed.** Large-cap replication +6.56 points (CV
 only).
 
+**The sealed holdout spans 5 rebalance periods over ~13 months
+(2025-04-11 to 2026-04-22), universe 1,131-1,292 names per period,
+decile 114-130 names, 604 selection slots, 336 distinct entities. Five
+periods is the effective sample for the CAGR margin, since holdings
+within a period share the same market. The result was pre-registered
+and all three conditions passed; this is stated so the sample size is
+visible next to the margin rather than having to be derived.**
+
 **Verified against the Bug #11 same-ISIN exclusion AS OF THE EXCLUSION
 SET'S STATE ON 2026-09-27 (the holdout read date, 78 entities excluded):
 margin 3.87 -> 3.64, still clearing the 3.0 threshold.** This is the

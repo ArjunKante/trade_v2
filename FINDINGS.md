@@ -29,6 +29,14 @@ All three pre-registered decision-rule conditions passed on the holdout:
 points *better*). Full period-by-period detail already reported in the
 holdout evaluation; not repeated here.
 
+**The sealed holdout spans 5 rebalance periods over ~13 months
+(2025-04-11 to 2026-04-22), universe 1,131-1,292 names per period,
+decile 114-130 names, 604 selection slots, 336 distinct entities. Five
+periods is the effective sample for the CAGR margin, since holdings
+within a period share the same market. The result was pre-registered
+and all three conditions passed; this is stated so the sample size is
+visible next to the margin rather than having to be derived.**
+
 **Do not extrapolate the backtest's 30.4%/18.1% level forward.** The
 holdout's 14.72%/10.85% is far lower, consistent with 2017-2024 having been
 an unusually strong run for Indian small/mid caps specifically, not with
@@ -211,6 +219,13 @@ turnover predicts, not a discrepancy.
 > their absence, with neither saying much about the strategy. Recorded
 > 2026-11-16, before the outcome is known, so that it cannot be offered
 > afterwards as an explanation for whichever result arrives.
+>
+> One forward basket is one fifth of the holdout's sample. Roughly five
+> baskets — about 315 trading days, or 15 months — would carry
+> comparable weight to the sealed test. The January 2027 check-in is
+> therefore a single weak observation by construction, whichever way
+> it lands, and should be recorded as one data point rather than read
+> as confirmation or refutation.
 
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 
@@ -448,8 +463,10 @@ was read.
 
 **Not a green light to trade.** Specifically:
 
-- **Thin sample.** 5 holdout periods (fewer than the ~6-7 pre-registered),
-  margin 3.87 points against a 3.0-point threshold -- a different period
+- **Thin sample.** 5 holdout periods (fewer than the ~6-7 pre-registered;
+  universe 1,131-1,292 names/period, decile 114-130, 604 selection slots,
+  336 distinct entities -- Section 2's own span statement), margin 3.87
+  points against a 3.0-point threshold -- a different period
   boundary could plausibly flip the pass/fail call. A pass at this sample
   size is weak evidence, exactly as `PREREGISTRATION.md` stated before the
   result existed, and that statement binds now that it passed, not only if
