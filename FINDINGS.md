@@ -15,14 +15,19 @@ configuration.
 
 **Yes, on a thin sample.**
 
-**The holdout margin is stated as a range, permanently, as of
-2026-11-16 -- see this section's own final entry, below the 2026-11-16
-lineage-contamination check, before relying on any single number in
-the table immediately following.** Primary **3.50 points**; range
-**3.50-5.97** depending on correction method, plus a separate
-3.57-5.22 exclusion-set-instability diagnostic on top of that. The
-3.87 below is the ORIGINAL, uncorrected figure -- historically accurate
-as the first number ever reported, not the one to cite today.
+**RETRACTED, 2026-11-17** (superseding the paragraph below, not
+deleting it -- see this section's own final entry for the full
+retraction): ~~The holdout margin is stated as a range, permanently,
+as of 2026-11-16... Primary 3.50 points; range 3.50-5.97 depending on
+correction method...~~ **The margin has never been reproducibly
+quantified. 3.50 was checked explicitly and shares the same defect as
+the retracted 3.57-5.22 range -- it is not a safer number sitting
+above it.** The verdict (holdout read once, pre-registered, all three
+conditions passed) stands unaffected; the margin does not. Do not cite
+a point estimate from this record. The 3.87 below is the ORIGINAL,
+uncorrected, AS-READ figure -- the one number in this section that
+*is* a fact about a specific read on a specific date, not a claim that
+any later recomputation will confirm it.
 
 | | pre-holdout backtest (2017-2024) | holdout (2025-2026) |
 |---|---|---|
@@ -333,6 +338,64 @@ the live warehouse with no pinned version, and any further contamination
 class found would add another correction method with its own defensible
 granularity choice. That is a property of the measurement, not news,
 and is not grounds for another re-run.**
+
+---
+
+**RETRACTION, 2026-11-17: the paragraph immediately above treated 3.50
+as a clean primary figure above an unmeasured-sensitivity range. It
+was wrong to do so. Annotated, not deleted.**
+
+Instructed to check this explicitly, before anything else, since it is
+the headline number: **does the 3.50 figure share the defect that made
+the 3.57-5.22 range unreliable?** Checked by reading the code, not by
+analogy. `scripts/run_holdout_study1_lineage_check.py` builds its
+40-entity correction via `lineage_jump_guard.find_unexplained_jumps(con)`
+-- called with no `before=` cutoff. Inside that function
+(`src/data_layer/lineage_jump_guard.py:67`):
+
+```python
+actions = con.execute("SELECT symbol, ex_date FROM corporate_actions").fetchdf()
+```
+
+An unfiltered, current-state read -- no `known_date`/`fetched_at`
+point-in-time predicate at all. `has_nearby_ca_record`, the flag that
+decides whether a transition enters the 40-entity set, is evaluated
+against TODAY's `corporate_actions` table for every transition,
+including ones dated years ago. **This is the identical mechanism**
+`BUGS.md` Bug #27 already found unstable on the same-ISIN side. Opened
+as its own entry, `BUGS.md` Bug #28 -- the same bug in a second place,
+the ninth instance of "fixed where noticed, not everywhere the pattern
+recurs" (`PROJECT_CONTEXT.md` Section 7 finding #4).
+
+**Answer: yes. 3.50 is exposed identically.** No earlier run of this
+script exists to show an observed drift (unlike the same-ISIN side,
+where multiple historical runs already disagree), but the mechanism
+is the same and already proven unstable in the sibling case. 3.50 is
+not a safer number sitting above the retracted range -- it is the same
+kind of number.
+
+**The corrected record, replacing the paragraph above:**
+
+The verdict stands, unaffected: the holdout was read once, on a
+pre-registered design, and all three conditions passed.
+
+The margin does not stand the same way. Computed at **+3.87** at read
+time against the 3.0 threshold. Subsequent corrections gave 3.64, 3.50,
+and 5.97, each clearing 3.0 when run. **None of these four numbers is
+reproducible.** All four depend on `corporate_actions` state at the
+moment the computation ran. The margin has never been reproducibly
+quantified; its sensitivity to warehouse state is unmeasured; and
+whether the pass depended on contaminated entities is therefore **OPEN**
+-- not "resolved at 3.50," not "bounded by a 3.50-5.97 range."
+
+**Do not cite a point estimate from this record. Do not recompute
+expecting to confirm one.** A new run produces a new number, and that
+is a property of the measurement. Large-cap replication +6.56 ->
+reported 7.30 (the table above) is **also unreproduced**: re-running
+`run_study2_largecap_bug11_check.py` today, pinned, gives **8.04**,
+cause undiagnosed (`BUGS.md` Bug #27). Lower stakes -- Study 2 was
+CV-only, no holdout spent -- but it does not sit in this record as
+verified either.
 
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 

@@ -212,30 +212,61 @@ append-only; corrections are new rows.
 Buy the top decile by `momentum_12_1` (12-month return skipping the most
 recent month), hold 63 trading days, equal weight, long only.
 
-**Sealed holdout, margin stated as a range, permanently -- no further
+**RETRACTED, 2026-11-17: the "primary 3.50 / range 3.50-5.97" framing
+below is superseded, not deleted.** It treated 3.50 as a clean primary
+figure above an unmeasured-sensitivity range. Checked explicitly
+(instructed to check this before anything else, since it is the
+headline number): 3.50 shares the identical defect as the retracted
+3.57-5.22 range, not a figure sitting cleanly above it. See the
+retraction immediately below the table, and `BUGS.md`'s new entry.
+
+~~**Sealed holdout, margin stated as a range, permanently -- no further
 point estimate should be produced** (`FINDINGS.md` Section 2): **primary
 3.50 points** (window-level correction for both known contaminations --
 the most precise analysis choice and the lowest of the measured values),
 full range **3.50 to 5.97** depending on correction method, with a
 separate exclusion-set-instability diagnostic spanning 3.57-5.22 on top
 of that. Every value below was measured, defensible under its own stated
-method, and is not "the number":
+method, and is not "the number":~~
 
 | value | method |
 |---|---|
 | 3.87 | original, no contamination correction applied |
 | 3.64 | 78-entity same-ISIN exclusion, pinned to the 2026-09-27 read date (the original record) |
 | 3.63 | same as above, reproduced 2026-11-16 (1-entity reconstruction difference from 3.64, immaterial) |
-| **3.50** | **+ the 40-entity lineage-jump correction, WINDOW-LEVEL (precise: masks only the contaminated momentum/forward-return windows)** |
-| 5.97 | + the 40-entity lineage-jump correction, ENTITY-LEVEL (conservative: drops the entities outright, matching the 78-entity precedent) |
-| 3.57-5.22 | separate diagnostic: the same-ISIN mechanism's own instability across exclusion-set snapshot dates, window held fixed |
+| 3.50 | + the 40-entity lineage-jump correction, WINDOW-LEVEL -- ~~most precise~~ **NOT REPRODUCIBLE, see retraction below** |
+| 5.97 | + the 40-entity lineage-jump correction, ENTITY-LEVEL -- same exposure |
+| ~~3.57-5.22~~ | ~~same-ISIN exclusion-set instability, window held fixed~~ -- **RETRACTED, see below** |
 
-**The next person to recompute this will get yet another number. That
-is a property of the measurement -- an unpinned live detector plus a
-margin sensitive to single-entity contribution concentration (top 10 of
-336 entities = 63% of compounded return) -- not news, and not a reason
-to run it again.** Large-cap replication +6.56 points (CV only, not
-subject to this same correction history).
+**RETRACTION, 2026-11-17: the margin has never been reproducibly
+quantified. Its sensitivity to warehouse state is unmeasured. Whether
+the pass depended on contaminated entities is OPEN.**
+
+**The verdict stands, unaffected**: the holdout was read once, on a
+pre-registered design, and all three conditions passed. That is a fact
+about one read on one date, not a number that needs to reproduce under
+later re-derivation.
+
+**The margin does not stand the same way.** Computed at **+3.87** at
+read time against the 3.0 threshold. Subsequent corrections gave 3.64,
+3.50, and 5.97, each clearing 3.0 when run. **None of these four
+numbers is reproducible.** All four depend on `corporate_actions`
+state at the moment the computation ran: `lineage_jump_guard.
+find_unexplained_jumps` reads that table unfiltered
+(`src/data_layer/lineage_jump_guard.py:67`, no point-in-time predicate
+at all), and the same-ISIN checkpoint path (`BUGS.md` Bug #27) does
+the structural equivalent. 3.50 was checked explicitly against this,
+not assumed clean -- it shares the defect exactly; it is not a safer
+number than the retracted range sitting above it, it is the same kind
+of number.
+
+**Do not cite a point estimate from this record. Do not recompute
+expecting to confirm one.** A new run produces a new number, and that
+is a property of the measurement, not a sign any individual run was
+done wrong. Large-cap replication +6.56 -> reported 7.30 is **also
+unreproduced** (`BUGS.md` Bug #27: re-running today gives 8.04, cause
+undiagnosed) -- lower stakes, since Study 2 was CV-only with no holdout
+spent, but it does not sit in this record as verified.
 
 **The sealed holdout spans 5 rebalance periods over ~13 months
 (2025-04-11 to 2026-04-22), universe 1,131-1,292 names per period,
@@ -245,21 +276,25 @@ within a period share the same market. The result was pre-registered
 and all three conditions passed; this is stated so the sample size is
 visible next to the margin rather than having to be derived.**
 
-**Why the range, not a single record.** Two independent contaminations
-have now been found and corrected (Bug #11, same-ISIN; Bug #26,
-lineage-transition), each with its own defensible correction method
-(entity-level vs window-level), on top of an exclusion mechanism
-(`same_isin_jump_excluded_entities()`) that reads the live warehouse
-with no pinned version and drifts as ordinary backfill continues. Max
-drawdown *worsened* when the 78 same-ISIN entities were excluded, which
-argues against contamination flattering the result generally -- but the
-point estimate itself has never been a stable thing to report, only a
-range bounded by stated methods. A single entity has been observed
-moving the margin by 1.65 points (MOLDTKPAC, `INE893J01011`) against a
-buffer as thin as 0.57-1.00 points in the exclusion-set diagnostic above
--- the margin is sensitive to single-name contribution concentration by
-construction (top 10 of 336 entities = 63% of compounded return), not a
-sign any one correction was done wrong.
+**SUPERSEDED, 2026-11-17, not deleted**: ~~Why the range, not a single
+record. Two independent contaminations have now been found and
+corrected (Bug #11, same-ISIN; Bug #26, lineage-transition), each with
+its own defensible correction method (entity-level vs window-level), on
+top of an exclusion mechanism (`same_isin_jump_excluded_entities()`)
+that reads the live warehouse with no pinned version and drifts as
+ordinary backfill continues. Max drawdown *worsened* when the 78
+same-ISIN entities were excluded, which argues against contamination
+flattering the result generally -- but the point estimate itself has
+never been a stable thing to report, only a range bounded by stated
+methods.~~ **This framing understated the problem: it is not "a range
+bounded by stated methods," it is unmeasured.** The two corrections
+(Bug #11, Bug #26) are real and were applied correctly; what was wrong
+was treating their OUTPUT as a stable number at all, when the
+corporate-action-explanation step both corrections depend on is itself
+unpinned. The MaxDD-worsened observation and the MOLDTKPAC 1.65-point
+single-entity swing are still accurate, standalone facts -- they are
+evidence the margin is NOT uniformly inflated by contamination, not
+evidence it is reproducible.
 
 **Never run live until 2026-10-26.** One basket now recorded with a January
 check-in. **Pre-committed interpretation recorded before that check-in**
@@ -597,6 +632,31 @@ baseline at any achievable sample). Recorded because an orthogonal
 selection signal is scarce and may matter to a future study, not because
 a strategy follows from it. `EARNINGS_DRIFT_FINDINGS.md`.
 
+**18. A recorded number that cannot be reproduced is not a result,
+however carefully it was derived at the time.** Not two of four
+recorded momentum results could not be reproduced by their own check
+scripts after pinning window and exclusion-set size -- it is ALL of
+them, including the figure (3.50) explicitly designated primary before
+this was checked. The cause in at least one case (`BUGS.md` Bug #27,
+and Bug #28 in a second location): checkpoint "reconstruction" was a
+date filter over CURRENT warehouse state, not a reconstruction of
+historical state -- corporate-action explanation status and `gap_days`
+were recomputed against today's data at every checkpoint, for every
+transition, regardless of how long ago it occurred. Reproducibility
+requires pinning the DERIVED state (which entities were flagged, and
+why) and not merely the inputs' dates. **Generalization**: a
+point-in-time project that reads any derived-state table unfiltered
+has a reproducibility hole wherever that read occurs. This is not the
+first instance -- Section 6's own Bug #12 ("fundamentals screener is
+current-state only... any screener-based historical variant is
+uncomputable") is the identical shape, found earlier, in a different
+table, and never generalized into a standing rule at the time it was
+found. Three occurrences now, three different tables
+(`fundamental_screener.py`'s live reads; `corporate_actions` via the
+same-ISIN guard; `corporate_actions` via the lineage guard), each
+treated as its own bug rather than the general case until now. Found
+2026-11-17.
+
 ---
 
 ## 8. THE STRUCTURAL FINDING
@@ -759,6 +819,14 @@ window-width confound left the window's start uncontrolled) and it was
 abandoned before preregistration, matching Study E. Final tally: 4 DEV
 failures, 2 Phase 1 abandonments, 1 withdrawn measurement. No Study G —
 see `LIQUIDITY_FAMILY_CLOSED.md` for the closure reasoning.
+
+**Point-in-time corporate-actions reads (Bug #27, Bug #28, "item B")
+-- the single highest-value infrastructure work outstanding.** Neither
+jump-detector honours a point-in-time predicate on its own
+`corporate_actions` read, even when a `before=` cutoff restricts which
+transitions are considered. At least 14 consumers inherit this hole
+today. Not implemented; see `BUGS.md`'s resolution-path entry for the
+full scope.
 
 ---
 
