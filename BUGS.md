@@ -2400,7 +2400,26 @@ snapshot -- none was ever saved (`FINDINGS.md` Section 2's own
 "reconstructed... no snapshot of the exact original 78 was ever saved"
 note already flagged this class of problem once, for the count alone;
 this is the same gap, now shown to also affect the set's CONTENT, not
-just its size). **Not resolved. Flagged for a decision**: the
+just its size).
+
+**CORRECTION, 2026-11-17, found while verifying the exclusion-list
+salvage below, not investigated further**: the `corporate_actions`
+backfill hypothesis above is checked and FALSIFIED, not just unconfirmed.
+`corporate_actions` has 727 rows, every one with the IDENTICAL
+`fetched_at` (2026-09-19 23:09:03) -- the table was populated once, in a
+single bulk load, and has never been touched since. Whatever drove the
+versioned script's own disagreeing checkpoints, it was not a
+corporate-actions backfill. `isin_lineage` is similarly static since
+2026-09-19 (3,357 rows, same single `fetched_at`). `prices_eod`/
+`adjustment_factors` DO grow continuously (`fetched_at` up to
+2026-11-16) -- the more likely candidate, not confirmed, is new price
+data shifting a transition's own `gap_days`/`boundary_ratio`
+calculation for an ALREADY-EXISTING transition, not a corporate-action
+explanation changing or a new transition appearing. Not investigated
+further tonight -- out of scope for exclusion-list persistence work,
+and the as-of-predicate fix (below) would need to cover whichever
+table turns out to be the real cause either way. **Not resolved.
+Flagged for a decision**: the
 3.57-5.22 sensitivity range in `FINDINGS.md` Section 2 should be read
 as a statement about the record AS IT STOOD on 2026-11-16, not as
 something a future re-run can be expected to confirm.
