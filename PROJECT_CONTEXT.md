@@ -679,6 +679,21 @@ The 20:00 move was kept, on grounds independent of the false rate: later is
 safer for bhavcopy availability, and 20:00 is more likely to find the laptop
 on. Recorded as a precaution, not a fix to an observed problem.
 
+**2026-11-16:** a testable hypothesis (post-earnings drift) came within one
+commit of permanent closure because my Phase 0 prompt specified the variance
+of the *level* where finding #3 ("variance of the difference, not effect
+size, is the binding constraint") requires the variance of the *difference*.
+The study tests a decile spread; a level's variance is inflated by exactly
+the quarter-clustered market shock that mostly cancels in a spread, so the
+wrong variance produced an MDE two orders of magnitude too large and a
+"the idea stops here" verdict that did not survive correction. The error
+was mine, in the instruction, not in the execution of it — and it was
+catchable against this project's own already-committed rule before a
+single number existed, the same way the Liquidity E/F pre-checks and the
+8-72-year momentum+fundamentals figure were each, in their own way, checks
+this project had already written down and then had to be reminded to apply
+to itself.
+
 ---
 
 ## 10. WHAT IS STILL OPEN
