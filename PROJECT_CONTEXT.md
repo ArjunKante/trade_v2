@@ -74,6 +74,7 @@ convincing and were not.
 | Options depth collector | Scheduled on the laptop, 10:30/12:30/14:30, monitored by healthchecks.io (dead-man's switch, added 2026-11-15) |
 | Spread estimator validation | Specified, 24 names selected, awaiting market-hours collection |
 | Historical holdout | **RETIRED.** No sealed window remains for any equity study except IPO listing's unread 199 trades. |
+| Earnings-event data (post-earnings-drift family) | **SEALED, declared 2026-11-16, unread.** `known_date >= 2025-07-01` in `fundamentals_filings`/`fundamentals_xbrl_facts`. Contamination partial, not zero (price data for this period already used elsewhere); the events themselves never loaded. `EARNINGS_DRIFT_PHASE0.md` Section 0, `data/holdout_access_log.txt`. |
 | Liquidity family | **CLOSED, 2026-11-07.** 4 DEV failures, 2 Phase 1 abandonments, 1 withdrawn measurement. No Study G. See `LIQUIDITY_FAMILY_CLOSED.md`, §10. |
 
 ### Known operational constraints
