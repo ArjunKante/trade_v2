@@ -2015,3 +2015,89 @@ unexplained jump under either guard, any `gap_days`, in addition to
 (not instead of) the existing 78-entity canonical same-ISIN pin and the
 unchanged winsorization rule. Status: **fixed in the preregistration
 before DEV ran**, per that document's own Amendment 2.
+
+## Bug #26 follow-up: proposal to make `read_entity_panel()` guard by default -- blast radius only, NOT IMPLEMENTED
+
+**Requested 2026-11-16**: Bug #26 is the eighth time a fix existed and new
+code simply didn't call it (`PROJECT_CONTEXT.md` finding #4, "fixed where
+noticed, not everywhere the pattern recurs"), and Bug #11's own record
+shows a sweep already missed seven scripts once. A guard that must be
+remembered will be forgotten again. This section reports what making the
+panel guarded-by-default would break, so the change itself is not made
+blind. **Nothing below is implemented.**
+
+### Current state, swept fresh against today's code
+
+Every caller of `read_entity_panel()` / direct reader of
+`entity_prices_daily`, classified by what it actually applies:
+
+| Guard applied | Scripts/modules |
+|---|---|
+| **Both** (lineage + same-ISIN) | `run_momentum_persistence_regime_count.py`, `run_portfolio_power_calc.py`, `tests/test_monitor_persistence.py`, `src/monitor/web.py`, and the swing-project scripts already recorded above (`run_swing_v1_holdout.py`, `run_swing_v1_checks.py`, `run_swing_phase3_clean_rerun.py`, `run_swing_phase3_decomposition.py`, `run_swing_v1_regime_check.py`, `run_swing_v1_regime_check2.py`) |
+| **Same-ISIN only** (dedicated materiality re-checks, not the original script) | `run_momentum_backtest_bug11_check.py`, `run_study2_largecap_bug11_check.py` |
+| **Lineage only** | `run_lineage_jump_fix_impact.py` (diagnostic), `run_swing_phase1_cost_dispersion.py`, `run_swing_phase2_candidate_counts.py` |
+| **Neither**, but routes through `factors/momentum.py`/`factors/target.py` (gets `STALE_GAP_DAYS`'s incidental protection for jumps with a >5-calendar-day gap; still fully exposed to zero-gap same-ISIN jumps) | `run_combination_ic_power_analysis.py`, `run_combination_power_analysis.py`, `run_ey_momentum_diagnostic.py`, `run_factor_ic_report.py`, `run_lowliq_cost_sensitivity.py`, `run_momentum_backtest.py`, `run_phase2_diagnostics.py`, `run_phase_e_factors.py`, `run_study2_largecap.py`, `run_survivorship_quantification.py`, **and `run_holdout_study1.py` itself** |
+| **Neither, and bypasses the factor layer entirely** (zero incidental protection) | the now-fixed `scripts/earnings_drift_phase0*.py` (Bug #26, above) |
+| **Not exposed** (no return computed across a time span) | `run_lowliq_cost_calibration_diagnostic.py` (turnover/spread only) |
+
+**The one finding that matters most**: `scripts/run_holdout_study1.py` --
+the script behind this project's one sealed-holdout-validated positive
+result -- calls `compute_momentum_12_1(panel)` and
+`compute_forward_return(panel)` with no `unexplained_jump_dates`
+argument. Checked what this actually means, not just flagged: **for
+lineage-transition jumps, it is already protected as a side effect**.
+`run_lineage_jump_fix_impact.py`'s own prior measurement found all 14
+known lineage-jump transitions (as of that check) have a 29-2622-day
+calendar gap, comfortably past `STALE_GAP_DAYS=5` -- `factors/momentum.py`'s
+pre-existing, unconditional gap-based NaN'ing (Bug #2, already in
+production, no dict required) catches these regardless of whether the
+guard parameter is passed. The new KAUSHALYA transition (Bug #26) has a
+~26-day gap -- same mechanism would catch it too, if `run_holdout_study1.py`
+used it. **What Study 1 is NOT protected against by anything in its own
+code: zero-gap same-ISIN jumps (Bug #11's own shape)** -- but that
+specific exposure was already measured separately
+(`run_holdout_study1_bug11_check.py`, `FINDINGS.md` Section 2: margin
+3.87 -> 3.64 at the 2026-09-27/78-entity snapshot), just via a side
+script, never folded into the original. Reported plainly; not re-litigated
+or reopened here -- that is a bigger decision than this section.
+
+### The proposed fix, and why it is not a one-line change
+
+Requested shape: `read_entity_panel(con, guard=True)` by default, opt-out
+requires a stated reason. **Two implementations are possible, and only
+one is safe:**
+
+1. **Delete the contaminated rows from the panel.** Unsafe. Momentum,
+   forward-return, and most other factor code in this project use
+   row-INDEX-based `.shift()`/`.rolling()` (position in the entity's own
+   sorted sequence, not calendar alignment). Deleting one row does not
+   null one computation -- it silently reindexes every later row in that
+   entity's series by one position, misaligning every subsequent
+   window. This would be a NEW bug class, probably worse than the
+   status quo, and is exactly why the existing lineage guard works by
+   NaN'ing the derived VALUE post-hoc (`_is_unexplained_jump_row`) rather
+   than deleting the input row.
+2. **Drop the affected ENTITY entirely** (same mechanism the 78/82-entity
+   same-ISIN pin already uses). Safe -- no partial-series misalignment,
+   since nothing survives to be misaligned. Costly: scoped to the FULL
+   same-ISIN population (not the tight `gap_days<=5` canonical pin) plus
+   the lineage population, this removes **up to ~700-750 entities**
+   (same-ISIN full scope ~714 ISINs + lineage ~45, minus overlap, against
+   a tracked universe of ~2,400-2,500 entities -- **roughly 30%**).
+   Scoped to the TIGHT canonical pin instead (78/82 + the 45 lineage
+   entities, ~120-125 total) the blast radius is small and safe, but
+   **would NOT have caught Bug #26** -- KAUSHALYA's own same-isin-adjacent
+   jumps have `gap_days` 61-146, all above the tight cutoff of 5.
+
+**Conclusion, not a recommendation to implement yet**: a safe,
+entity-level default guard using the TIGHT scope is cheap and would have
+prevented the seven-script Bug #11 propagation gap, but would not have
+prevented Bug #26 on its own. Preventing Bug #26-shaped issues (a forward
+return spanning an arbitrary, caller-chosen horizon) requires either
+widening the default to the full same-ISIN population (large, ~30%,
+blast radius -- discards good history for hundreds of entities whose
+only flaw is one old jump) or keeping the per-window check
+(Amendment 2's own approach) as something every forward-return-building
+script must still do explicitly, which is the exact "must be remembered"
+problem this proposal was meant to solve. Flagged, not resolved; no code
+changed.
