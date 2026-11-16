@@ -2404,3 +2404,106 @@ just its size). **Not resolved. Flagged for a decision**: the
 3.57-5.22 sensitivity range in `FINDINGS.md` Section 2 should be read
 as a statement about the record AS IT STOOD on 2026-11-16, not as
 something a future re-run can be expected to confirm.
+
+## Bug #28: the lineage guard has the same unfiltered-corporate_actions defect as Bug #27 -- a second location, the ninth instance of fix-not-propagated
+
+**Found 2026-11-17, checking explicitly whether the 3.50 margin figure
+(window-level lineage correction, `scripts/run_holdout_study1_lineage_
+check.py`) shares Bug #27's defect -- asked directly, not discovered by
+accident.**
+
+**Confirmed by reading the code, not by analogy.**
+`lineage_jump_guard.find_unexplained_jumps()`
+(`src/data_layer/lineage_jump_guard.py:67`):
+
+```python
+actions = con.execute("SELECT symbol, ex_date FROM corporate_actions").fetchdf()
+```
+
+Unfiltered. No `known_date`/`fetched_at` point-in-time predicate, no
+`before` cutoff applied to this specific query even when the caller
+passes one for the lineage-transition date itself. `has_nearby_ca_
+record`, the flag deciding whether a transition is "unexplained" and
+therefore enters a correction's exclusion set, is evaluated against
+TODAY's `corporate_actions` table for every transition, including ones
+dated years in the past. This is structurally identical to Bug #27's
+same-ISIN mechanism (`same_isin_jump_guard`'s own `has_nearby_ca_record`
+computation) -- the same defect, in a second detector.
+
+**Consequence**: the 3.50 figure (`FINDINGS.md` Section 2, PROJECT_
+CONTEXT.md Section 4, both now retracted-and-annotated) is not a clean
+primary number sitting above the retracted 3.57-5.22 range -- it is
+exposed to the identical instability. No earlier run of the lineage-
+check script exists to show an observed drift the way Bug #27 could
+point to four already-disagreeing historical runs, but the mechanism
+is proven unstable in the sibling case and there is no reason to expect
+this one is better-behaved.
+
+**The ninth instance of "fixed where noticed, not everywhere the
+pattern recurs"** (`PROJECT_CONTEXT.md` Section 7 finding #4, itself
+tracking a running count that this entry extends). The generalization,
+not just the instance count: **a point-in-time project that reads any
+derived-state table unfiltered has a reproducibility hole wherever that
+read occurs** -- `corporate_actions` here (Bug #27, Bug #28), but
+`PROJECT_CONTEXT.md` Section 6's own Bug #12 ("fundamentals screener is
+current-state only... any screener-based historical variant is
+uncomputable") is the identical shape, found earlier, in a different
+table (`fundamental_screener.py`'s live price/balance-sheet reads), and
+never generalized into a standing rule at the time. Three instances of
+the same shape now exist in this project's own history, in three
+different tables, found on three separate occasions, each treated as
+its own bug rather than as the general case. See `PROJECT_CONTEXT.md`
+Section 7 finding #18 for the generalization recorded as a standing
+finding, not just a bug-by-bug tally.
+
+**Fix, not implemented tonight -- see the resolution-path entry below,
+which covers this bug and Bug #27 together.**
+
+## Resolution path for Bug #27 and Bug #28, NOT to implement tonight -- the single highest-value infrastructure work outstanding
+
+**This is item B.** Earlier in this project's history, a versioning
+mechanism for the same-ISIN exclusion set was proposed and never
+implemented (`data/holdout_access_log.txt`'s own entries reference it
+as "item B's own as-of predicate... not implemented"). Bug #27 and
+Bug #28 are that same gap, now shown to be bigger than originally
+scoped: it is not just that `same_isin_jump_excluded_entities()` never
+threads an `as_of` parameter through to its own caller -- it is that
+NEITHER of the two underlying detectors (`lineage_jump_guard.
+find_unexplained_jumps`, `same_isin_jump_guard.
+find_unexplained_same_isin_jumps`) honours a point-in-time predicate
+on the `corporate_actions` READ specifically, even when a `before=`
+cutoff is passed for the jump/transition date itself. Threading an
+as-of predicate through `before=` already works for restricting WHICH
+transitions are considered; it does nothing for whether a CONSIDERED
+transition is judged explained or unexplained, because that judgment
+reads `corporate_actions` with no date filter at all.
+
+**Why this is possible, not just desirable**: `corporate_actions`
+already carries `known_date` and `fetched_at` -- the same point-in-time
+columns this project's own `as_of`/`known_date <= as_of` convention
+already uses everywhere else (`build_entity_resolver`, `guard_date_
+range`, the fundamentals point-in-time joins). The predicate exists on
+the table. The detector just does not apply it. This is not a new
+mechanism to invent, only a filter to add to one query in each of two
+functions, propagated through `has_nearby_ca_record`'s own computation.
+
+**Scope, counted not guessed**: at least 14 consumers across both
+detectors (`same_isin_jump_excluded_entities`, `unexplained_same_isin_
+jump_entities`, `find_unexplained_same_isin_jumps`, `unexplained_jump_
+boundaries`, `find_unexplained_jumps`) -- `run_holdout_study1_bug11_
+check.py`, `_versioned.py`, `run_study2_largecap_bug11_check.py`,
+`run_momentum_backtest_bug11_check.py`, `run_holdout_study1_lineage_
+check.py`, `run_lineage_jump_fix_impact.py`, `run_momentum_basket_
+snapshot.py`, `run_momentum_persistence_monitor.py`, `run_momentum_
+persistence_regime_count.py`, `run_portfolio_power_calc.py`, six swing
+scripts, `src/monitor/persistence.py`, `src/monitor/web.py`,
+`src/reports/fundamental_snapshot.py` -- every one of them inherits
+this same hole today, whether or not its own result has been shown to
+drift yet.
+
+**NOT to implement tonight.** Recorded as the single highest-value
+piece of infrastructure work outstanding in this project: until it
+exists, every future study built on either detector inherits the same
+reproducibility hole Bug #27 and Bug #28 just made visible, and will
+not know it until someone happens to re-run an old check script and
+notice the number moved.
