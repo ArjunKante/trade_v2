@@ -61,5 +61,170 @@ Recorded in `data/holdout_access_log.txt` alongside the retired windows
 
 ## 1-5. Feasibility and power analyses (2016-01 through 2025-06 only)
 
-[Filled in below, in the same commit sequence, after the sealing
-declaration above has landed on its own.]
+Computed by `scripts/earnings_drift_phase0.py`, read-only, no backfill run.
+All numbers below restrict to `known_date < 2025-07-01` (137,110 of the
+137,228 total events ever loaded — 118 fall on/after the seal and are
+excluded from every count in this section).
+
+### 1. Join attrition
+
+Of 137,110 events in the unsealed window:
+
+| Stage | Count | % of 137,110 |
+|---|---:|---:|
+| No `isin_lineage` match at all | 1,097 | 0.8% |
+| Matched, but nearest trade date >10 calendar days from announcement | 11,069 | 8.1% |
+| Matched, but incomplete 60-trading-day forward window (panel ends 2025-03-18) | 4,368 | 3.2% |
+| Matched, but no price row on/after the announcement at all | 3,855 | 2.8% |
+| Matched, but gap before the event row >10 calendar days | 797 | 0.6% |
+| Matched, but entity has no price rows at all | 55 | 0.0% |
+| Matched, but entity history starts at/after the event | 52 | 0.0% |
+| **Survives (complete 3-day-ish event window AND complete 60-day forward window)** | **115,817** | **84.5%** |
+
+**A finding not asked for by name but structurally unavoidable here:**
+`entity_prices_daily` — the point-in-time, split-adjusted panel this
+project's backtests actually use — ends **2025-03-18**, not 2025-06-30.
+That date is independently known in this repo as "the sealed-holdout
+boundary" (comment in `scripts/run_survivorship_quantification.py`). It is
+*not* the earnings seal declared in Section 0 above — it is simply how far
+the adjusted price panel has been built — but it means the practically
+complete-forward-window portion of the "unsealed" 2016-01–2025-06 range is,
+under the data as it sits today, closer to 2016-01–2024-12-ish (60 trading
+days ≈ 3 months short of 2025-03-18). The "incomplete forward window" row
+above (4,368 events, 3.2%) is this effect, counted directly rather than
+estimated. No backfill was run to extend the panel, consistent with
+Section 0's "no new ingestion" instruction — extending it is a separate,
+later decision, not part of this feasibility check.
+
+Event-window definition used (stated plainly, provisional — see Section 3
+below for why): day 0 = the first trading day on/after the calendar date of
+`known_date`, admitting a match only within 10 calendar days (to catch
+long trading halts/delistings rather than silently keeping them). This
+ignores `broadcast_ts` time-of-day; Section 3 exists precisely to check
+whether that is defensible before any real preregistration bakes it in.
+
+### 2. The 1,097 unmatched rows — systematic, not random
+
+| | Unmatched (1,097 rows / 59 ISINs) | Matched (136,013 rows / 2,441 ISINs) |
+|---|---:|---:|
+| Median daily turnover (₹, last-observed) | 11,552 | 10,280,101 |
+| Median last close (price level — **not market cap**, see note) | ₹3.36 | ₹193.69 |
+| % still trading within 90 cal. days of the raw price panel's own end (2026-11-05) | 10.2% | 71.6% |
+
+**This is a survivorship-flavoured gap, stated before any result exists.**
+The 59 unmatched ISINs are penny-priced (median ₹3.36 vs ₹193.69), roughly
+900x less liquid by turnover, and nearly 90% of them are no longer trading
+at all as of the most recent raw price data — versus under 30% attrition
+for the matched universe. Dropping these 1,097 rows silently would bias any
+later study toward survivors.
+
+**Market cap note**: no warehouse-resident market-cap field exists.
+Reconstructing one requires live-scraping individual XBRL filings for
+paid-up share capital (`scripts/sample_shares_outstanding_coverage_v2.py` —
+a network crawl, not a warehouse query), which is out of scope for a
+feasibility/counting check. Price level is substituted above as a labelled,
+weaker proxy rather than silently computing a misleading market-cap number.
+
+### 3. Announcement timing distribution
+
+Of 137,110 events (all have a non-null `broadcast_ts`):
+
+| Window | Count | % |
+|---|---:|---:|
+| Before 09:15 (pre-market) | 1,873 | 1.4% |
+| 09:15–15:30 (market hours) | 53,032 | 38.7% |
+| After 15:30 (post-market) | 82,205 | 60.0% |
+
+60% of announcements land after market close — day 0's natural definition
+for the *majority* of events is "the next trading day," not the
+announcement's own calendar date. But 38.7% land *during* market hours,
+where same-day price action could already reflect the news before the
+close — for those, "day 0 = next trading day" (used provisionally in
+Section 1 above) would miss the first, and often largest, reaction. Any
+real preregistration needs a day-0 rule that branches on this, not one
+rule applied uniformly. Stated here, not fixed here — fixing it is part of
+the study design, not this feasibility check.
+
+### 4. Clustering — the item that matters most
+
+| Year | Distinct dates | Events | Top-20-day share |
+|---|---:|---:|---:|
+| 2016 | 198 | 12,420 | 43.6% |
+| 2017 | 190 | 14,625 | 43.8% |
+| 2018 | 166 | 15,268 | 52.5% |
+| 2019 | 228 | 12,947 | 41.9% |
+| 2020 | 296 | 14,169 | 35.1% |
+| 2021 | 276 | 14,446 | 39.6% |
+| 2022 | 252 | 14,925 | 46.7% |
+| 2023 | 246 | 16,491 | 44.1% |
+| 2024 | 283 | 17,887 | 42.2% |
+| 2025 (partial, through June) | 83 | 3,932 | 84.4% |
+
+35–53% of each year's events land on just 20 days (results-season peaks).
+Across the full 2016-01-08 to 2025-06-17 window:
+
+- **Day-clusters**: 2,218 distinct announcement dates.
+- **Quarter-clusters**: 38 distinct quarters.
+
+These are the two candidate effective sample sizes for inference, not
+137,110 (the event count) and not 2,441 (the entity count) — because
+within a results-season day, and even more so within a quarter, events are
+not independent draws; they share market-wide and sector-wide shocks.
+
+### 5. MDE, computed both ways
+
+**Quarter-clustered MDE (182.5%, or 30.8% on an outlier-robust sigma —
+either way) vastly exceeds any plausible drift effect. The idea stops at
+this step, the same way portfolio construction did (`PROJECT_CONTEXT.md`
+Section 3, "Feasibility and power checks first").**
+
+Cross-sectional SD of the 60-trading-day forward return, survivors only
+(n=115,817; mean 7.24% — **not used for sizing**, variance only, per
+`FINDINGS.md` Section 12's own discipline):
+
+- Raw SD: **117.2%**. Driven heavily by a small number of extreme-tail
+  returns (max observed: +18,939%, on 4 rows belonging to one entity — a
+  corporate-action-scale artifact, not representative; min: -97.9%, genuine
+  near-total losses). Median is only 1.8%; IQR is -9.9% to +16.8%.
+- Outlier-robust SD (IQR/1.349, a standard normal-equivalent estimator):
+  **19.8%**.
+
+MDE (two-sample, top-decile-vs-rest, t-distribution, 80% power, α=0.05
+two-sided, decile/rest split applied to the *effective cluster count*, not
+the event count):
+
+| Clustering | Effective n (clusters) | df | MDE (raw σ=117.2%) | MDE (robust σ=19.8%) |
+|---|---:|---:|---:|---:|
+| Day | 2,218 | 2,216 | 23.3% | 3.9% |
+| Quarter | 38 | 36 | 182.5% | 30.8% |
+
+Round-trip cost band for comparison: **0.20%–0.30%**.
+
+**Which is honest**: quarter-clustering. Announcement dates cluster into
+results seasons that repeat each quarter; the day-level count (2,218)
+overstates independence the same way counting every trading day in a
+single earnings season as a separate "cluster" would. Treating 2,218 days
+as independent when 35–53% of each year's events fall on 20 of them is the
+same mistake the project has already paid for once (day-clustered vs
+quarter-clustered bootstrap CIs, `PROJECT_CONTEXT.md` Section 3, "Gates").
+
+**Under the honest (quarter) clustering, the MDE is 30.8%–182.5% of
+return, against a cost band of 0.2%–0.3% — roughly 100x to 900x too large
+for any plausible drift effect to be detectable.** Even under the
+optimistic, almost-certainly-wrong day-clustered assumption, the MDE
+(3.9%–23.3%) still exceeds the cost band by 13x to 78x. The conclusion does
+not depend on which sigma or which clustering is used. **This idea does not
+clear even a generous feasibility bar. No preregistration should be
+written for it as specified.**
+
+---
+
+## Separately: PROJECT_CONTEXT.md's stale balance-sheet-coverage claim
+
+`PROJECT_CONTEXT.md` stated balance-sheet data "only reaches FY2022-23."
+Directly counted: `fundamentals_xbrl_facts` rows with
+`source = 'NSE_XBRL_ANNUAL_BALANCE_SHEET'` reach `period_end = 2024-12-31`
+(2,646,909 rows, 2,260 distinct ISIN). Corrected in that commit, swept
+across the repo for the same stale claim — see that commit's message for
+the specific sites found and fixed.
+
