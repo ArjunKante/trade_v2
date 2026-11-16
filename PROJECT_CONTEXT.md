@@ -565,6 +565,19 @@ threshold, because citing a genuine calculation makes the claim read as
 measured. A power figure is a property of a specific comparison, not of
 a family of them. Found 2026-11-16.
 
+**17. The earnings-reaction selection signal is orthogonal to momentum.**
+Top-decile overlap 7.7% against a ~10% chance baseline; within-quarter
+rank correlation 0.030. It passed the SELECTION null at the 99th-100th
+percentile, so it genuinely identifies outperforming stocks, and it is
+not momentum in disguise. No tradeable form has been identified: the
+TIMING null showed the post-announcement 60 days is the worst window of
+the year for these names, and every obvious route forward is either
+parameter tuning (select on earnings, enter after N days) or a momentum
+variant (which portfolio construction showed is indistinguishable from
+baseline at any achievable sample). Recorded because an orthogonal
+selection signal is scarce and may matter to a future study, not because
+a strategy follows from it. `EARNINGS_DRIFT_FINDINGS.md`.
+
 ---
 
 ## 8. THE STRUCTURAL FINDING
