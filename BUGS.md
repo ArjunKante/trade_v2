@@ -2213,3 +2213,51 @@ project already treats as a materiality check rather than a new spend
 (`FINDINGS.md` Section 7, the existing Bug #11 check's own precedent) --
 it would need its own `data/holdout_access_log.txt` entry on that same
 basis. **Not run.**
+
+**UPDATE, 2026-11-16: measured anyway, as its own pre-committed check**
+(`scripts/run_holdout_study1_lineage_check.py`, `FINDINGS.md` Section 2)
+-- margin 3.64 -> 3.50 (window-level correction, precise) / 5.97
+(entity-level, conservative) for these same 40 entities. Both stay
+above the 3.0 threshold; the result stands and the margin is restated.
+This answers the materiality question follow-up 3 raised; it does not
+retract follow-up 3's own correction (41 of 45 lineage transitions are
+zero-gap and unprotected) or follow-up 2's masking analysis below.
+
+## Bug #26 structural resolution: specification, NOT IMPLEMENTED
+
+**Where the guard belongs, settled by the two follow-ups above**: as a
+window-span check inside `compute_momentum`/`compute_momentum_12_1`/
+`compute_momentum_6_1`/`compute_forward_return` themselves -- does any
+flagged transition (lineage or same-ISIN, either guard, full scope, not
+just the tight pin) fall inside THIS window -- not as row masking in
+`read_entity_panel()`. Follow-up 2 established why masking cannot work
+here: these are two-point `.shift()`-based ratios, and a masked row
+only protects outputs where that row is itself one of the two shift
+endpoints, not the window spanning over it (Bug #26's own KAUSHALYA
+case sits strictly between its two endpoints). The window-span check
+these functions already have (`_max_gap_in_window`, a rolling-max over
+a boolean flag across the full lookback/lookahead window) is the
+correct mechanism and needs no redesign -- it already answered "does a
+flagged transition fall inside this window" correctly when given the
+dates, as `run_holdout_study1_lineage_check.py` just confirmed.
+
+**What is actually broken is that it is optional.** `unexplained_jump_
+dates: dict | None = None` lets every caller silently default to
+unguarded -- this is the exact mechanism behind Bug #26 and Item 1's
+"10 scripts apply neither guard" finding, including `run_holdout_
+study1.py` itself. The fix: **remove the default.** Make
+`unexplained_jump_dates` a required, no-default parameter on these four
+functions. Every call site must then explicitly choose: pass the real,
+merged guard output (`lineage_jump_guard.unexplained_jump_boundaries`
+UNION the full, unfiltered `same_isin_jump_guard.
+find_unexplained_same_isin_jumps`'s unexplained rows -- not just the
+tight 78/82-entity pin, which follow-up 3 showed covers almost none of
+the lineage exposure), or pass `{}` as an explicit, visible statement
+"I accept this risk," which is a very different thing from silently
+never having been asked. This is a small, mechanical signature change
+with a large, loud blast radius (every current call site breaks until
+it decides), which is the point -- a guard that must be remembered will
+be forgotten; a guard that must be answered cannot be.
+
+**Still not implemented.** This is a specification, written down before
+being built, per instruction.
