@@ -78,7 +78,7 @@ convincing and were not.
 | Options depth collector | Scheduled on the laptop, 10:30/12:30/14:30, monitored by healthchecks.io (dead-man's switch, added 2026-11-15) |
 | Spread estimator validation | Specified, 24 names selected, awaiting market-hours collection |
 | Historical holdout | **RETIRED.** No sealed window remains for any equity study except IPO listing's unread 199 trades. |
-| Earnings-event data (post-earnings-drift family) | **SEALED, declared 2026-11-16, unread.** `known_date >= 2025-07-01` in `fundamentals_filings`/`fundamentals_xbrl_facts`. Contamination partial, not zero (price data for this period already used elsewhere); the events themselves never loaded. `EARNINGS_DRIFT_PHASE0.md` Section 0, `data/holdout_access_log.txt`. |
+| Earnings-event data (post-earnings-drift family) | **Still SEALED, still unread.** `known_date >= 2025-07-01` in `fundamentals_filings`/`fundamentals_xbrl_facts`. **Family CLOSED at trial 1, 2026-11-16** -- DEV failed Gate conditions 1 (CI includes zero) and 2 (TIMING null at the 0th percentile, decisively), per `EARNINGS_DRIFT_FINDINGS.md`. No sealed read happened and none will. `EARNINGS_DRIFT_PHASE0.md` Section 0, `data/holdout_access_log.txt`. |
 | Liquidity family | **CLOSED, 2026-11-07.** 4 DEV failures, 2 Phase 1 abandonments, 1 withdrawn measurement. No Study G. See `LIQUIDITY_FAMILY_CLOSED.md`, §10. |
 
 ### Known operational constraints
@@ -161,6 +161,7 @@ findings files, not from §5's own prose** (2026-11-07):
 | Per-stock weekly | 42 (21 stocks × 2 rules, actually run — `PER_STOCK.md` §4: preregistered for 50×2=100, only 42 actually run) | 0 survivors | 42, explicit ("across ALL trials actually run") |
 | Momentum (63-day) | 2 (Study 1; Study 2, large-cap replication) | Study 1 passed its sealed holdout; Study 2 ran CV-only, no holdout spent | UNVERIFIED for this pair specifically — no numbered correction found in `FINDINGS.md` for Studies 1/2 themselves (a *different* study, the momentum+fundamentals combination, states "m=8" for its own nine-factor screen — not reused here) |
 | Fibo | 1 | Passed, after two corrections to the same trial (cost model, then a price-scale bug) — one authorized sealed-test read, not three trials | None found or stated — single trial, no multi-config split |
+| Post-earnings drift | 1 (Phase 0 feasibility + DEV, counted as one per explicit instruction) | **FAILED DEV** — CI includes zero; TIMING null at the 0th percentile (random-timing entries beat the real post-announcement entry on the same stocks). Liquid-bands, best-year-drop, and cost conditions all passed; Gate requires all five. Sealed window never read, family closed. `EARNINGS_DRIFT_FINDINGS.md` | 1, lone trial, none needed |
 
 **Disagreements found between this table and §5's own prose, reported, not
 reconciled here**: §5 names only two of Swing's six run variants (V1, V4)
