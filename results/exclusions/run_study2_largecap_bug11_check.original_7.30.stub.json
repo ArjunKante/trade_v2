@@ -1,0 +1,9 @@
+{
+  "result_id": "run_study2_largecap_bug11_check.original_7.30",
+  "status": "NOT_RECOVERABLE",
+  "stub_written_at": "2026-11-17T03:48:42.771886",
+  "recorded_value": "margin +7.30pts, 78 same-ISIN entities excluded, read date 2026-09-27",
+  "recorded_in": ["FINDINGS.md Section 2", "PROJECT_CONTEXT.md Section 4"],
+  "produced_by": "scripts/run_study2_largecap_bug11_check.py (2026-09-27 run)",
+  "reason": "Same gap as run_holdout_study1_bug11_check.original_3.64.stub.json -- the literal 78-entity set used on 2026-09-27 was never saved. The 2026-11-17 pinned-reconstruction run (results/exclusions/run_study2_largecap_bug11_check.json, 79 entities) gives margin 8.04, not 7.30 -- a +0.74pt gap too large to attribute to the one-entity difference alone, and explicitly flagged UNREPRODUCED in BUGS.md Bug #27 and FINDINGS.md Section 2, cause undiagnosed. Lower stakes than the holdout figure since Study 2 was CV-only, no sealed holdout spent."
+}

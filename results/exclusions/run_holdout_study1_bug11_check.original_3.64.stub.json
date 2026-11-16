@@ -1,0 +1,9 @@
+{
+  "result_id": "run_holdout_study1_bug11_check.original_3.64",
+  "status": "NOT_RECOVERABLE",
+  "stub_written_at": "2026-11-17T03:48:42.771886",
+  "recorded_value": "margin +3.64pts, 78 same-ISIN entities excluded, read date 2026-09-27",
+  "recorded_in": ["FINDINGS.md Section 2", "PROJECT_CONTEXT.md Section 4"],
+  "produced_by": "scripts/run_holdout_study1_bug11_check.py (2026-09-27 run)",
+  "reason": "The literal 78-entity set used on 2026-09-27 was never saved -- this persistence mechanism did not exist until 2026-11-17. FINDINGS.md Section 2 already recorded this gap before tonight ('no snapshot of the exact original 78 was ever saved, off by one, immaterial to the conclusion'). Not the same file as results/exclusions/run_holdout_study1_bug11_check.json, which is a FRESH, pinned-reconstruction run from 2026-11-17 (79 entities, margin 3.63) -- a close but not identical reproduction attempt, not a recovery of the original 78-entity list or the original 3.64 figure."
+}

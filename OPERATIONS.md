@@ -2314,3 +2314,24 @@ not a frozen historical snapshot -- so a nominally fixed checkpoint
 entity set, and a different margin, on a later run even with the window
 and count unchanged. See `BUGS.md`'s new entry for the actual numbers;
 not resolved here.
+
+**AMENDMENT, 2026-11-17: pinning the window and exclusion-set count is
+STILL not enough. A reproduction script that recomputes its own
+exclusion list -- even pinned, even with matching counts -- is not
+reproducing anything, because the detectors it calls read
+`corporate_actions` unfiltered (`BUGS.md` Bug #27, Bug #28). The cheap
+fix: a result that gets recorded must PERSIST the materialized
+exclusion list it used (`src/data_layer/exclusion_list.py`,
+`results/exclusions/`) -- the actual entity IDs and/or jump dates, not
+the code that derives them. A script that PRODUCES a recorded result
+calls `save_exclusion_list()`. A script that REPRODUCES one calls
+`load_exclusion_list()` instead of calling the detectors again --
+**never** re-derive the list live and call that a reproduction. The
+loader has no recomputation fallback, under any flag; a missing file is
+an error to fix by restoring or salvaging the file, not a cue to
+rebuild something that might not match. Wired into `run_holdout_
+study1_bug11_check.py`, `run_study2_largecap_bug11_check.py`,
+`run_momentum_backtest_bug11_check.py`, and `run_holdout_study1_
+lineage_check.py` (all four now save on every run). The as-of predicate
+that would fix the detectors themselves stays separate and unscheduled
+(`BUGS.md`'s resolution-path entry, "item B").

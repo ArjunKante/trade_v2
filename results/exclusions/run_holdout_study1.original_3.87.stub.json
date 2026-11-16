@@ -1,0 +1,9 @@
+{
+  "result_id": "run_holdout_study1.original_3.87",
+  "status": "NOT_RECOVERABLE",
+  "stub_written_at": "2026-11-17T03:48:42.771886",
+  "recorded_value": "margin +3.87pts",
+  "recorded_in": ["FINDINGS.md Section 2", "PROJECT_CONTEXT.md Section 4"],
+  "produced_by": "scripts/run_holdout_study1.py",
+  "reason": "No exclusion list applies -- this is the ORIGINAL, uncorrected figure (zero exclusions, neither guard called). It predates this persistence mechanism (added 2026-11-17) in a different sense than the other stubs here: there is no list to have saved, because none was used. Noted separately from the other stubs because its own reproducibility risk is NOT the corporate_actions-unfiltered-read defect (Bug #27/#28) -- it is the unpinned-rebalance-window issue flagged when the second momentum seal was declared (FINDINGS.md Section 7, BUGS.md's 'found as a side effect, not fixed' note on run_holdout_study1.py itself): re-running this script today would also pull in rebalances past the original 5, for an unrelated reason. Not resolved here -- out of scope for the exclusion-list persistence work this stub accompanies."
+}

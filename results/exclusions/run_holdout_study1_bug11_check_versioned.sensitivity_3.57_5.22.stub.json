@@ -1,0 +1,9 @@
+{
+  "result_id": "run_holdout_study1_bug11_check_versioned.sensitivity_3.57_5.22",
+  "status": "NOT_RECOVERABLE",
+  "stub_written_at": "2026-11-17T03:48:42.771886",
+  "recorded_value": "margin range 3.57-5.22 across exclusion-set checkpoints dated 2026-09-27/09-28/10-10/11-16 (79/80/81/82 entities)",
+  "recorded_in": ["FINDINGS.md Section 2 (RETRACTED, 2026-11-17 -- annotated, not deleted)", "PROJECT_CONTEXT.md Section 4 (RETRACTED, 2026-11-17)"],
+  "produced_by": "scripts/run_holdout_study1_bug11_check_versioned.py",
+  "reason": "No single exclusion list can stand in for this diagnostic -- by construction, it computed FOUR different checkpoint reconstructions, and the diagnostic's whole finding (BUGS.md Bug #27) is that this script's own checkpoint-reconstruction mechanism recomputes has_nearby_ca_record/gap_days against CURRENT warehouse state every run, so a nominally fixed checkpoint date does not reliably resolve to the same entity set later. Re-running it 2026-11-17 reproduced 3.63/2.63/5.21/4.63 against the recorded 3.99/5.22/3.57/4.00 -- not even the same relative ordering. This script is NOT wired to save an exclusion list going forward (unlike the other three bug11_check scripts): its own purpose is deliberately varying the exclusion set across checkpoints, so there is no single 'the list it used' to persist -- saving would misrepresent what this script does. The underlying as-of-predicate fix (BUGS.md's resolution-path entry) is what would make this specific diagnostic re-answerable, not list persistence."
+}

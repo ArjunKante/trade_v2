@@ -30,6 +30,7 @@ from data_layer.db import get_read_connection
 from data_layer.holdout import guard_momentum_rebalance_dates
 from data_layer.entity_panel import read_entity_panel
 from data_layer.same_isin_jump_guard import find_unexplained_same_isin_jumps
+from data_layer.exclusion_list import save_exclusion_list
 from factors.momentum import compute_momentum_12_1
 from factors.target import compute_forward_return, HORIZON_DAYS
 
@@ -197,3 +198,15 @@ else:
 
 rec_df.to_csv(ROOT / "data" / "study2_largecap_bug11_check_records.csv", index=False)
 print(f"\nSaved to data/study2_largecap_bug11_check_records.csv")
+
+# This script PRODUCES this result -- save the materialized exclusion
+# list it actually used (OPERATIONS.md's pinning rule; BUGS.md Bug #27).
+save_exclusion_list(
+    "run_study2_largecap_bug11_check",
+    produced_by="scripts/run_study2_largecap_bug11_check.py",
+    components=[{"guard": "same_isin", "mode": "entity_exclusion",
+                 "entity_ids": sorted(excluded)}],
+    detector_paths=[ROOT / "src" / "data_layer" / "same_isin_jump_guard.py"],
+    notes=f"margin={margin_pp:.2f}pts (recorded target: 7.30, unreproduced -- BUGS.md Bug #27).",
+)
+print("Exclusion list saved to results/exclusions/run_study2_largecap_bug11_check.json")
