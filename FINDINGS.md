@@ -262,6 +262,50 @@ ZERO clean passes, and `PROJECT_CONTEXT.md` Section 4 must say so in
 its first line. No re-litigating, no appeal to the original check
 having passed, no third correction.
 
+**RESULT, computed after the above was committed**
+(`scripts/run_holdout_study1_lineage_check.py`). Window held fixed to
+the original 5 rebalances (through 2026-04-22, same convention as the
+exclusion-set sensitivity table above); same-ISIN exclusion pinned to
+the 2026-09-27 read date (79 entities, reproducing 3.63 against the
+recorded 3.64 -- the same one-entity reconstruction difference already
+noted above, immaterial):
+
+| variant | margin | pass? |
+|---|---:|---|
+| ORIGINAL (no exclusion at all) | 3.87 | -- |
+| RECORDED (78 same-ISIN excluded, 2026-09-27) | 3.64 | -- |
+| Reproduced baseline, this check (79 same-ISIN excluded) | 3.63 | PASS |
+| **(a) WINDOW-LEVEL** (78/79 + the 40 lineage entities' transition windows masked) | **3.50** | **PASS** |
+| **(b) ENTITY-LEVEL** (78/79 + the 40 lineage entities excluded outright) | **5.97** | **PASS** |
+
+**(a) and (b) disagree materially (-2.47pts), as anticipated above --
+stated, not smoothed over.** Window-level and entity-level correct the
+same contamination at different granularity and get different answers;
+neither is wrong, they answer different questions (what the data
+actually shows once only the bad windows are removed, vs. the more
+conservative whole-entity removal). Window-level is the more precise
+correction, per this project's own finding that the transition sits
+strictly between a window's two endpoints, not at either.
+
+**Selected-decile positions affected, baseline (pre-correction)**: of
+the 40 entities, 18 entity-rebalance hits into the top decile across
+the 5 holdout rebalances (1, 3, 4, 7, 3 per rebalance) -- no single
+rebalance drove this; 2026-01-14 (7 hits) is the most concentrated.
+Window-level correction removes 2 of those 18 hits (2026-01-14 drops
+from 7 to 5, as the specific entities whose lookback window spans their
+own transition at that date are correctly excluded from that one
+rebalance's ranking, while remaining eligible at other rebalances where
+their window is clean); entity-level removes all 18 by construction.
+
+**VERDICT, per the pre-commitment above: the margin stays above 3.0
+under both corrections. The result stands. The margin is restated,
+not "made more robust"**: **3.87 (original) -> 3.64 (78 same-ISIN
+excluded, 2026-09-27) -> 3.50 (also window-level-correcting the 40
+lineage entities, the precise form; 5.97 under the conservative
+entity-level form)**. `PROJECT_CONTEXT.md` Section 4 is NOT amended to
+state zero clean passes -- this branch of the pre-commitment does not
+apply.
+
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 
 This is the finding that matters more than the headline pass, and it is the
