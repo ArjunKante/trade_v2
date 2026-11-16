@@ -46,7 +46,9 @@ def test_log_return_not_nan_across_a_short_gap():
 
 def test_momentum_nan_when_gap_falls_inside_lookback_window():
     panel = _panel_with_gap(gap_days=200, n_before=300, n_after=300)
-    mom = compute_momentum(panel, window=252, skip=21)
+    # unexplained_jump_dates={}: this test exercises calendar-gap detection
+    # only; no lineage/same-isin jump is relevant to this synthetic fixture.
+    mom = compute_momentum(panel, window=252, skip=21, unexplained_jump_dates={})
     # a date shortly after the gap should have the gap inside its 273-row lookback
     row = mom.iloc[310]
     assert pd.isna(row["value"])
@@ -57,7 +59,8 @@ def test_momentum_nan_when_gap_falls_inside_lookback_window():
 
 def test_forward_return_nan_when_gap_falls_inside_forward_window():
     panel = _panel_with_gap(gap_days=200, n_before=100, n_after=100)
-    fwd = compute_forward_return(panel, horizon=63)
+    # unexplained_jump_dates={}: calendar-gap detection only, same as above.
+    fwd = compute_forward_return(panel, horizon=63, unexplained_jump_dates={})
     # a prediction date whose forward 63-row window crosses the gap
     contaminated = fwd[(fwd["trade_date"] >= panel["trade_date"].iloc[40]) &
                         (fwd["trade_date"] <= panel["trade_date"].iloc[98])]
@@ -68,5 +71,6 @@ def test_forward_return_nan_when_gap_falls_inside_forward_window():
 
 def test_gap_fix_does_not_flag_a_fully_clean_series():
     panel = _panel_with_gap(gap_days=1, n_before=300, n_after=300)  # effectively continuous
-    mom = compute_momentum(panel, window=252, skip=21)
+    # unexplained_jump_dates={}: calendar-gap detection only, same as above.
+    mom = compute_momentum(panel, window=252, skip=21, unexplained_jump_dates={})
     assert mom["value"].notna().sum() > 0

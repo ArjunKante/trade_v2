@@ -2261,3 +2261,95 @@ be forgotten; a guard that must be answered cannot be.
 
 **Still not implemented.** This is a specification, written down before
 being built, per instruction.
+
+**UPDATE, 2026-11-17: IMPLEMENTED.** `unexplained_jump_dates` is now a
+required, keyword-only parameter (no default) on `compute_momentum`,
+`compute_momentum_12_1`, `compute_momentum_6_1` (`src/factors/
+momentum.py`) and `compute_forward_return` (`src/factors/target.py`).
+New helper, `src/data_layer/jump_guards.py::all_unexplained_jump_dates`,
+merges both guards (lineage + full same-ISIN output) in one call so
+every real-guard call site gets the complete answer, not a partial one.
+
+**Every call site touched** (removing the default broke all of them;
+each now explicitly passes either the merged real guard or `{}` with a
+stated reason):
+
+*Given the real guard* (no reason not to; these are diagnostics with no
+"preserve the original" constraint) -- `run_combination_ic_power_
+analysis.py`, `run_combination_power_analysis.py`, `run_ey_momentum_
+diagnostic.py`, `run_factor_ic_report.py`, `run_lowliq_cost_sensitivity.
+py`, `run_phase2_diagnostics.py`, `run_phase_e_factors.py`,
+`run_survivorship_quantification.py`.
+
+*Given `{}`, published/preserved results -- "no rewriting of published
+results," the existing project convention* -- `run_holdout_study1.py`
+(the sealed-holdout record), `run_momentum_backtest.py` (the pre-holdout
+backtest record), `run_study2_largecap.py` (the Study 2 record).
+
+*Given `{}`, same-ISIN-only scoped materiality checks (their own
+correction is the entity exclusion already applied via panel
+filtering; the lineage guard is a separate, orthogonal correction
+measured elsewhere)* -- `run_holdout_study1_bug11_check.py` (both its
+calls), `run_holdout_study1_bug11_check_versioned.py`,
+`run_study2_largecap_bug11_check.py` (both calls), `run_momentum_
+backtest_bug11_check.py` (both calls).
+
+*Given `{}`, decomposing an already-published unguarded result* --
+`run_holdout_study1_contribution_concentration.py` (matches
+`run_holdout_study1.py`'s own construction, or it would decompose a
+different, uncomputed result).
+
+*Given `{}`, deliberate no-fix/blunt-exclusion comparison variants* --
+`run_lineage_jump_fix_impact.py` (variants 1 and 2; variant 3 already
+passed the real dict), `tests/test_lineage_jump_guard.py` (the
+`mom_unguarded` comparison row only), `tests/test_gap_awareness.py`
+(all three calls -- these test calendar-gap detection only, no jump
+guard is relevant to the synthetic fixtures).
+
+*Given `{}`, matches a published script's own construction by design*
+-- `earnings_drift_momentum_overlap.py` (already stated in its own
+comment: matches `run_holdout_study1.py` exactly, for the overlap
+measurement to be against momentum as actually run).
+
+*Given both*, the one script this was built for --
+`run_holdout_study1_lineage_check.py`: `{}` for BASELINE and
+ENTITY-LEVEL (their own corrections are panel-level exclusions), the
+real 40-entity dict for WINDOW-LEVEL only.
+
+*Already correct, no change needed* -- `src/monitor/persistence.py`
+(fixed one positional-argument call that would have broken under the
+new keyword-only signature), `src/reports/fundamental_snapshot.py`,
+`run_momentum_basket_snapshot.py`, `run_portfolio_power_calc.py`,
+`run_swing_phase1_cost_dispersion.py`, `run_swing_phase2_candidate_
+counts.py`, `src/darvas/nulls.py` -- all already passed a real dict
+before this change.
+
+*Deliberately out of scope* -- `src/swing/universe.py`, `src/swing/
+backtest.py` (separate family, own already-audited guard discipline,
+own wrapper functions not touched), `src/factors/lowvol.py`
+(`compute_trailing_vol`/`compute_beta` keep their own optional default
+-- not named in this spec), `src/monitor/persistence.py`'s own
+`compute_daily_persistence(jump_dates=None)` wrapper (one level removed
+from the four functions this spec named; its own callers already pass
+real data).
+
+Full suite: 693 passed. Representative scripts (`run_holdout_study1_
+lineage_check.py`, `run_survivorship_quantification.py`,
+`run_holdout_study1_bug11_check.py`) re-run live to confirm no
+`TypeError` and unchanged numeric output.
+
+**Found as a side effect of this verification, not fixed, flagged for
+a separate decision**: re-running `run_holdout_study1_bug11_check.py`
+today reproduces margin **7.31**, not the recorded 3.64 -- because,
+like the lineage-check script originally did before it was pinned
+(`FINDINGS.md` Section 2), this script's own holdout window is not
+pinned to the original 5 rebalances and has grown a 6th
+(2026-07-23) as ordinary backfill continued. This is a pre-existing
+property of this script, not introduced by today's change, and is
+reported here rather than silently fixed -- the same window-pinning
+fix applied to `run_holdout_study1_lineage_check.py` would need to be
+applied here too, and to `run_holdout_study1_bug11_check_versioned.py`,
+`run_study2_largecap_bug11_check.py`, and `run_momentum_backtest_
+bug11_check.py` if they have the same gap, for any of their own output
+to be trustworthy against the recorded figures without rechecking the
+window first.

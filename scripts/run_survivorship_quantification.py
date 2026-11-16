@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.db import get_read_connection
 from data_layer.entity_panel import read_entity_panel
+from data_layer.jump_guards import all_unexplained_jump_dates
 from factors.momentum import compute_momentum_12_1
 from factors.target import compute_forward_return, HORIZON_DAYS
 
@@ -26,10 +27,11 @@ BLENDED_COST_BPS = 32.5
 
 con = get_read_connection(ROOT / "data" / "warehouse.duckdb")
 panel = read_entity_panel(con)
+jump_dates = all_unexplained_jump_dates(con)
 con.close()
 
-mom = compute_momentum_12_1(panel)
-fwd_clean = compute_forward_return(panel)  # gap-fixed (NaN'd where contaminated)
+mom = compute_momentum_12_1(panel, unexplained_jump_dates=jump_dates)
+fwd_clean = compute_forward_return(panel, unexplained_jump_dates=jump_dates)  # gap-fixed (NaN'd where contaminated)
 
 # RAW forward return, no gap-fix, so we can see what actually happened to excluded entities
 p = panel.sort_values(["entity_id", "trade_date"]).copy()

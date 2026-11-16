@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.db import get_read_connection
 from data_layer.entity_panel import read_entity_panel
+from data_layer.jump_guards import all_unexplained_jump_dates
 from factors.target import compute_forward_return
 from factors.ic_eval import ic_by_year, rebalance_spacing_trading_days, nonoverlapping_ic_report, benjamini_hochberg, HORIZON_DAYS
 from scipy.stats import t as t_dist
@@ -71,11 +72,12 @@ cfo_a = load_annual_tag(con, "CashFlowsFromUsedInOperatingActivities")
 
 print("Computing shares outstanding...")
 shares = compute_shares_outstanding(con)
+jump_dates = all_unexplained_jump_dates(con)
 con.close()
 
 # --- entity-keyed dates: all (entity_id, trade_date) with valid momentum-style panel presence ---
 p = panel.sort_values(["entity_id", "trade_date"]).copy()
-fwd = compute_forward_return(p)  # gap-aware target, same as momentum
+fwd = compute_forward_return(p, unexplained_jump_dates=jump_dates)  # gap-aware target, same as momentum
 
 all_dates = sorted(fwd["trade_date"].unique())
 rebalance_dates = all_dates[::63]

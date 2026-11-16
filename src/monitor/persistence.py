@@ -202,7 +202,7 @@ def compute_daily_persistence(panel: pd.DataFrame, jump_dates: dict | None = Non
     `factors.target.compute_forward_return` itself was willing to return
     is used (which already excludes anything past the panel's own last
     available date, by construction of that function)."""
-    mom = compute_momentum_12_1(panel, jump_dates).dropna(subset=["value"]).rename(columns={"value": "mom"})
+    mom = compute_momentum_12_1(panel, unexplained_jump_dates=jump_dates).dropna(subset=["value"]).rename(columns={"value": "mom"})
     fwd = compute_forward_return(panel, unexplained_jump_dates=jump_dates)
     if as_of is not None:
         as_of_ts = pd.Timestamp(as_of)

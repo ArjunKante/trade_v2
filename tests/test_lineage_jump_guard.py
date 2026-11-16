@@ -50,7 +50,8 @@ def test_momentum_nan_when_unexplained_jump_falls_inside_lookback_window():
     panel, boundary_date = _panel_with_fabricated_jump()
     jump_dates = {"E": {boundary_date}}
     mom_guarded = compute_momentum(panel, window=252, skip=21, unexplained_jump_dates=jump_dates)
-    mom_unguarded = compute_momentum(panel, window=252, skip=21)
+    # unexplained_jump_dates={}: deliberately unguarded, the comparison this test needs.
+    mom_unguarded = compute_momentum(panel, window=252, skip=21, unexplained_jump_dates={})
 
     row_near_guarded = mom_guarded[mom_guarded["trade_date"] == panel["trade_date"].iloc[310]].iloc[0]
     row_near_unguarded = mom_unguarded[mom_unguarded["trade_date"] == panel["trade_date"].iloc[310]].iloc[0]

@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.db import get_read_connection
 from data_layer.entity_panel import read_entity_panel
+from data_layer.jump_guards import all_unexplained_jump_dates
 from factors.momentum import compute_momentum_12_1
 from factors.target import compute_forward_return
 
@@ -31,10 +32,11 @@ BLENDED_COST_BPS = 32.5
 
 con = get_read_connection(ROOT / "data" / "warehouse.duckdb")
 panel = read_entity_panel(con)
+jump_dates = all_unexplained_jump_dates(con)
 con.close()
 
-mom = compute_momentum_12_1(panel)
-fwd = compute_forward_return(panel)
+mom = compute_momentum_12_1(panel, unexplained_jump_dates=jump_dates)
+fwd = compute_forward_return(panel, unexplained_jump_dates=jump_dates)
 
 p = panel.sort_values(["entity_id", "trade_date"]).copy()
 p["_liq"] = p.groupby("entity_id")["turnover"].transform(lambda s: s.rolling(20, min_periods=20).median())

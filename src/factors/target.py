@@ -48,7 +48,7 @@ def _max_gap_in_forward_window(panel: pd.DataFrame, horizon: int, unexplained_ju
 
 
 def compute_forward_return(panel: pd.DataFrame, horizon: int = HORIZON_DAYS,
-                            unexplained_jump_dates: dict | None = None) -> pd.DataFrame:
+                            *, unexplained_jump_dates: dict) -> pd.DataFrame:
     """Returns [entity_id, trade_date (=prediction_time), eval_date
     (=evaluation_time, the real calendar date the target is realized on),
     fwd_return]. eval_date is what PurgedKFold needs as evaluation_times --
@@ -56,7 +56,13 @@ def compute_forward_return(panel: pd.DataFrame, horizon: int = HORIZON_DAYS,
     since the horizon is defined in trading days.
 
     NaN'd out whenever a >STALE_GAP_DAYS gap falls inside the forward
-    window -- see module docstring."""
+    window -- see module docstring.
+
+    `unexplained_jump_dates` has NO DEFAULT (BUGS.md Bug #26's structural
+    resolution, 2026-11-16) -- every caller must now explicitly pass the
+    merged lineage_jump_guard + same_isin_jump_guard output, or `{}` with
+    a stated reason for why this particular call is intentionally
+    unguarded."""
     p = panel.sort_values(["entity_id", "trade_date"]).copy()
     grp = p.groupby("entity_id", group_keys=False)
     p["future_close"] = grp["adjusted_close"].shift(-horizon)

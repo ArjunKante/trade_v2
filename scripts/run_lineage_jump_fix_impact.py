@@ -48,16 +48,19 @@ def xsec_std_stats(fwd_df):
     return daily.mean(), daily.median()
 
 
-# --- Variant 1: no fix ---
-mom_nofix = compute_momentum_12_1(panel)
-fwd_nofix = compute_forward_return(panel)
+# --- Variant 1: no fix --- unexplained_jump_dates={}: this IS variant 1,
+# deliberately unguarded, the baseline this comparison needs.
+mom_nofix = compute_momentum_12_1(panel, unexplained_jump_dates={})
+fwd_nofix = compute_forward_return(panel, unexplained_jump_dates={})
 ic_nofix, n_nofix = rank_ic(mom_nofix, fwd_nofix)
 std_mean_nofix, std_med_nofix = xsec_std_stats(fwd_nofix)
 
 # --- Variant 2: Bug #1's original blunt fix (exclude the 14 entities entirely) ---
+# unexplained_jump_dates={}: the correction here IS the entity exclusion
+# on the line above; a window-level guard on top would double-correct.
 panel_excl = panel[~panel["entity_id"].isin(affected_entities)]
-mom_excl = compute_momentum_12_1(panel_excl)
-fwd_excl = compute_forward_return(panel_excl)
+mom_excl = compute_momentum_12_1(panel_excl, unexplained_jump_dates={})
+fwd_excl = compute_forward_return(panel_excl, unexplained_jump_dates={})
 ic_excl, n_excl = rank_ic(mom_excl, fwd_excl)
 std_mean_excl, std_med_excl = xsec_std_stats(fwd_excl)
 

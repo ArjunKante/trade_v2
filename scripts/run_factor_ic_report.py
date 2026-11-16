@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from data_layer.db import get_read_connection
 from data_layer.holdout import SEALED_HOLDOUT_START, guard_date_range
 from data_layer.entity_panel import read_entity_panel
+from data_layer.jump_guards import all_unexplained_jump_dates
 from factors.momentum import compute_momentum_12_1, compute_momentum_6_1
 from factors.lowvol import compute_trailing_vol, compute_beta
 from factors.target import compute_forward_return
@@ -32,6 +33,7 @@ guard_date_range(panel["trade_date"].min().date(), panel["trade_date"].max().dat
 print(f"  {len(panel)} rows, {panel['entity_id'].nunique()} entities, "
       f"{panel['trade_date'].min().date()} to {panel['trade_date'].max().date()}")
 assert panel["trade_date"].max().date() < SEALED_HOLDOUT_START, "panel must never reach the sealed holdout"
+jump_dates = all_unexplained_jump_dates(con)
 
 index_raw = con.execute("SELECT trade_date, close FROM index_eod WHERE index_name='NIFTY50' ORDER BY trade_date").fetchdf()
 index_raw["trade_date"] = pd.to_datetime(index_raw["trade_date"])
@@ -41,10 +43,10 @@ print(f"  index series: {len(index_returns)} rows")
 
 print("\nComputing factors...")
 t0 = time.time()
-mom_12_1 = compute_momentum_12_1(panel)
+mom_12_1 = compute_momentum_12_1(panel, unexplained_jump_dates=jump_dates)
 print(f"  momentum_12_1: {time.time()-t0:.1f}s")
 t0 = time.time()
-mom_6_1 = compute_momentum_6_1(panel)
+mom_6_1 = compute_momentum_6_1(panel, unexplained_jump_dates=jump_dates)
 print(f"  momentum_6_1: {time.time()-t0:.1f}s")
 t0 = time.time()
 vol_252 = compute_trailing_vol(panel)
@@ -54,7 +56,7 @@ beta_252 = compute_beta(panel, index_returns)
 print(f"  beta_252: {time.time()-t0:.1f}s")
 
 t0 = time.time()
-fwd = compute_forward_return(panel)
+fwd = compute_forward_return(panel, unexplained_jump_dates=jump_dates)
 print(f"  forward_return_63d: {time.time()-t0:.1f}s ({len(fwd)} rows)")
 
 factors = {

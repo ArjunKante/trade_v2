@@ -62,8 +62,13 @@ con = get_read_connection(ROOT / "data" / "warehouse.duckdb")
 panel = read_full_entity_panel_authorized(con, authorize_holdout=True)
 con.close()
 
-mom = compute_momentum_12_1(panel)
-fwd_clean = compute_forward_return(panel)
+# unexplained_jump_dates={}: this decomposes the ORIGINAL, published
+# holdout result (run_holdout_study1.py's own construction, unguarded by
+# the same precedent) -- "no new hypothesis, nothing about the strategy
+# varied" per this script's own docstring; decomposing a different
+# (corrected) result would not be decomposing the recorded one.
+mom = compute_momentum_12_1(panel, unexplained_jump_dates={})
+fwd_clean = compute_forward_return(panel, unexplained_jump_dates={})
 clean = mom.merge(fwd_clean, on=["entity_id", "trade_date"]).dropna(subset=["value", "fwd_return"])
 
 all_dates = sorted(clean["trade_date"].unique())

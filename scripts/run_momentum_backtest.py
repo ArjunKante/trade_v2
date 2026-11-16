@@ -40,8 +40,12 @@ panel = read_entity_panel(con)
 con.close()
 
 print("Computing momentum_12_1, forward returns, liquidity terciles...")
-mom = compute_momentum_12_1(panel)
-fwd = compute_forward_return(panel)
+# unexplained_jump_dates={}: this is the PUBLISHED pre-holdout backtest
+# result (FINDINGS.md Section 2, 30.43%/18.11%/+12.32pts) -- preserved as
+# originally computed, not modified. See run_holdout_study1.py's own
+# {} rationale; the same precedent applies here.
+mom = compute_momentum_12_1(panel, unexplained_jump_dates={})
+fwd = compute_forward_return(panel, unexplained_jump_dates={})
 
 p = panel.sort_values(["entity_id", "trade_date"]).copy()
 p["_liq"] = p.groupby("entity_id")["turnover"].transform(lambda s: s.rolling(20, min_periods=20).median())

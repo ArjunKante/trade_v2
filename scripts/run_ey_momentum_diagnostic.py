@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.db import get_read_connection
 from data_layer.entity_panel import read_entity_panel
+from data_layer.jump_guards import all_unexplained_jump_dates
 from factors.momentum import compute_momentum_12_1
 from factors.ic_eval import daily_rank_ic, ic_by_year, rebalance_spacing_trading_days, nonoverlapping_ic_report, HORIZON_DAYS
 
@@ -35,10 +36,11 @@ master = pd.read_csv(ROOT / "data" / "phase_e_master_frame.csv", parse_dates=["t
 
 con = get_read_connection(ROOT / "data" / "warehouse.duckdb")
 panel = read_entity_panel(con)
+jump_dates = all_unexplained_jump_dates(con)
 con.close()
 
 print("Computing momentum_12_1 on the full panel...")
-mom = compute_momentum_12_1(panel.sort_values(["entity_id", "trade_date"]))
+mom = compute_momentum_12_1(panel.sort_values(["entity_id", "trade_date"]), unexplained_jump_dates=jump_dates)
 mom = mom.rename(columns={"value": "momentum_12_1"})
 
 m = master.merge(mom, on=["entity_id", "trade_date"], how="left")

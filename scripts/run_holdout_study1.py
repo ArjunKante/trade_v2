@@ -49,8 +49,17 @@ con.close()
 print(f"Full panel: {len(panel)} rows, {panel['entity_id'].nunique()} entities, "
       f"{panel['trade_date'].min().date()} to {panel['trade_date'].max().date()}")
 
-mom = compute_momentum_12_1(panel)
-fwd_clean = compute_forward_return(panel)
+# unexplained_jump_dates={}: this is the PUBLISHED, sealed-holdout result
+# (FINDINGS.md Section 2) -- preserved exactly as originally computed, not
+# modified ("no rewriting of published results", per run_holdout_study1_
+# bug11_check.py's own docstring). Both known contaminations (Bug #11
+# same-ISIN, Bug #26 lineage) are measured against this same panel in
+# separate materiality-check scripts instead; see
+# scripts/run_holdout_study1_bug11_check.py and
+# scripts/run_holdout_study1_lineage_check.py, and FINDINGS.md Section 2's
+# resulting margin range.
+mom = compute_momentum_12_1(panel, unexplained_jump_dates={})
+fwd_clean = compute_forward_return(panel, unexplained_jump_dates={})
 
 p = panel.sort_values(["entity_id", "trade_date"]).copy()
 p["_liq"] = p.groupby("entity_id")["turnover"].transform(lambda s: s.rolling(20, min_periods=20).median())

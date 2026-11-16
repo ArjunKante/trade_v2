@@ -60,8 +60,11 @@ print(f"Excluded {len(excluded)} same-ISIN-jump entities (BUGS.md Bug #11). "
       f"Panel: {len(panel_all)} -> {len(panel)} rows.", file=sys.stderr)
 
 print("Computing momentum_12_1, forward returns, liquidity terciles (78 entities excluded)...")
-mom = compute_momentum_12_1(panel)
-fwd = compute_forward_return(panel)
+# unexplained_jump_dates={}: this check's own correction is the same-ISIN
+# entity exclusion already applied above; the lineage guard is a separate
+# correction, not measured here.
+mom = compute_momentum_12_1(panel, unexplained_jump_dates={})
+fwd = compute_forward_return(panel, unexplained_jump_dates={})
 
 p = panel.sort_values(["entity_id", "trade_date"]).copy()
 p["_liq"] = p.groupby("entity_id")["turnover"].transform(lambda s: s.rolling(20, min_periods=20).median())
@@ -178,7 +181,9 @@ print(f"{'Momentum MaxDD':22s}{ORIGINAL['mom_mdd']*100:>11.2f}%{mom_mdd*100:>13.
 print(f"{'Benchmark MaxDD':22s}{ORIGINAL['bench_mdd']*100:>11.2f}%{bench_mdd*100:>13.2f}%{(bench_mdd-ORIGINAL['bench_mdd'])*100:>+9.2f}pp")
 
 # --- how many of the 78 ever entered the top decile, and clustering ---
-mom_full = compute_momentum_12_1(panel_all)
+# unexplained_jump_dates={}: deliberately computed on the full, uncorrected
+# panel -- same rationale as run_holdout_study1_bug11_check.py's own probe.
+mom_full = compute_momentum_12_1(panel_all, unexplained_jump_dates={})
 excluded_hits = mom_full[mom_full["entity_id"].isin(excluded)].dropna(subset=["value"]).copy()
 if len(excluded_hits):
     excluded_hits_rebal = excluded_hits[excluded_hits["trade_date"].isin(rebalance_dates)]

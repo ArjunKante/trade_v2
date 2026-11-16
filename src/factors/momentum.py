@@ -62,7 +62,7 @@ def _max_gap_in_window(panel: pd.DataFrame, window: int, unexplained_jump_dates:
 
 
 def compute_momentum(panel: pd.DataFrame, window: int, skip: int = SKIP_DAYS,
-                      unexplained_jump_dates: dict | None = None) -> pd.DataFrame:
+                      *, unexplained_jump_dates: dict) -> pd.DataFrame:
     """panel: columns [entity_id, trade_date, adjusted_close], one row per
     entity per trading day it traded. Returns [entity_id, trade_date, value]
     where value = adjusted_close[t-skip] / adjusted_close[t-skip-window] - 1,
@@ -74,7 +74,14 @@ def compute_momentum(panel: pd.DataFrame, window: int, skip: int = SKIP_DAYS,
     NaN'd out (not silently computed) whenever a >STALE_GAP_DAYS trading gap
     falls anywhere inside the lookback window -- the return is real, but its
     formation period isn't the intended ~skip+window trading days, and
-    measured live it's pure noise relative to the clean-window observations."""
+    measured live it's pure noise relative to the clean-window observations.
+
+    `unexplained_jump_dates` has NO DEFAULT (BUGS.md Bug #26's structural
+    resolution, 2026-11-16) -- a guard that must be remembered will be
+    forgotten; every caller must now explicitly pass the merged
+    lineage_jump_guard + same_isin_jump_guard output, or `{}` with a
+    stated reason for why this particular call is intentionally
+    unguarded."""
     p = panel.sort_values(["entity_id", "trade_date"]).copy()
     grp = p.groupby("entity_id", group_keys=False)
     p["_far"] = grp["adjusted_close"].shift(skip + window)
@@ -85,9 +92,9 @@ def compute_momentum(panel: pd.DataFrame, window: int, skip: int = SKIP_DAYS,
     return p[["entity_id", "trade_date", "value"]]
 
 
-def compute_momentum_12_1(panel: pd.DataFrame, unexplained_jump_dates: dict | None = None) -> pd.DataFrame:
+def compute_momentum_12_1(panel: pd.DataFrame, *, unexplained_jump_dates: dict) -> pd.DataFrame:
     return compute_momentum(panel, window=WINDOW_12M, skip=SKIP_DAYS, unexplained_jump_dates=unexplained_jump_dates)
 
 
-def compute_momentum_6_1(panel: pd.DataFrame, unexplained_jump_dates: dict | None = None) -> pd.DataFrame:
+def compute_momentum_6_1(panel: pd.DataFrame, *, unexplained_jump_dates: dict) -> pd.DataFrame:
     return compute_momentum(panel, window=WINDOW_6M, skip=SKIP_DAYS, unexplained_jump_dates=unexplained_jump_dates)

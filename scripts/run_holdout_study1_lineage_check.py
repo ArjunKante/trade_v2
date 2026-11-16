@@ -100,7 +100,11 @@ con.close()
 panel_baseline = panel_all[~panel_all["entity_id"].isin(same_isin_excluded)].reset_index(drop=True)
 
 
-def run_variant(panel, label, jump_dates=None):
+def run_variant(panel, label, jump_dates):
+    # jump_dates={} for BASELINE (correction is the same-ISIN entity
+    # exclusion already in the panel) and ENTITY-LEVEL (correction is the
+    # 40-entity exclusion already in the panel); the real 40-entity dict
+    # only for WINDOW-LEVEL, the one variant this guard is meant to apply to.
     mom = compute_momentum_12_1(panel, unexplained_jump_dates=jump_dates)
     fwd_clean = compute_forward_return(panel, unexplained_jump_dates=jump_dates)
 
@@ -215,7 +219,7 @@ def run_variant(panel, label, jump_dates=None):
 
 print("=" * 90)
 print(f"BASELINE (78 same-ISIN excluded only, no lineage correction) -- recorded margin should reproduce {RECORDED['margin_78_excluded']}")
-margin_baseline, pass_baseline, affected_baseline = run_variant(panel_baseline, "BASELINE (78 excluded)")
+margin_baseline, pass_baseline, affected_baseline = run_variant(panel_baseline, "BASELINE (78 excluded)", jump_dates={})
 
 print("\n" + "=" * 90)
 print("(a) WINDOW-LEVEL correction: 40 entities' transition dates passed to compute_momentum_12_1/compute_forward_return")
@@ -224,7 +228,7 @@ margin_a, pass_a, affected_a = run_variant(panel_baseline, "WINDOW-LEVEL (78 exc
 print("\n" + "=" * 90)
 print("(b) ENTITY-LEVEL correction: 40 entities dropped entirely, on top of the 78")
 panel_entity = panel_baseline[~panel_baseline["entity_id"].isin(entities_40)].reset_index(drop=True)
-margin_b, pass_b, affected_b = run_variant(panel_entity, "ENTITY-LEVEL (78 + 40 excluded)")
+margin_b, pass_b, affected_b = run_variant(panel_entity, "ENTITY-LEVEL (78 + 40 excluded)", jump_dates={})
 
 print("\n" + "=" * 90)
 print("SUMMARY")

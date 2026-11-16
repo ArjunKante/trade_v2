@@ -32,8 +32,8 @@ panel = read_entity_panel(con)
 con.close()
 print(f"Panel: {len(panel):,} rows, {panel['entity_id'].nunique():,} entities")
 
-mom = compute_momentum_12_1(panel)  # no jump-date guard -- matches run_holdout_study1.py exactly
-fwd = compute_forward_return(panel)
+mom = compute_momentum_12_1(panel, unexplained_jump_dates={})  # matches run_holdout_study1.py's own published, unguarded construction, exactly
+fwd = compute_forward_return(panel, unexplained_jump_dates={})
 
 p = panel.sort_values(["entity_id", "trade_date"]).copy()
 p["_liq"] = p.groupby("entity_id")["turnover"].transform(lambda s: s.rolling(20, min_periods=20).median())

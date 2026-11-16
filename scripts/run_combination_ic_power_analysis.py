@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.db import get_read_connection
 from data_layer.entity_panel import read_entity_panel
+from data_layer.jump_guards import all_unexplained_jump_dates
 from factors.momentum import compute_momentum_12_1
 from factors.ic_eval import daily_rank_ic
 
@@ -45,10 +46,11 @@ ey = ey[np.isfinite(ey["earnings_yield"])]
 
 con = get_read_connection(ROOT / "data" / "warehouse.duckdb")
 panel = read_entity_panel(con)
+jump_dates = all_unexplained_jump_dates(con)
 con.close()
 
 print("Computing momentum_12_1 on the full panel...")
-mom = compute_momentum_12_1(panel.sort_values(["entity_id", "trade_date"]))
+mom = compute_momentum_12_1(panel.sort_values(["entity_id", "trade_date"]), unexplained_jump_dates=jump_dates)
 mom = mom.rename(columns={"value": "momentum_12_1"}).dropna()
 
 m = ey.merge(mom, on=["entity_id", "trade_date"], how="inner")

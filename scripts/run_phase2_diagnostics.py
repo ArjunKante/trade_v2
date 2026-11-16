@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.db import get_read_connection
 from data_layer.entity_panel import read_entity_panel
+from data_layer.jump_guards import all_unexplained_jump_dates
 from factors.momentum import compute_momentum_12_1, compute_momentum_6_1
 from factors.lowvol import compute_trailing_vol, compute_beta
 from factors.target import compute_forward_return
@@ -29,6 +30,7 @@ ROUND_TRIP_COST_BPS_HIGH = 39.0
 con = get_read_connection(ROOT / "data" / "warehouse.duckdb")
 panel = read_entity_panel(con)
 index_raw = con.execute("SELECT trade_date, close FROM index_eod WHERE index_name='NIFTY50' ORDER BY trade_date").fetchdf()
+jump_dates = all_unexplained_jump_dates(con)
 con.close()
 
 index_raw["trade_date"] = pd.to_datetime(index_raw["trade_date"])
@@ -37,12 +39,12 @@ index_returns = index_raw[["trade_date", "mkt_logret"]]
 
 print("Computing factors + target...")
 factors = {
-    "momentum_12_1": compute_momentum_12_1(panel),
-    "momentum_6_1": compute_momentum_6_1(panel),
+    "momentum_12_1": compute_momentum_12_1(panel, unexplained_jump_dates=jump_dates),
+    "momentum_6_1": compute_momentum_6_1(panel, unexplained_jump_dates=jump_dates),
     "trailing_vol_252": compute_trailing_vol(panel),
     "beta_252": compute_beta(panel, index_returns),
 }
-fwd = compute_forward_return(panel)
+fwd = compute_forward_return(panel, unexplained_jump_dates=jump_dates)
 
 # trailing 20-day median turnover per entity per date, for liquidity tercile assignment
 p = panel.sort_values(["entity_id", "trade_date"]).copy()

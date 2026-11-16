@@ -89,8 +89,12 @@ CHECKPOINTS = [
 
 def run_one(excluded_entities: set) -> dict:
     panel = panel_all[~panel_all["entity_id"].isin(excluded_entities)].reset_index(drop=True)
-    mom = compute_momentum_12_1(panel)
-    fwd_clean = compute_forward_return(panel)
+    # unexplained_jump_dates={}: this diagnostic isolates the same-ISIN
+    # exclusion-set's own instability (entity-level, varied by snapshot
+    # date); the lineage guard is a separate, orthogonal correction,
+    # measured in run_holdout_study1_lineage_check.py instead.
+    mom = compute_momentum_12_1(panel, unexplained_jump_dates={})
+    fwd_clean = compute_forward_return(panel, unexplained_jump_dates={})
 
     p = panel.sort_values(["entity_id", "trade_date"]).copy()
     p["_liq"] = p.groupby("entity_id")["turnover"].transform(lambda s: s.rolling(20, min_periods=20).median())

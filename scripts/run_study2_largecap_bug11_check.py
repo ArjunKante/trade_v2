@@ -58,8 +58,11 @@ for y in sorted(year_end_snapshot["_year"].unique()):
     top200 = snap.nlargest(TOP_N_LARGECAP, "_trailing_turnover")["entity_id"]
     cohort_by_year[y + 1] = set(top200)
 
-mom = compute_momentum_12_1(panel)
-fwd = compute_forward_return(panel)
+# unexplained_jump_dates={}: this check's own correction is the same-ISIN
+# entity exclusion already applied above; the lineage guard is a separate
+# correction, not measured for Study 2 here.
+mom = compute_momentum_12_1(panel, unexplained_jump_dates={})
+fwd = compute_forward_return(panel, unexplained_jump_dates={})
 m = mom.merge(fwd, on=["entity_id", "trade_date"]).dropna(subset=["value", "fwd_return"])
 m["_year"] = m["trade_date"].dt.year
 m["_in_largecap"] = m.apply(lambda r: r["entity_id"] in cohort_by_year.get(r["_year"], set()), axis=1)
@@ -150,7 +153,9 @@ any_flip = (cond_a != ORIGINAL["cond_a"]) or (cond_b != ORIGINAL["cond_b"]) or (
 print(f"ANY CONDITION FLIPPED vs original: {'YES -- STOP, per instruction' if any_flip else 'NO'}")
 
 # --- how many of the 78 ever entered the large-cap top decile, and clustering ---
-mom_full = compute_momentum_12_1(panel_all)
+# unexplained_jump_dates={}: deliberately computed on the full, uncorrected
+# panel -- same rationale as run_holdout_study1_bug11_check.py's own probe.
+mom_full = compute_momentum_12_1(panel_all, unexplained_jump_dates={})
 hits = []
 for d in rebalance_dates:
     day = mom_full[mom_full["trade_date"] == d].dropna(subset=["value"])

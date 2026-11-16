@@ -52,8 +52,13 @@ print("\nAnnual large-cap cohort sizes (entities with valid trailing turnover at
 for y, cohort in sorted(cohort_by_year.items()):
     print(f"  membership for {y}: {len(cohort)} entities (decided from {y-1} year-end data)")
 
-mom = compute_momentum_12_1(panel)
-fwd = compute_forward_return(panel)
+# unexplained_jump_dates={}: this is the PUBLISHED Study 2 (large-cap
+# replication) result (FINDINGS.md Section 2, +6.56pts) -- preserved as
+# originally computed. See run_holdout_study1.py's own {} rationale;
+# run_study2_largecap_bug11_check.py measures the same-ISIN correction
+# separately instead.
+mom = compute_momentum_12_1(panel, unexplained_jump_dates={})
+fwd = compute_forward_return(panel, unexplained_jump_dates={})
 m = mom.merge(fwd, on=["entity_id", "trade_date"]).dropna(subset=["value", "fwd_return"])
 m["_year"] = m["trade_date"].dt.year
 m["_in_largecap"] = m.apply(lambda r: r["entity_id"] in cohort_by_year.get(r["_year"], set()), axis=1)

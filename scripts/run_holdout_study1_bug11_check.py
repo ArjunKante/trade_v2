@@ -70,8 +70,12 @@ print(f"Excluded {len(excluded)} same-ISIN-jump entities. Full panel: {len(panel
       f"{panel['entity_id'].nunique()} entities, {panel['trade_date'].min().date()} to "
       f"{panel['trade_date'].max().date()}")
 
-mom = compute_momentum_12_1(panel)
-fwd_clean = compute_forward_return(panel)
+# unexplained_jump_dates={}: this check's own correction is the same-ISIN
+# entity exclusion already applied above (panel filtering); the lineage
+# guard is a separate correction, measured instead in
+# scripts/run_holdout_study1_lineage_check.py.
+mom = compute_momentum_12_1(panel, unexplained_jump_dates={})
+fwd_clean = compute_forward_return(panel, unexplained_jump_dates={})
 
 p = panel.sort_values(["entity_id", "trade_date"]).copy()
 p["_liq"] = p.groupby("entity_id")["turnover"].transform(lambda s: s.rolling(20, min_periods=20).median())
@@ -204,7 +208,10 @@ any_flip = (cond_a != ORIGINAL["cond_a"]) or (cond_b != ORIGINAL["cond_b"]) or (
 print(f"ANY CONDITION FLIPPED vs original: {'YES -- STOP, per instruction' if any_flip else 'NO'}")
 
 # --- how many of the 78 ever entered the top decile within the HOLDOUT window, and clustering ---
-mom_full_raw = compute_momentum_12_1(panel_all)
+# unexplained_jump_dates={}: deliberately computed on the full, UNCORRECTED
+# panel to measure how many excluded entities would have been selected
+# absent any correction -- that is the question this probe asks.
+mom_full_raw = compute_momentum_12_1(panel_all, unexplained_jump_dates={})
 holdout_hits = []
 for d in holdout_rebalance_dates:
     day = mom_full_raw[mom_full_raw["trade_date"] == d].dropna(subset=["value"])
