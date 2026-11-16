@@ -54,6 +54,43 @@ instruction when that correction was recorded.
 
 ---
 
+## Amendment 1 (2026-11-16, before any computation)
+
+Three changes, recorded explicitly rather than edited in silently:
+
+1. **Entry moved from open to close.** Flag 1 below is resolved: entry is
+   now the CLOSE of the first session after the 3-day event window closes,
+   using `adjusted_close` from `entity_prices_daily` -- never the raw
+   unadjusted table. Forced by the panel having no `open` field at all;
+   conservative (gives up the open-to-close gap any announcement reaction
+   would have moved through); and it means this design tests **drift**,
+   not the announcement **reaction** -- the reaction itself, if any,
+   happens inside the 3-day event window and before entry, and is never
+   captured as part of this study's own return.
+2. **NIFTY50 replaced as the market-adjustment benchmark.** Flag 3 below
+   is resolved: the benchmark is now the equal-weight return of this
+   study's own event universe (Section 1) over the same session dates as
+   each event's own 3-day window, not any index. NIFTY50 is cap-weighted
+   and large-cap; this universe has a long small-cap tail (Phase 0 Section
+   2's turnover profile). Adjusting against a large-cap index would leave
+   systematic small-cap-wide movement sitting inside the "abnormal"
+   return, uncancelled, rather than genuinely idiosyncratic drift.
+3. **A limitations entry added, before any result exists**: the
+   liquid-bands gate condition (Section 5, condition 4) is the single
+   most likely failure mode. PEAD is expected, in the literature this
+   family is sourced from, to be strongest in thinly covered, illiquid
+   names -- which is exactly where this project's cost model charges the
+   most (`COST_BY_TERCILE`'s own `low_liq` tier) and exactly what the
+   gate excludes to test whether the effect survives in the tradable
+   part of the universe. If the effect lives only in the names the gate
+   excludes, the study fails, and that failure is the gate working as
+   designed, not an oversight to fix after the fact.
+
+Sections 0, 1, 3, 7, and 10 below reflect these three changes directly;
+nothing else in this document changed.
+
+---
+
 ## Flags: specification does not fit the data as given -- not resolved here
 
 Per instruction, these are surfaced, not worked around. Each is a place
@@ -61,23 +98,20 @@ where the Rules as specified cannot be implemented against the data
 exactly as stated, or rest on an unimplemented mechanism. None are fixed
 in this document.
 
-1. **No `open` price in the point-in-time panel.** `entity_prices_daily`
-   (the entity-resolved, split-adjusted panel this project standardizes
-   on -- `read_entity_panel()`, same as the momentum study) carries
+1. **No `open` price in the point-in-time panel.** **RESOLVED by
+   Amendment 1 above.** `entity_prices_daily` (the entity-resolved,
+   split-adjusted panel this project standardizes on --
+   `read_entity_panel()`, same as the momentum study) carries
    `raw_close`/`adjusted_close` only, no `open`. "Entry at the open of the
-   first full session after the event window closes" cannot be
-   implemented against that panel as written. The raw `prices_eod` table
-   does have `open`, but it is ISIN-keyed, not entity-resolved, and not
-   corporate-action-adjusted -- using it directly would reintroduce
+   first full session after the event window closes" could not be
+   implemented against that panel as written, and the raw `prices_eod`
+   table's `open` is ISIN-keyed, not entity-resolved, and not
+   corporate-action-adjusted -- using it directly would have reintroduced
    exactly the same-ISIN-jump and lineage-transition risk this project
    has already been burned by three times (Bug #1, Bug #11, Bug #18).
-   Options, not chosen here: (a) use the entry session's
-   `adjusted_close` as a close-to-close proxy (changes what "the first
-   full session" actually measures by one session's worth of reaction);
-   (b) join raw `prices_eod.open` for the entry day only and apply
-   `adjustment_factors` by hand (reintroduces manual-adjustment risk);
-   (c) change the rule to entry-at-close instead of entry-at-open. Left
-   for your decision.
+   Resolved: entry is now at the CLOSE of the first full session after
+   the event window, using `adjusted_close` only. See Section 1 and
+   Section 3.
 2. **The same-ISIN exclusion set's `as_of` predicate is not implemented.**
    `BUGS.md` records this directly: `same_isin_jump_excluded_entities()`
    always reads the live, full warehouse; the underlying detector
@@ -89,13 +123,15 @@ in this document.
    `as_of` threading is implemented later, this document's universe does
    NOT silently follow it -- the pin stated here would need its own
    recorded amendment.
-3. **Only one index series exists for market-adjustment.** `index_eod`
-   has NIFTY50 only (2016-01-01 to 2026-11-05) -- no broader small/
-   mid-cap index. NIFTY50 is a known-imperfect benchmark for this
-   universe: Phase 0 Section 2 already found the matched universe's
-   median turnover (₹10.3M) sits well below large-cap liquidity, and
-   NIFTY50 tracks the 50 largest names specifically. Used below because
-   it is the only series available, not because it fits well.
+3. **Only one index series exists for market-adjustment.** **RESOLVED by
+   Amendment 1 above.** `index_eod` has NIFTY50 only (2016-01-01 to
+   2026-11-05) -- no broader small/mid-cap index -- and NIFTY50 is a
+   known-imperfect benchmark for this universe: Phase 0 Section 2 already
+   found the matched universe's median turnover (₹10.3M) sits well below
+   large-cap liquidity, and NIFTY50 tracks the 50 largest names
+   specifically. Resolved: no index is used at all; the benchmark is now
+   the equal-weight return of this study's own event universe over each
+   event's own window dates. See Section 1 and Section 0.
 4. **The Gate's "net of costs, stated per rebalance" wording assumes a
    periodic-rebalance strategy; this is event-driven.** There is no fixed
    rebalance date -- events arrive continuously. Interpreted below as "per
@@ -111,7 +147,6 @@ in this document.
 - `read_entity_panel()` / `entity_prices_daily` -- the point-in-time,
   split-adjusted entity panel, same reconstitution convention as
   `scripts/run_holdout_study1.py`'s momentum universe.
-- `index_eod` (NIFTY50) for market-adjustment (Flag 3 above).
 - `same_isin_jump_guard.unexplained_same_isin_jump_entities(con,
   before=date(2026, 9, 28))` -- the 78-entity snapshot, pinned (Flag 2
   above), the same mechanism and snapshot `FINDINGS.md` Section 2 already
@@ -128,11 +163,13 @@ in this document.
   summed or linearly approximated.
 
 **New in this study, not yet written:** the event-return construction
-(market-adjusted 3-session return), the entry-rule implementation
-(blocked on Flag 1), the per-quarter real-spread aggregation, the
-quarter-clustered bootstrap CI, the TIMING null construction, and the
-cost application. None of this exists yet; Section 10 lists the order it
-would be built and run in, once this document is approved.
+(market-adjusted 3-session return, benchmarked against this study's own
+equal-weight event-universe return per Amendment 1 -- not NIFTY50), the
+close-based entry-rule implementation (frozen by Amendment 1, not yet
+coded), the per-quarter real-spread aggregation, the quarter-clustered
+bootstrap CI, the TIMING null construction, and the cost application.
+None of this exists yet; Section 10 lists the order it would be built
+and run in, once this document is approved.
 
 ## Section 1: configuration frozen (universe, strategy, costs)
 
@@ -147,8 +184,13 @@ declaration). Excludes:
 
 **Event return (ranking signal)**: market-adjusted return across 3
 trading sessions -- day 0, day 0+1, day 0+2 -- each session's raw return
-computed close-to-close and adjusted by subtracting NIFTY50's same-session
-return, the three sessions compounded (not summed).
+computed close-to-close, adjusted by subtracting the **equal-weight
+return of this study's own event universe (Section 1's universe, after
+exclusions) over those same 3 session dates** -- not any index (Amendment
+1). The three sessions compound (not sum). The focal entity is itself a
+member of the universe its own window is benchmarked against; with
+~2,441 constituent entities this is a ~0.04% self-weight, noted rather
+than corrected.
 
 **Day 0 definition** (pinned from Phase 0 Section 3's real distribution,
 not improvised): if `broadcast_ts` is before 15:30 on a trading day, day 0
@@ -158,10 +200,13 @@ post-market) or falls on a non-trading day, day 0 = the next trading day.
 One rule, branching on the real distribution, applied uniformly -- no
 subset gets a different rule applied after the fact.
 
-**Entry**: the open of the first full trading session after day 0+2
-closes (i.e., day 0+3 if a normal session). **Blocked by Flag 1** -- no
-`open` field exists in the panel this is specified against. Not resolved
-here.
+**Entry**: the **close** of the first full trading session after day 0+2
+closes (i.e., day 0+3's `adjusted_close`, if a normal session) --
+**amended from open to close** (Amendment 1): `entity_prices_daily` has
+no `open` field, and the raw unadjusted table is not used. Conservative
+(gives up any open-to-close move the announcement reaction itself might
+still be working through on day 0+3) and deliberate: this design tests
+**drift after the reaction window**, not the reaction itself.
 
 **Ranking and grouping**: rank by event return **within each quarter**
 (the same grouping Phase 0's corrected MDE used for its null spread) --
@@ -178,8 +223,10 @@ weight across the decile's constituents for that quarter.
 
 **Comparison**: top-decile mean 60-day return minus the mean 60-day
 return of the rest of that quarter's event population (same construction
-as the null). Not versus NIFTY50 or any index -- the index is used only
-for the event-return market-adjustment step above, nowhere else.
+as the null). Not versus NIFTY50 or any index -- no index is used
+anywhere in this document after Amendment 1; the event-return
+market-adjustment step above uses this study's own event-universe
+equal-weight return instead.
 
 **Costs**: round-trip cost of 0.20%-0.30% of notional, charged once per
 position (one entry, one exit) against the top-decile leg only -- the
@@ -197,12 +244,26 @@ backtest result, and are not a preview of this study's own outcome.
 
 ## Section 3: known, permanent limitations
 
-- NIFTY50 is the only available benchmark and is a poor liquidity/size
-  match for this universe (Flag 3).
-- The entry-rule implementation is blocked pending a decision on Flag 1;
-  whichever option is chosen changes exactly what "day 0+3" means by up
-  to one session of reaction, which the winsorized MDE (0.67%) is thin
-  enough that a one-session difference could plausibly matter.
+- **Entry is at close, not open (Amendment 1), forced by
+  `entity_prices_daily` carrying no `open` field.** This is conservative
+  -- it gives up the open-to-close move of the first post-window session,
+  which could still carry residual announcement reaction -- and it means
+  this design tests **drift that persists after the 3-day event window**,
+  not the announcement's own initial reaction. A study that could use
+  intraday or raw adjusted opens might find a different, larger effect in
+  the reaction itself; this one, by construction, cannot see that effect
+  and is not claiming to.
+- **The liquid-bands gate condition (Section 5, condition 4) is the most
+  likely failure mode, stated before any result exists.** PEAD is
+  expected, in the literature this family is sourced from, to be
+  strongest in thinly covered, illiquid names -- exactly where this
+  project's cost model charges the most (`low_liq` tier,
+  `COST_BY_TERCILE`) and exactly what this condition excludes. If the
+  effect lives only in the names the gate excludes, the study fails, and
+  that is the gate working as intended, not an oversight to patch later.
+- **The event-universe equal-weight benchmark (Amendment 1) includes the
+  focal entity in its own benchmark** (~0.04% self-weight at ~2,441
+  constituents) -- negligible at this N, noted rather than corrected.
 - The 78-entity exclusion pin (Flag 2) will go stale the moment the live
   same-ISIN jump guard flags another entity (it already moved from 78 to
   82 once during this project's own history, per `BUGS.md`) -- this
@@ -309,20 +370,26 @@ feasibility.
 - Any announcement-return-vs-forward-return relationship -- not computed
   anywhere in this document or in Phase 0. That computation begins only
   if this document is approved and DEV is run.
-- Whether a different entry rule (Flag 1's unresolved options), a
-  different benchmark (Flag 3), or a different exclusion-set vintage
-  (Flag 2) would change the result -- not tested; one configuration is
-  specified and frozen here, per instruction ("ONE corrected
-  computation, not a search" applied to this document's own design, not
-  just to the MDE correction it follows).
-- Intraday reaction within the 3-session event window -- not modeled;
-  only close-to-close session returns are used.
+- Whether a different entry rule (open-based, if a data source existed),
+  a different benchmark, or a different exclusion-set vintage (Flag 2)
+  would change the result -- not tested; one configuration is specified
+  and frozen here, per instruction ("ONE corrected computation, not a
+  search" applied to this document's own design, not just to the MDE
+  correction it follows).
+- Intraday reaction within the 3-session event window, or the
+  open-to-close reaction on the entry session itself -- not modeled; only
+  close-to-close session returns are used (Amendment 1), and entry is at
+  close, not open.
+- The announcement **reaction** (the price move during the 3-day event
+  window) -- not this study's subject at all; this design tests only
+  what happens **after** that window, i.e. drift, by construction
+  (Amendment 1, Section 3).
 
 ## Section 8: multiple-testing correction, if this is part of a family
 
 Lone trial -- trial 1 of a new family. No correction applied, none
-needed at n=1. If any alternative configuration (a different entry rule
-once Flag 1 is resolved, a different winsorization level, a different
+needed at n=1. If any alternative configuration (open-based entry if a
+data source were found, a different winsorization level, a different
 holding period) is run before or after this one, the family's trial count
 increases and a correction must be applied retroactively to both,
 per `PROJECT_CONTEXT.md`'s own trial-counting convention (a configuration
@@ -354,13 +421,14 @@ Not run. The order, once approved:
 
 1. Build the event universe (Section 1 exclusions, join-attrition logic
    from `scripts/earnings_drift_phase0.py`, reused).
-2. Resolve Flag 1 (entry-rule implementation) -- requires your decision
-   before this step can be written.
-3. Compute the market-adjusted 3-session event return (NIFTY50-adjusted,
-   Section 1) for every surviving event.
+2. Build the event-universe equal-weight daily return series (Amendment
+   1) -- new, not yet written.
+3. Compute the market-adjusted 3-session event return (benchmarked
+   against step 2's series, Section 1) for every surviving event.
 4. Rank within each quarter; assign top decile and the rest.
 5. Compute per-quarter top-decile-minus-rest spread, both raw and
-   winsorized (Section 6's frozen rule).
+   winsorized (Section 6's frozen rule), using close-based entry
+   (Amendment 1) for the 60-day holding return.
 6. Quarter-clustered bootstrap CI on the mean spread (resample quarters).
 7. Run the SELECTION null (random decile assignment, many draws) and the
    TIMING null (random same-year entry window); compute percentiles.
