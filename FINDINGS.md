@@ -622,6 +622,71 @@ resolved here.
 Recorded in `data/holdout_access_log.txt` alongside the retired window
 and the earnings-drift seal.
 
+**RE-DECLARED, 2026-11-17, excluding the contaminated rebalance --
+superseding the start date above, not editing it.** The 2026-11-16
+declaration sealed `>= 2026-04-23` without excluding 2026-07-23 by
+name. Since then, that rebalance was read a SECOND time, independently,
+by a different route:
+
+- **First leak (already disclosed above):** the lineage-check script's
+  own pre-fix run printed 2026-07-23's composition directly.
+- **Second leak, found while pinning the Bug #11 check scripts
+  (Section-7-adjacent work, same day):** `scripts/run_holdout_study1_
+  bug11_check.py`, unpinned, silently absorbed 2026-07-23 into its own
+  "reproduction" of the recorded holdout margin, returning **7.31**
+  against the recorded **3.64** -- a gap only explainable by that one
+  rebalance's own return. The same unpinned-window defect existed in
+  three sibling scripts.
+
+**The actual figures that were seen, recorded here so a later
+re-derivation is recognized as a repeat, not mistaken for fresh data.
+Marked CONTAMINATED -- seen twice before any seal excluded them,
+carrying NO evidential weight, never to be cited as a result:**
+
+| source | config | 2026-07-23 (or 6-period aggregate) figures |
+|---|---|---|
+| `run_holdout_study1_lineage_check.py`, pre-fix run | 78 same-ISIN + 40 lineage entities excluded, unpinned (6 rebalances) | Aggregate margin 7.31 (raw) / 7.22 (window-level) / 9.24 (entity-level); 2026-07-23 alone: 4 of the 40 lineage entities in the top decile (baseline), 2 (window-level) |
+| `run_holdout_study1_bug11_check.py`, re-run while verifying the guard-default fix | 78/79 same-ISIN excluded only, unpinned (6 rebalances) | 2026-07-23 period-level: momentum net **-4.21%**, benchmark net **-8.61%** -- momentum beat benchmark by **+4.39pts** in this one period (both negative in absolute terms; a relative win, the same "loses less when the market falls" shape as Section 3's own finding). 6-period aggregate margin **7.31** |
+
+**This confirms the rebalance was strongly positive -- in the relative,
+margin sense, not necessarily in absolute return** -- consistent with,
+not contradicting, the downside-protection mechanism already documented
+in Section 3. This is reported as a contaminated observation, not as
+evidence that mechanism continues to hold; one period proves nothing
+either way.
+
+**The seal is moved to the first rebalance AFTER the contaminated one,
+confirmed against the live panel, not assumed: `MOMENTUM_WINDOW_2_START
+= 2026-10-23`** (63-trading-day cadence from 2026-07-23). 2026-07-23
+itself is permanently EXCLUDED from the second momentum window -- not
+sealed, not evidential, never to be read again as if it were unseen.
+
+**Made mechanical, not a note**: `src/data_layer/holdout.py` now
+defines `MOMENTUM_WINDOW_2_START`, `MOMENTUM_WINDOW_2_CONTAMINATED_
+REBALANCE`, `guard_momentum_rebalance_dates()` (raises
+`MomentumWindow2ViolationError` on any rebalance date `>=
+2026-10-23` unless `authorize_momentum_window_2=True` is passed
+explicitly, the same convention `guard_date_range`/`authorize_holdout`
+already use), and `clip_momentum_rebalance_dates()` (narrows a
+rebalance-date list to exclude both the contaminated date and the
+sealed window, never needs authorization). Wired into the four
+Bug #11 check scripts as a second, independent layer underneath their
+own manual window pin (below).
+
+**Confirmed, not assumed, that nothing computed this session reaches
+the corrected seal.** Checked directly against the live panel: the
+rebalance schedule's next position after 2026-07-23 is 2026-10-23,
+which sits at index 2394 of 2396 total dates in the momentum-factor
+pipeline's own date list -- only 1 date exists after it, nowhere near
+the 63 trading days `HORIZON_DAYS` completeness requires. Every script
+run this session (including the unpinned ones that leaked 2026-07-23)
+filters `rebalance_dates_all` to dates with a complete forward window
+before doing anything else, which mechanically excludes 2026-10-23 --
+confirmed by index arithmetic, not inferred from behavior. **Currently
+exactly one rebalance (2026-10-23) exists inside the corrected seal,
+it is not yet forward-complete, and nothing in this session touched
+it.**
+
 ## 8. What this is not
 
 **Not a green light to trade.** Specifically:

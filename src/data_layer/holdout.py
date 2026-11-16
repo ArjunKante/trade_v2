@@ -48,3 +48,73 @@ def clip_to_pre_holdout(dates) -> "object":
     import pandas as pd
     s = pd.Series(list(dates))
     return s[pd.to_datetime(s) < pd.Timestamp(SEALED_HOLDOUT_START)]
+
+
+# ---------------------------------------------------------------------------
+# Second momentum holdout window.
+#
+# Declared 2026-11-16, RE-DECLARED 2026-11-17 (FINDINGS.md Section 7) after
+# finding the first declaration had already been partially read: one
+# uncorrected script run printed the 2026-07-23 rebalance's own composition
+# and realized return before the seal existed, and four unpinned
+# "bug11_check" scripts independently leaked the same rebalance a second
+# time by reproducing an inflated margin (7.31 against the recorded 3.64)
+# that is only explainable by that rebalance's own strongly-positive
+# relative return. 2026-07-23 is therefore EXCLUDED, permanently, from this
+# seal -- sealing it now would be sealing data already seen twice, and it
+# carries no evidential weight going forward (see FINDINGS.md Section 7 for
+# the actual figures, recorded as contaminated observations, not as a
+# result).
+#
+# The new seal starts at the first rebalance AFTER the contaminated one:
+# 2026-10-23 (63-trading-day cadence from 2026-07-23, confirmed against the
+# live panel, not assumed). A function, not a comment, enforces this --
+# the same discipline SEALED_HOLDOUT_START above already uses.
+# ---------------------------------------------------------------------------
+
+MOMENTUM_WINDOW_2_DECLARED = dt.date(2026, 11, 17)
+MOMENTUM_WINDOW_2_CONTAMINATED_REBALANCE = dt.date(2026, 7, 23)
+MOMENTUM_WINDOW_2_START = dt.date(2026, 10, 23)
+MOMENTUM_WINDOW_2_MIN_REBALANCES = 5
+
+
+class MomentumWindow2ViolationError(Exception):
+    """Raised when an operation would touch a rebalance date inside the
+    second sealed momentum window."""
+
+
+def guard_momentum_rebalance_dates(dates, authorize_momentum_window_2: bool = False) -> None:
+    """Raise if any rebalance date in `dates` falls on or after
+    MOMENTUM_WINDOW_2_START, unless explicitly authorized. Call this on
+    the candidate rebalance-date list of any momentum evaluation, the
+    same way `guard_date_range` is called on a bare date range. The
+    contaminated 2026-07-23 rebalance is not inside this window (it is
+    earlier) and this guard does not catch it -- use
+    `clip_momentum_rebalance_dates` to drop that one too."""
+    if authorize_momentum_window_2:
+        return
+    bad = sorted(d for d in dates if _as_ts(d) >= _as_ts(MOMENTUM_WINDOW_2_START))
+    if bad:
+        raise MomentumWindow2ViolationError(
+            f"{len(bad)} rebalance date(s) >= {MOMENTUM_WINDOW_2_START} requested "
+            f"(first: {bad[0]}) -- inside the second sealed momentum window "
+            f"(FINDINGS.md Section 7). Disallowed by default. If this is really "
+            f"the one authorized evaluation (>={MOMENTUM_WINDOW_2_MIN_REBALANCES} "
+            f"rebalances accumulated, preregistration written first), pass "
+            f"authorize_momentum_window_2=True explicitly -- and only there."
+        )
+
+
+def clip_momentum_rebalance_dates(dates) -> list:
+    """Convenience: filter an iterable of rebalance dates to exclude BOTH
+    the contaminated 2026-07-23 rebalance AND anything on or after the
+    second sealed window's start. Never needs authorization -- it only
+    ever narrows, the same convention as `clip_to_pre_holdout`."""
+    contaminated = _as_ts(MOMENTUM_WINDOW_2_CONTAMINATED_REBALANCE)
+    start = _as_ts(MOMENTUM_WINDOW_2_START)
+    return [d for d in dates if _as_ts(d) != contaminated and _as_ts(d) < start]
+
+
+def _as_ts(d):
+    import pandas as pd
+    return pd.Timestamp(d)
