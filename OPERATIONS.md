@@ -2280,3 +2280,37 @@ from a chart; this field is what records it when someone does anyway --
 the part that actually matters for trial counting, not a second warning.
 Every future preregistration must fill this field in, same discipline as
 every other frozen-before-the-read requirement in this project.
+
+## Standing rule: pin the window, universe, and exclusion set in any reproduction/verification script (2026-11-17)
+
+Any script that reproduces or verifies a recorded result must pin its
+window, universe and exclusion set to the state those were in when the
+result was recorded. An unpinned check silently drifts into a different
+computation while still presenting itself as a reproduction. Found
+2026-11-17 when four bug11_check scripts returned 7.31 against a recorded
+3.64, having absorbed a rebalance that postdated the result -- and in
+doing so leaked a period that had just been sealed.
+
+Fixed: `run_holdout_study1_bug11_check.py` (window pinned to the original
+5 rebalances through 2026-04-22; same-ISIN exclusion pinned to the
+2026-09-27 read date, not the live set), `run_study2_largecap_bug11_
+check.py` and `run_momentum_backtest_bug11_check.py` (exclusion set
+pinned; their own window was already structurally incapable of drifting,
+`read_entity_panel()` being physically capped at the sealed holdout
+boundary -- pinned anyway for the same clarity). `run_holdout_study1_
+bug11_check_versioned.py` already pinned its window correctly (its own
+purpose is varying the exclusion set, by design); all four now also call
+`data_layer.holdout.guard_momentum_rebalance_dates()` as a mechanical,
+second-layer check underneath the manual pin.
+
+**Pinning the window and the exclusion-set ENTITY COUNT is not the same
+as pinning the exclusion set's CONTENT.** Found while verifying this
+fix: `run_holdout_study1_bug11_check_versioned.py`'s own checkpoint
+reconstruction (`unexplained_same_isin_jump_entities()` filtered by
+`jump_date <= checkpoint`) recomputes `has_nearby_ca_record` and
+`gap_days` against the CURRENT warehouse state every time it is run --
+not a frozen historical snapshot -- so a nominally fixed checkpoint
+(e.g. "~80 entities as of 2026-09-28") can resolve to a different actual
+entity set, and a different margin, on a later run even with the window
+and count unchanged. See `BUGS.md`'s new entry for the actual numbers;
+not resolved here.

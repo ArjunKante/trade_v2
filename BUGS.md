@@ -2353,3 +2353,54 @@ applied here too, and to `run_holdout_study1_bug11_check_versioned.py`,
 bug11_check.py` if they have the same gap, for any of their own output
 to be trustworthy against the recorded figures without rechecking the
 window first.
+
+## Bug #27: pinning the window and exclusion-set COUNT did not make the four check scripts reproduce -- reported, not yet explained
+
+**Found 2026-11-17, while implementing OPERATIONS.md's new pinning
+rule.** After pinning window + exclusion-set snapshot in all four
+bug11_check scripts, three of the four still do not reproduce their
+recorded target:
+
+| script | reproduces | recorded target | diff |
+|---|---:|---:|---:|
+| `run_holdout_study1_bug11_check.py` | 3.63 | 3.64 | -0.01 (within the known 1-entity reconstruction gap) |
+| `run_study2_largecap_bug11_check.py` | 8.04 | 7.30 | **+0.74** |
+| `run_momentum_backtest_bug11_check.py` | 11.57 | 11.70 | -0.13 (plausibly within the same 1-entity gap) |
+| `run_holdout_study1_bug11_check_versioned.py`, each checkpoint | see below | see below | **large, not monotone** |
+
+**The versioned script's own sensitivity table does not reproduce at
+all** -- window and checkpoint dates unchanged, same code (only a no-op
+guard call added, confirmed via `git diff`):
+
+| checkpoint (n_excl) | recorded margin (`FINDINGS.md` Section 2) | reproduced today |
+|---|---:|---:|
+| ~78/79 (2026-09-27) | 3.99 | 3.63 |
+| ~80 (2026-09-28) | 5.22 | 2.63 |
+| ~81 (2026-10-10) | 3.57 | 5.21 |
+| ~82 (2026-11-16) | 4.00 | 4.63 |
+
+Not monotone in either direction, and the relative ORDER of the
+checkpoints changed (81 used to be the lowest, now 80 is) -- not
+explainable as a uniform drift or a single extra entity.
+
+**Reported, not yet explained, per instruction.** One structural
+candidate, found while reading the versioned script's own code, stated
+as a hypothesis, not confirmed: its checkpoint reconstruction
+(`unexplained_same_isin_jump_entities()` filtered by `jump_date <=
+checkpoint`) recomputes `has_nearby_ca_record` and `gap_days` against
+whatever `corporate_actions`/`prices_eod` look like AT CALL TIME, for
+EVERY checkpoint, every run -- it is not a frozen historical snapshot.
+If a corporate-action record has been backfilled since for any of these
+jump dates (plausible -- this project's own tables carry `revision_seq`
+columns specifically because late-arriving revisions are normal here),
+an entity's explained/unexplained status, or its measured `gap_days`,
+could change for a checkpoint dated months ago, without that checkpoint
+date itself changing. This cannot be verified against a historical
+snapshot -- none was ever saved (`FINDINGS.md` Section 2's own
+"reconstructed... no snapshot of the exact original 78 was ever saved"
+note already flagged this class of problem once, for the count alone;
+this is the same gap, now shown to also affect the set's CONTENT, not
+just its size). **Not resolved. Flagged for a decision**: the
+3.57-5.22 sensitivity range in `FINDINGS.md` Section 2 should be read
+as a statement about the record AS IT STOOD on 2026-11-16, not as
+something a future re-run can be expected to confirm.

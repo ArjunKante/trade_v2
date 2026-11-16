@@ -36,7 +36,7 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.db import get_read_connection
-from data_layer.holdout import SEALED_HOLDOUT_START
+from data_layer.holdout import SEALED_HOLDOUT_START, guard_momentum_rebalance_dates
 from data_layer.entity_panel import read_full_entity_panel_authorized
 from data_layer.same_isin_jump_guard import unexplained_same_isin_jump_entities
 from factors.momentum import compute_momentum_12_1
@@ -111,6 +111,8 @@ def run_one(excluded_entities: set) -> dict:
     all_dates = sorted(full["trade_date"].unique())
     rebalance_dates_all = all_dates[::REBALANCE_DAYS]
     rebalance_dates_all = [d for d in rebalance_dates_all if all_dates.index(d) + HORIZON_DAYS < len(all_dates)]
+    # Mechanical seal: defense-in-depth underneath the manual pin below.
+    guard_momentum_rebalance_dates(rebalance_dates_all)
 
     holdout_start_ts = pd.Timestamp(SEALED_HOLDOUT_START)
     # FIXED window: only the original 5 rebalances, never the later ones

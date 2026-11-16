@@ -19,9 +19,17 @@ DIP, a different exposure to a single-day jump than momentum's top-decile
 selection on a 12-MONTH return. Not assumed to generalize; checked here
 directly.
 
+PINNED (OPERATIONS.md's "pin the window, universe, and exclusion set"
+rule, added 2026-11-17): the same-ISIN exclusion set is reconstructed
+at the 2026-09-27 read date, not the live set, which has drifted to 82
+entities by ordinary backfill. `read_entity_panel()` is physically
+capped at the sealed holdout boundary, so this script's window cannot
+drift forward on its own.
+
 Usage:
     python scripts/run_momentum_backtest_bug11_check.py
 """
+import datetime as dt
 import sys
 import warnings
 from pathlib import Path
@@ -33,10 +41,11 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.db import get_read_connection
+from data_layer.holdout import guard_momentum_rebalance_dates
 from data_layer.entity_panel import read_entity_panel
+from data_layer.same_isin_jump_guard import find_unexplained_same_isin_jumps
 from factors.momentum import compute_momentum_12_1
 from factors.target import compute_forward_return
-from monitor.persistence import same_isin_jump_excluded_entities
 
 ROOT = Path(__file__).resolve().parents[1]
 REBALANCE_DAYS = 63
@@ -52,7 +61,11 @@ ORIGINAL = {
 }
 
 con = get_read_connection(ROOT / "data" / "warehouse.duckdb")
-excluded = same_isin_jump_excluded_entities(con)  # BUGS.md Bug #11
+same_isin_tight = find_unexplained_same_isin_jumps(con, before=dt.date(2026, 9, 28))
+same_isin_tight = same_isin_tight[(~same_isin_tight["has_nearby_ca_record"]) & (same_isin_tight["gap_days"] <= 5)]
+lineage_for_pin = con.execute("SELECT DISTINCT isin, entity_id FROM isin_lineage").fetchdf()
+iso_to_entity_pin = lineage_for_pin.set_index("isin")["entity_id"].to_dict()
+excluded = set(same_isin_tight["isin"].map(iso_to_entity_pin).dropna().unique())
 panel_all = read_entity_panel(con)
 panel = panel_all[~panel_all["entity_id"].isin(excluded)].reset_index(drop=True)
 con.close()
@@ -78,6 +91,9 @@ m = m.dropna(subset=["value", "fwd_return", "_tercile"])
 
 all_dates = sorted(m["trade_date"].unique())
 rebalance_dates = all_dates[::REBALANCE_DAYS]
+# Mechanical seal: structurally unreachable here (read_entity_panel() is
+# capped at the sealed holdout boundary), asserted anyway for consistency.
+guard_momentum_rebalance_dates(rebalance_dates)
 print(f"{len(rebalance_dates)} rebalance dates, {rebalance_dates[0]} to {rebalance_dates[-1]}")
 
 

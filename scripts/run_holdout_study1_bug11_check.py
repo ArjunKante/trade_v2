@@ -5,6 +5,15 @@ before anything else runs. `run_holdout_study1.py` itself is NOT modified
 -- this is a separate script, per instruction ("no rewriting of
 published results").
 
+PINNED (OPERATIONS.md's "pin the window, universe, and exclusion set"
+rule, added 2026-11-17 after this exact script was found reproducing
+7.31 against the recorded 3.64, having silently absorbed a 6th
+rebalance and the live, grown exclusion set): the same-ISIN exclusion
+set is reconstructed at the 2026-09-27 read date (not the live set,
+which drifts as backfill continues), and the holdout window is capped
+at the original last rebalance, 2026-04-22 -- both exactly as they
+were when 3.64 was recorded.
+
 The holdout is RETIRED (`FINDINGS.md` Section 7, 2026-09-27) -- rereading
 it is permitted, and this run is logged to `data/holdout_access_log.txt`
 as exactly that: a materiality check on an already-retired window, not a
@@ -30,11 +39,16 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.db import get_read_connection
-from data_layer.holdout import SEALED_HOLDOUT_START
+from data_layer.holdout import SEALED_HOLDOUT_START, guard_momentum_rebalance_dates
 from data_layer.entity_panel import read_full_entity_panel_authorized
+from data_layer.same_isin_jump_guard import find_unexplained_same_isin_jumps
 from factors.momentum import compute_momentum_12_1
 from factors.target import compute_forward_return, HORIZON_DAYS
-from monitor.persistence import same_isin_jump_excluded_entities
+
+# Pinned window: the original 5-rebalance holdout only (through
+# 2026-04-22) -- matches data/holdout_study1_records.csv exactly, same
+# convention as run_holdout_study1_bug11_check_versioned.py.
+ORIGINAL_HOLDOUT_LAST_DATE = pd.Timestamp("2026-04-22")
 
 ROOT = Path(__file__).resolve().parents[1]
 REBALANCE_DAYS = 63
@@ -62,7 +76,15 @@ with open(LOG_PATH, "a") as f:
 print(f"Holdout access logged (materiality check on a retired window) to {LOG_PATH}", file=sys.stderr, flush=True)
 
 con = get_read_connection(ROOT / "data" / "warehouse.duckdb")
-excluded = same_isin_jump_excluded_entities(con)  # BUGS.md Bug #11
+# Pinned to the 2026-09-27 read date (same reconstruction convention as
+# run_holdout_study1_bug11_check_versioned.py) -- NOT the live set, which
+# has drifted to 82 entities by ordinary backfill and would not
+# reproduce 3.64.
+same_isin_tight = find_unexplained_same_isin_jumps(con, before=dt.date(2026, 9, 28))
+same_isin_tight = same_isin_tight[(~same_isin_tight["has_nearby_ca_record"]) & (same_isin_tight["gap_days"] <= 5)]
+lineage_for_pin = con.execute("SELECT DISTINCT isin, entity_id FROM isin_lineage").fetchdf()
+iso_to_entity_pin = lineage_for_pin.set_index("isin")["entity_id"].to_dict()
+excluded = set(same_isin_tight["isin"].map(iso_to_entity_pin).dropna().unique())
 panel_all = read_full_entity_panel_authorized(con, authorize_holdout=True)
 panel = panel_all[~panel_all["entity_id"].isin(excluded)].reset_index(drop=True)
 con.close()
@@ -93,9 +115,15 @@ rebalance_dates_all = all_dates[::REBALANCE_DAYS]
 rebalance_dates_all = [d for d in rebalance_dates_all if all_dates.index(d) + HORIZON_DAYS < len(all_dates)]
 print(f"{len(rebalance_dates_all)} total rebalances, 2016 through end of available data")
 
+# Mechanical seal: defense-in-depth underneath the manual pin below --
+# raises if this ever reaches the second sealed momentum window.
+guard_momentum_rebalance_dates(rebalance_dates_all)
+
 holdout_start_ts = pd.Timestamp(SEALED_HOLDOUT_START)
-holdout_rebalance_dates = [d for d in rebalance_dates_all if d >= holdout_start_ts]
-print(f"{len(holdout_rebalance_dates)} rebalances fall inside the (retired) sealed holdout "
+holdout_rebalance_dates = [d for d in rebalance_dates_all
+                            if holdout_start_ts <= d <= ORIGINAL_HOLDOUT_LAST_DATE]
+print(f"{len(holdout_rebalance_dates)} rebalances fall inside the (retired) sealed holdout, "
+      f"pinned to the original window "
       f"({holdout_rebalance_dates[0].date()} to {holdout_rebalance_dates[-1].date()})")
 
 momentum_nav = [1.0]
@@ -147,7 +175,7 @@ for d in rebalance_dates_all:
     prev_bench_set = bench_set
 
     records.append({
-        "date": d, "in_holdout": d >= holdout_start_ts,
+        "date": d, "in_holdout": holdout_start_ts <= d <= ORIGINAL_HOLDOUT_LAST_DATE,
         "mom_n": len(mom_set), "mom_gross": gross_ret, "mom_net": net_ret,
         "bench_n": len(bench_set), "bench_gross": bgross, "bench_net": bnet,
     })
