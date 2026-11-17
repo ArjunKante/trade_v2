@@ -658,9 +658,18 @@ a family of them. Found 2026-11-16.
 Top-decile overlap 7.7% against a ~10% chance baseline; within-quarter
 rank correlation 0.030. It passed the SELECTION null at the 99th-100th
 percentile, so it genuinely identifies outperforming stocks, and it is
-not momentum in disguise. No tradeable form has been identified: the
+not momentum in disguise. No tradeable form has been identified: ~~the
 TIMING null showed the post-announcement 60 days is the worst window of
-the year for these names, and every obvious route forward is either
+the year for these names~~ -- **AMENDED, 2026-11-18**: that null's random
+entry was not constrained to post-announcement days (48.3% of its draws
+fell before the event's own announcement, unattainable by construction).
+Restricted to achievable post-announcement entries only, the real
+spread sits at the 12th (raw) / 2nd (winsorized) percentile of the
+corrected null, not the 0th -- still underperforming other
+post-announcement entry points on these names, but "the worst window of
+the year" overstates it; "a below-median post-announcement window" is
+the supported claim. See `EARNINGS_DRIFT_FINDINGS.md`'s condition 2b
+correction for the full numbers. Either way, every obvious route forward is either
 parameter tuning (select on earnings, enter after N days) or a momentum
 variant (which portfolio construction showed is indistinguishable from
 baseline at any achievable sample). Recorded because an orthogonal

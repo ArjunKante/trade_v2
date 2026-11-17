@@ -62,6 +62,55 @@ typical drift than a random entry would -- plausibly because some of
 the move is already reflected in the price by the time entry happens,
 3 sessions after day 0.
 
+**CORRECTION, 2026-11-18 -- for the record only; the study stays
+CLOSED, condition 1 failed independently and alone would have ended the
+run (see Verdict below). Checked whether the null's random entry was
+constrained to post-announcement days. It was not.**
+`scripts/earnings_drift_dev_stage4_timing_null.py`'s `eligible_indices()`
+draws from any trading day in the same calendar year with room for the
+60-day horizon -- no constraint requiring the draw to fall on or after
+that event's own `known_date`. Checked directly, not assumed: of the
+null's individual event-level draws, **48.3%** (mean across the 50
+repetitions, range 48.0-48.6%) fell *before* their own event's
+announcement date. An entry that precedes the announcement cannot use
+the information that selected the stock into the top decile -- part of
+the null's own +5.35%/+4.72% mean is unattainable by construction, not
+a demonstration that random timing beats announcement timing on equal
+terms.
+
+Re-run with the same 50 seeds, same contamination guard, same horizon,
+adding only `entry >= known_date` (post-announcement-only null; first
+reproduced the unconstrained arrays bit-for-bit as a checkpoint, so
+this is the same warehouse state the DEV run used, not a re-measurement
+under different data --
+`scripts/earnings_drift_timing_null_preannouncement_check.py`):
+
+| | null mean | real spread's percentile |
+|---|---:|---:|
+| Unconstrained (as originally run) | raw +5.35%, wins +4.72% | **0.0** (both) |
+| Post-announcement-only | raw +1.23%, wins +0.87% | raw **12.0**, wins **2.0** |
+
+The restricted null's mean (+1.23% raw) sits close to the real spread
+itself (+1.025% raw) -- most of the apparent gap was the unattainable
+half of the draws. **Condition 2b still fails**: 12.0 and 2.0 are both
+far below the 95th-percentile bar, so the Gate verdict, the DEV
+failure, and the family closure are all unchanged. What changes is the
+characterization, not the verdict: not "random timing on these stocks
+produces a far larger spread than the real announcement-timed entry"
+(true only because roughly half the random draws were entries the real
+design could never make), but **the real post-announcement entry
+underperforms OTHER achievable post-announcement entries on the same
+stocks, by a real but much smaller margin than first reported** -- 12th
+percentile, not 0th, on the raw configuration. The winsorized
+configuration (2nd percentile) still points toward a genuine, if more
+modest, timing cost to entering 3 sessions after the announcement
+rather than at some other post-announcement point in the year. The
+inference that selection (which stocks) dominates timing (when to
+enter) is accordingly weaker than condition 2b's original 0th-percentile
+framing suggested, though direction is unchanged: timing still looks
+like a net cost, not a net benefit, relative to the broader set of
+post-announcement entry points.
+
 **3. Still positive after dropping the single best calendar year. --
 PASS.** Best year: 2020 (raw +3.17%, winsorized +2.78% mean spread).
 After dropping it: raw +0.757%, winsorized +0.278% -- still positive,
@@ -79,9 +128,15 @@ end), raw net spread +0.719%, winsorized net spread +0.208%.
 ## Verdict
 
 **Gate fails.** Conditions 3, 4, and 5 pass; conditions 1 and 2 do not,
-and all five are required. Condition 2's failure (TIMING null) is not
+and all five are required. ~~Condition 2's failure (TIMING null) is not
 a near-miss -- the real spread sits below the entire 50-draw null
-distribution. Per Section 5's own stated rule, condition 1's failure
+distribution.~~ **AMENDED, 2026-11-18**: true of the unconstrained null
+as originally run (0.0th percentile) -- but see condition 2b's
+2026-11-18 correction above: restricted to achievable, post-announcement
+entries only, the real spread sits at the 12th (raw) / 2nd (winsorized)
+percentile. Still a fail against the 95th-percentile bar, but a
+materially closer one than "sits below the entire null distribution"
+suggests. Per Section 5's own stated rule, condition 1's failure
 alone ("If condition 1 fails decisively, the run is killed outright --
 the nulls do not get a chance to rescue it") would have been enough to
 stop here; the nulls were run anyway, cheaply, and corroborate the
