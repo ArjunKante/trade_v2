@@ -3260,3 +3260,19 @@ what. A test that forgets to mock `send_email` now gets a loud
 into "EMAIL NOT SENT" and `False` -- safe by default, no per-test
 opt-in required, no silent success. Applies to all 717 tests
 automatically; confirmed by running the full suite after adding it.
+
+## Bug #33: gap_backfill's isin_lineage exclusion is flagged, not verified
+
+The auto-backfill path rebuilds `adjustment_factors` and
+`entity_prices_daily` but deliberately does NOT rebuild `isin_lineage`.
+The reasoning is that it is a narrow edge case — but this was flagged,
+not verified. It remains unconfirmed whether a backfilled price day can
+create or alter a lineage transition that `isin_lineage` would
+otherwise record. `index_eod` (independent source) and jump detection
+(not materialized, self-heals) are also excluded, but with reasoning
+that holds; this one does not. Recorded 2026-11-18 (escalated out of
+`gap_backfill.py`'s module docstring per finding #15 — a flag that
+lives only where it was written doesn't survive).
+
+**Closes when**: it's determined whether a lineage transition can be
+created or changed by prices inside the 30-day auto-fill window.
