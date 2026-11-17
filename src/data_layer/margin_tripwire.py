@@ -14,11 +14,22 @@ Both of those are facts about the warehouse TODAY, not permanent
 properties. This module is the mechanized version of the tripwire
 FINDINGS.md Section 2 states in prose -- checked here, not just
 written down, so a resumed ingest or a backfill does not have to be
-remembered by someone reading an old markdown file. Not yet wired into
-any entry point (unlike `staleness.assert_data_current`, which every
-price-panel consumer already calls) -- that wiring is additional,
-unscoped work, left for whoever next touches the ingestion path for
-either table.
+remembered by someone reading an old markdown file.
+
+WIRED, 2026-11-17, into `tests/test_margin_tripwire.py`'s `test_live_*`
+functions as a data-gated test (same `real_con`/`pytest.skip("real
+warehouse not present")` convention as ~45 other tests in this suite):
+skips on every GitHub Actions push (no warehouse there), runs for real
+only in the Saturday weekly full-suite job
+(`scripts/weekly_full_test_run.py`) against this project's actual
+data. A failure there makes that job exit nonzero, withholding its
+healthchecks.io heartbeat and producing that service's own DOWN email
+once the grace window lapses -- the existing dead-man's-switch, not a
+second alerting path. Deliberately NOT wired into `staleness`'s own
+`assert_data_current` call sites (the Fibo watchlist, momentum
+universe, screener, persistence monitor) -- those run far more often
+than weekly and check a different thing (today's data being current),
+not this tripwire's two rare, retroactive ingestion events.
 """
 from __future__ import annotations
 

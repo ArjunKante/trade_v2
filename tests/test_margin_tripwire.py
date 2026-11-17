@@ -5,6 +5,21 @@ inside the sealed holdout window. data_layer.margin_tripwire is the
 mechanized version of that tripwire -- these tests fix its two failure
 conditions as data, not placeholders, so a resumed feed or a backfill
 is caught here before someone has to notice the margin moved.
+
+The first group below is hermetic (synthetic in-memory warehouse) and
+runs everywhere, including CI. The LIVE group at the bottom
+(`test_live_*`) is data-gated on `real_con`, same skip-guard convention
+as `test_isin_lineage.py`'s own `real_con` fixture and ~44 other tests
+in this suite: skips with "real warehouse not present" wherever
+data/warehouse.duckdb doesn't exist (every GitHub Actions push), and
+runs for real only in the weekly full-suite job against this project's
+actual data (`scripts/weekly_full_test_run.py` -- see that script's own
+docstring for the Task Scheduler/healthchecks.io wiring; task #19,
+registering it in OPERATIONS.md, is separately still open). A failure
+here makes that job exit nonzero, which withholds its healthchecks.io
+heartbeat ping, which produces healthchecks.io's own DOWN email once
+the grace window lapses -- the existing dead-man's-switch alerting
+path, not a new one.
 """
 import datetime as dt
 import sys
@@ -15,7 +30,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from data_layer.db import SCHEMA_SQL
+from data_layer.db import SCHEMA_SQL, get_read_connection
 from data_layer.margin_tripwire import (
     CORPORATE_ACTIONS_FROZEN_AT,
     CORPORATE_ACTIONS_FROZEN_ROWS,
@@ -117,3 +132,51 @@ def test_revision_outside_window_does_not_trip():
         + PRICE_ROW.format(trade_date="2026-11-18", fetched_at="2026-11-18 00:00:00")
     )
     assert_no_in_window_price_revision(con, baseline_fetched_at=baseline)  # no raise
+
+
+WAREHOUSE = Path(__file__).resolve().parents[1] / "data" / "warehouse.duckdb"
+
+_MEANING = (
+    "the momentum margin's stability conditions are violated; 3.50 must be "
+    "recomputed and PROJECT_CONTEXT.md Section 4 / FINDINGS.md Section 2 "
+    "revisited before that figure is cited again."
+)
+
+
+@pytest.fixture(scope="module")
+def real_con():
+    """Same skip-guard convention as test_isin_lineage.py's real_con and
+    ~44 other data-gated tests in this suite: skips cleanly wherever
+    data/warehouse.duckdb doesn't exist (every GitHub Actions push),
+    runs for real only against this project's actual local warehouse
+    (the Saturday weekly full-suite job)."""
+    if not WAREHOUSE.exists():
+        pytest.skip("real warehouse not present")
+    return get_read_connection(WAREHOUSE)
+
+
+def test_live_corporate_actions_and_lineage_still_frozen(real_con):
+    """Condition (b): corporate_actions/isin_lineage resuming updates.
+    Runs only against real data -- see module docstring for why a
+    failure here reaches a human via the existing weekly-heartbeat
+    dead-man's-switch, not a new alerting path."""
+    try:
+        assert_corporate_actions_and_lineage_still_frozen(real_con)
+    except FrozenTableResumedError as e:
+        pytest.fail(
+            "MOMENTUM MARGIN TRIPWIRE TRIPPED (condition b, corporate_actions/"
+            f"isin_lineage resumed updating): {_MEANING}\nDetail: {e}"
+        )
+
+
+def test_live_no_in_window_price_revision(real_con):
+    """Condition (a): a price row inside the sealed holdout window
+    [2025-04-11, 2026-04-22] touched after the margin was last verified.
+    Runs only against real data -- see module docstring."""
+    try:
+        assert_no_in_window_price_revision(real_con)
+    except HoldoutWindowPriceRevisionError as e:
+        pytest.fail(
+            "MOMENTUM MARGIN TRIPWIRE TRIPPED (condition a, in-window price "
+            f"revision): {_MEANING}\nDetail: {e}"
+        )
