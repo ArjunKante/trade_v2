@@ -2716,3 +2716,61 @@ from future ingestion -- new `fetched_at` activity only ever lands on
 recent `trade_date`s. This is the structural mechanism behind the
 reachability property recorded above, not an independent reassurance:
 the two findings are one proof, not two separate pieces of good news.
+
+## Sweep: every other closed study's TIMING/SELECTION null checked for the earnings-drift defect (PROJECT_CONTEXT.md finding #19) -- report, nothing to fix
+
+**Result: earnings-drift was the only instance. Every other study's null
+is clean, verified by reading the actual null-construction code, not by
+analogy or by trusting each study's own preregistration prose.**
+
+The defect (finding #19) can only occur in a specific shape: a TIMING
+null that holds the ENTITY fixed (the real selection stands) but
+redraws the ENTRY TIME from a window wide enough to include moments
+before the entity became identifiable as a candidate at all. A
+SELECTION null cannot have this defect by construction -- it draws
+both entity and day/week at random from an eligible population with no
+real "selecting signal" to precede in the first place, so there is
+nothing for the draw to come before.
+
+| Study | TIMING null window | Entity/day fixed to the real trade? | Could a draw precede the selecting information? |
+|---|---|---|---|
+| **Earnings drift** | any trading day in the same **calendar year** | entity fixed, day free | **YES -- confirmed, 48.3% of draws did (finding #19)** |
+| Fibo (Step5/open-entry) | same (entity, day), random 15-min candle 09:30-11:15 | fixed | No -- window is the real strategy's own valid entry window, same day |
+| POC V1-V5 | same (entity, day), random 5-min candle 09:45-14:30 | fixed | No -- same reasoning; V2-V5 reuse V1's `_random_fill`/`_valid_entry_idx` unchanged (`src/poc/v2.py`-`v5.py`, confirmed by direct import) |
+| Box theory V1/V2 | same (entity, day), random 5-min entry | fixed | No -- shared `src/box_theory/nulls.py`, both versions |
+| Liquidity A-D | same (entity, day), random intraday fill | fixed | No -- confirmed in all four of `src/liquidity/{a,b,c,d}.py`'s own `build_timing_pool_*` |
+| FVG | same (entity, day), random 1-hour candle | fixed | No |
+| IPO listing | same listing, random 1-min bar in [09:16, 15:00] | fixed | No -- the listing day itself is the information event; 09:16 is market open, nothing earlier exists to draw |
+| Darvas | random day in **[box's own `top_confirm_idx`, +19 trading days]** | entity fixed, day free but anchored | **No** -- the window's own lower bound IS the breakout-confirmation index; by construction it cannot draw before the signal that identified the box |
+| Per-stock weekly | entity's own CHECK-window (2023-01-01 to 2026-09-30) `entry_candidates` pool only | entity fixed (own rule, own stock), week free within that pool | No -- pool is pre-restricted to that entity's own signal-eligible weeks inside the post-FIT CHECK window; no pre-signal or pre-CHECK draw is possible |
+| Momentum (63-day, Study 1/2) | n/a | n/a | **N/A -- no TIMING/SELECTION null of this kind exists.** The design is a sealed-holdout read against a fixed threshold, not a randomization test |
+
+SELECTION nulls (Fibo, POC, box theory, liquidity A-D, FVG, Darvas --
+all random (entity, day) drawn from that **same calendar month's**
+eligible population, matched to the real trade count that month,
+confirmed directly in each family's own `build_month_pool*`) carry no
+version of this defect for the structural reason above. IPO listing's
+SELECTION null is a deterministic alternate strategy (`ignore_color=
+True`), not a seeded draw at all -- no window to check.
+
+**The user's pre-stated expectation ("intraday randomizes within a
+single day, so it's clean; earnings drift was unique in randomizing
+across a year") holds, but the precise mechanism is narrower than
+"intraday vs. not."** Darvas is NOT intraday -- it is a daily-bar,
+multi-day-horizon strategy, and its TIMING null still randomizes across
+a 20-trading-day window, same general shape as earnings-drift's
+"draw from a wide window" design. It is clean only because that window
+is explicitly anchored to start AT the box's own confirmation index,
+never before it. The real dividing line is not granularity, it is
+**whether the null's window is anchored to the entity's own selecting
+event, or to an arbitrary calendar boundary (a year) that ignores it.**
+Earnings-drift used the latter; every other study, intraday or not,
+used the former (or has no such null at all).
+
+**Direction of the earnings-drift error, for the record**: it inflated
+the null's mean (unattainable pre-announcement entries drew from a
+wider, often-calmer pre-event price history), which made the real,
+attainable post-announcement result look worse by comparison (0th
+percentile instead of 12th) -- it damned the study's TIMING condition,
+it did not flatter it. The family closed regardless, on condition 1
+(bootstrap CI includes zero), independently of this.

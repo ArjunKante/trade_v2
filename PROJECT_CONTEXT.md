@@ -668,8 +668,18 @@ spread sits at the 12th (raw) / 2nd (winsorized) percentile of the
 corrected null, not the 0th -- still underperforming other
 post-announcement entry points on these names, but "the worst window of
 the year" overstates it; "a below-median post-announcement window" is
-the supported claim. See `EARNINGS_DRIFT_FINDINGS.md`'s condition 2b
-correction for the full numbers. Either way, every obvious route forward is either
+the supported claim. **AMENDED FURTHER, 2026-11-18**: read the other
+way, those percentiles also say entry timing AMONG attainable days
+barely moves the result -- the selection signal is close to
+time-insensitive within the post-announcement window, not merely "less
+bad than first reported." That makes it a more interesting pure
+selection signal, not less: you would not need to catch a particular
+window to realize most of it. This does **not** make it tradeable --
+condition 1 (bootstrap CI excluding zero) still failed, and the real
+spreads (+1.025% raw, +0.555% winsorized) remain statistically
+indistinguishable from zero regardless of entry timing. See
+`EARNINGS_DRIFT_FINDINGS.md`'s condition 2b correction for the full
+numbers. Either way, every obvious route forward is either
 parameter tuning (select on earnings, enter after N days) or a momentum
 variant (which portfolio construction showed is indistinguishable from
 baseline at any achievable sample). Recorded because an orthogonal
@@ -700,6 +710,26 @@ found. Three occurrences now, three different tables
 same-ISIN guard; `corporate_actions` via the lineage guard), each
 treated as its own bug rather than the general case until now. Found
 2026-11-17.
+
+**19. A null must be restricted to what was attainable at decision
+time.** The earnings-drift TIMING null drew entry days from the whole
+calendar year, including days BEFORE the announcement that selected the
+stock — entries nobody could have made, because the information
+identifying the stock did not yet exist. 48.3% of draws were
+unattainable. This inflated the null's mean from +1.23% to +5.35% and
+placed the real result at the 0th percentile instead of the 12th. A
+null containing impossible actions is not a benchmark, it is a fiction,
+and it will always make a real strategy look worse than it is. Found
+2026-11-17, after the study had already closed on other grounds.
+**Swept every other study's TIMING/SELECTION nulls for the same shape,
+2026-11-17: this was the only instance.** Every other family's TIMING
+null either holds entity+day fixed and only randomizes intraday
+(Fibo, POC, box theory, liquidity A-D, FVG, IPO listing) or, for the one
+daily-bar exception (Darvas), anchors its window to start AT the
+entity's own selecting event, never before it. SELECTION nulls cannot
+have this defect by construction (no real selecting signal to precede).
+Momentum has no null of this kind. See `BUGS.md`'s sweep entry for the
+full per-study table and code citations.
 
 ---
 
