@@ -425,6 +425,57 @@ Full transition/entity lists and the forward-growth evidence are in
 `BUGS.md`'s "Holdout-window drift-reachability check" and "Exclusion-
 set growth source" entries, both 2026-11-17.
 
+**FINAL RESTATEMENT, 2026-11-17 -- absent new information. Rests
+entirely on the measurements already made above; nothing below
+required a new computation.**
+
+**VERDICT**: the holdout was read once against a design fixed in
+advance; all three pre-registered conditions passed. Unchanged.
+
+**MARGIN UNDER WINDOW-LEVEL LINEAGE CORRECTION: 3.50, against a 3.0
+threshold. REPRODUCIBLE**, for two independent reasons: its exclusion
+list is persisted (`results/exclusions/
+run_holdout_study1_lineage_check.window_level.json`) and reproduces the
+figure end-to-end by loading, not recomputing; and recomputing the list
+from scratch yields the same margin, because all entities added since
+the pinned snapshot have out-of-window jump dates while price
+ingestion is forward-only (the ADDENDUM immediately above).
+
+**Did detected contamination drive the pass? No.** Removing it costs
+0.37 points (3.87 -> 3.50) and the result still clears the 3.0
+threshold. This was the question the corrections existed to answer,
+and it is now answered -- for DETECTED contamination. Undetected
+contamination is unfalsifiable and always will be.
+
+**Conditions under which 3.50 would move -- both stated, not just the
+likelier one:**
+(a) price ingestion ceasing to be forward-only, i.e. historical
+backfill producing a newly-detected jump dated inside the window;
+(b) `corporate_actions` resuming updates, which could EXPLAIN one of
+the 14 currently-unexplained in-window transitions, remove it from the
+exclusion set, and move the margin in the OPPOSITE direction. That
+table is frozen by accident, not design, making (b) the more likely of
+the two.
+
+**Tripwire**: both conditions are checked, not just written down, by
+`src/data_layer/margin_tripwire.py` (`assert_no_in_window_price_
+revision` for (a), `assert_corporate_actions_and_lineage_still_frozen`
+for (b)) -- the natural location since it sits alongside `data_layer.
+staleness`, the module every price-panel consumer already calls before
+computing anything, per `BUGS.md` Bug #13. Not yet wired into any entry
+point; the functions exist and both currently pass against the live
+warehouse (confirmed 2026-11-17), but nothing calls them automatically
+yet. If either raises -- `FrozenTableResumedError` or `HoldoutWindow
+PriceRevisionError` -- 3.50 must be recomputed and this section
+revisited before the number is cited again.
+
+**Still open, unchanged**: the older figures (3.87, 3.64, Study 2's
+7.30) remain unreproducible, with no exclusion list ever saved for any
+of them; the sensitivity of the margin to exclusion-set VERSION (as
+opposed to whether the window-level set is currently stable) remains
+unmeasured and needs the as-of work on the price/lineage path (`BUGS.
+md`'s resolution-path entry, corrected 2026-11-17).
+
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 
 This is the finding that matters more than the headline pass, and it is the

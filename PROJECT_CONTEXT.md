@@ -250,15 +250,21 @@ later re-derivation.
 **The margin does not stand the same way.** Computed at **+3.87** at
 read time against the 3.0 threshold. Subsequent corrections gave 3.64,
 3.50, and 5.97, each clearing 3.0 when run. **None of these four
-numbers is reproducible.** All four depend on `corporate_actions`
-state at the moment the computation ran: `lineage_jump_guard.
-find_unexplained_jumps` reads that table unfiltered
+numbers is reproducible.** ~~All four depend on `corporate_actions`
+state at the moment the computation ran~~ -- **CORRECTED, 2026-11-17**:
+`corporate_actions` has been frozen since 2026-09-19 and cannot be the
+moving part; the dependency is on `prices_eod`/`adjustment_factors`
+state (which grow continuously) feeding the detectors' ratio/boundary
+computation directly, not on the corporate-action match. See `BUGS.md`'s
+resolution-path entry, corrected the same day. `lineage_jump_guard.
+find_unexplained_jumps` reads `corporate_actions` unfiltered
 (`src/data_layer/lineage_jump_guard.py:67`, no point-in-time predicate
 at all), and the same-ISIN checkpoint path (`BUGS.md` Bug #27) does
-the structural equivalent. 3.50 was checked explicitly against this,
-not assumed clean -- it shares the defect exactly; it is not a safer
-number than the retracted range sitting above it, it is the same kind
-of number.
+the structural equivalent -- that defect is real, but it is a second,
+currently-inert exposure, not the one that produced the observed drift.
+3.50 was checked explicitly against this, not assumed clean -- it
+shares the defect exactly; see the final restatement below for why that
+does not, in practice, make it unreproducible today.
 
 **Do not cite a point estimate from this record. Do not recompute
 expecting to confirm one.** A new run produces a new number, and that
@@ -302,6 +308,35 @@ check-in. **Pre-committed interpretation recorded before that check-in**
 concentrated enough (top 10 of 336 entities = 63% of compounded return)
 that a single basket is an extremely weak test either way -- read
 before the outcome, not fitted to it afterward.
+
+**FINAL RESTATEMENT, 2026-11-17 -- absent new information. Full
+reasoning and the measured numbers are in `FINDINGS.md` Section 2;
+restated here in summary.**
+
+- **Verdict**: unchanged. Holdout read once against a pre-registered
+  design; all three conditions passed.
+- **Margin under window-level lineage correction: 3.50 against 3.0.
+  REPRODUCIBLE** -- its exclusion list is persisted and loads to the
+  same figure, and recomputing that list from scratch gives the same
+  in-window entity set, because price ingestion is forward-only and
+  every entity added since the pinned snapshot has an out-of-window
+  jump date.
+- **Did detected contamination drive the pass? No** -- removing it
+  costs 0.37 points (3.87 -> 3.50); the result still clears 3.0.
+  Undetected contamination remains unfalsifiable.
+- **Conditions under which 3.50 would move**: (a) price ingestion
+  stops being forward-only (a backfilled jump dated inside the
+  window); (b) `corporate_actions` resumes updating, which could
+  explain away one of the 14 in-window transitions and move the
+  margin the other direction -- the more likely of the two, since that
+  table is frozen by accident, not design. Both are now checked by
+  `src/data_layer/margin_tripwire.py`, not just written down here; not
+  yet wired into any entry point.
+- **Still open, unchanged**: 3.87, 3.64, and Study 2's 7.30 remain
+  unreproducible with no exclusion list ever saved for them; the
+  margin's sensitivity to exclusion-set *version* (as opposed to its
+  current stability) still needs the as-of fix on the price/lineage
+  path.
 
 ### Fibonacci/ORB intraday — passes with four caveats
 
