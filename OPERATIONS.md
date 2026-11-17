@@ -2335,3 +2335,113 @@ study1_bug11_check.py`, `run_study2_largecap_bug11_check.py`,
 lineage_check.py` (all four now save on every run). The as-of predicate
 that would fix the detectors themselves stays separate and unscheduled
 (`BUGS.md`'s resolution-path entry, "item B").
+
+## Weekly full-suite run against real data, Task Scheduler entry registered 2026-11-17
+
+**What this is for.** `python -m pytest` on this laptop, against a
+normal checkout, skips ~45 tests that need real local data this repo's
+`.gitignore` deliberately keeps out of version control --
+`data/warehouse.duckdb`, `data/fibo_intraday.duckdb`, the real
+multi-year `data/raw/nse_cm_holidays.pkl` (see `.github/workflows/
+test_suite.yml`'s own comment for the exact count). GitHub Actions runs
+the suite on every push but can never exercise those tests, structurally
+-- a GitHub-hosted runner never has this data. **This job is the only
+thing that runs the full ~707-test suite, including every one of those
+~45 data-gated tests, against this project's actual warehouse, on any
+kind of schedule.** A human running `pytest` by hand covers the same
+ground opportunistically; this is the only unattended, recurring check
+of it.
+
+**Schedule and grace**, mirroring the two existing dead-man's-switches
+in this file (Evening job, Options-depth collector, both above):
+- Task Scheduler: `TradeNew_WeeklyFullTestSuite`, weekly trigger,
+  **Saturday 09:00 IST**, `python.exe scripts/weekly_full_test_run.py`,
+  working directory the repo root, `ExecutionTimeLimit` 30 minutes
+  (the real suite takes ~90 seconds; this is headroom, not an estimate).
+  **`StartWhenAvailable` is `True`** here, deliberately unlike the other
+  two project tasks in this file (both `False`) -- a trading job that
+  fires late is pointless or wrong, but a test suite that runs Sunday
+  morning because the laptop was off Saturday is still a fully valid
+  check, so catching up is strictly better than skipping the week.
+- healthchecks.io project `trade_v2`, check name "Weekly test suite":
+  cron `0 9 * * 6`, timezone `Asia/Kolkata` (matching the trigger
+  exactly), **grace 1 day 12 hours** -- wide on purpose, both because
+  `StartWhenAvailable` can legitimately push the real run into Sunday
+  and because this is a weekly cadence (unlike the 1-hour/30-minute
+  graces on the two sub-daily jobs above, which would false-alarm on
+  every late Saturday run otherwise).
+- Mechanism: `scripts/weekly_full_test_run.py` runs `pytest -q` as a
+  subprocess and pings `WEEKLY_TEST_SUITE_HEALTHCHECK_URL` (`.env`,
+  never committed) **only when pytest's own exit code is 0** -- every
+  test either passed or was cleanly skipped. Never on a nonzero exit
+  (a real failure OR a collection error). Same fail-soft contract as
+  the other two heartbeats: a missing/empty env var or a network error
+  talking to healthchecks.io is logged and swallowed, never raised --
+  see the script's own docstring.
+
+**The margin tripwire rides on this job.** `tests/test_margin_
+tripwire.py`'s `test_live_corporate_actions_and_lineage_still_frozen`
+and `test_live_no_in_window_price_revision` (added 2026-11-17, see
+`FINDINGS.md` Section 2's final restatement and `src/data_layer/
+margin_tripwire.py`) are data-gated the same way as the other ~45 --
+they skip on every GitHub Actions push and run for real only here. **A
+failure in either one makes this job red, withholding its heartbeat,
+which is how a resumed `corporate_actions`/`isin_lineage` feed or an
+in-window `prices_eod` revision reaches a human at all.** Anyone
+disabling, renaming, or re-scheduling `TradeNew_WeeklyFullTestSuite`,
+or changing `scripts/weekly_full_test_run.py`'s heartbeat logic, is also
+turning off the only check that the momentum holdout's 3.50 margin
+hasn't silently become unreproducible again. Nothing else watches for
+either of those two conditions.
+
+**Verified live, 2026-11-17, by test not by reasoning**, same method as
+the other two heartbeats above:
+- `WEEKLY_TEST_SUITE_HEALTHCHECK_URL` confirmed present and non-empty
+  in `.env` (56-character `https://` URL).
+- The Task Scheduler entry did not exist before this entry -- checked
+  against the live `Get-ScheduledTask` list, not a repo file, and found
+  absent. Registered as `TradeNew_WeeklyFullTestSuite`, matching
+  `FiboEvening`/`TradeNew_OptionsDepth`'s own principal/action
+  conventions (`python.exe`, `LogonType Interactive`, `RunLevel
+  Limited`, this user). Confirmed back from the live list after
+  registering: `StartBoundary 2026-11-17T09:00:00+05:30`, `DaysOfWeek
+  64` (Saturday), `StartWhenAvailable True`, `ExecutionTimeLimit
+  PT30M`.
+- The healthchecks.io check itself ("Weekly test suite") already
+  existed from when the script was first written, cron/grace as above,
+  email notification ON to the account owner -- confirmed on the
+  dashboard, "This check has never received a ping" before today.
+- A real successful run (`python scripts/weekly_full_test_run.py`, full
+  707-test suite, genuinely passing) sent a real ping; dashboard
+  recorded "Status: new -> up" at 18:11.
+- A temporary, disposable failing test
+  (`tests/test_zz_tmp_force_fail.py`, one `assert False`, never
+  committed) was added, the real script run again (`1 failed, 707
+  passed`), and its own log line confirmed: "NOT pinging heartbeat --
+  pytest exited nonzero." The dashboard's last-ping timestamp did not
+  advance past 18:11, confirming the withhold is real, not just logged.
+  The temporary test was deleted immediately after.
+- An explicit failure signal (`GET .../fail`) was sent to the real
+  check (same method as both other heartbeats); the dashboard recorded
+  "Status: up -> down" at 18:13, and a "DOWN | Weekly test suite" email
+  was confirmed delivered to the account's inbox at **18:13, the same
+  timestamp**.
+- Restored to "up" immediately after with a normal successful run of
+  the real script; dashboard recorded "Status: down -> up" at 18:16.
+  Saturday's first real run starts from a clean state.
+- `scripts/weekly_full_test_run.py` itself was found, while doing this,
+  to have existed on disk since an earlier session but never been
+  committed to git -- committed in the same change as this section.
+
+**What this does not catch**: same stated limitation as both other
+heartbeats in this file -- a run that starts, reaches the ping, and the
+suite still passed on a result that's quietly wrong (this job proves
+the suite ran clean, not that the suite's own assertions are
+sufficient); a healthchecks.io outage; an email-delivery failure on the
+alerting side. For the margin tripwire specifically, a weekly cadence
+also means a transient change -- `corporate_actions` resuming and then
+going quiet again, or an in-window price row touched and then restored
+-- between two Saturday runs could pass undetected: each run only sees
+the warehouse's state at that moment, not everything that happened
+during the week. See `src/data_layer/margin_tripwire.py` for the exact
+two conditions it does check.
