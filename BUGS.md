@@ -2774,3 +2774,100 @@ attainable post-announcement result look worse by comparison (0th
 percentile instead of 12th) -- it damned the study's TIMING condition,
 it did not flatter it. The family closed regardless, on condition 1
 (bootstrap CI includes zero), independently of this.
+
+## Bug #29: sector_classification covers ~44-48% of entities, and the gap is SYSTEMATIC, not random -- a warehouse-level issue, not a footnote on one HHI
+
+**sector_classification covers ~44-48% of entities, and the gap is
+SYSTEMATIC rather than random -- unmapped entities have roughly 5x
+lower median turnover at basket scale and 18x lower at universe scale,
+and within the October basket every mid-liquidity holding is unmapped
+while every mapped holding is high-liquidity. Any analysis using sector
+data therefore silently computes on the more liquid, more established
+subset. This affects sector-neutral returns, sector tilts and
+sector-based filters in any future study, not only the 2026-10-26
+basket's HHI. Found 2026-11-17.**
+
+**Is the gap fetchable or genuinely absent? Checked, not assumed, not
+fetched (per instruction).** `data/raw/sector/symbol_industry_map.csv`
+(the project's one sector-classification source, used by `src/reports/
+fundamental_snapshot.py::load_sector_map` and everything downstream of
+it) is **byte-identical, symbol-for-symbol and label-for-label, to
+`data/raw/sector/ind_niftytotalmarket_list.csv`** -- 755 rows each, same
+755 symbols, zero mismatched Industry labels. This is not a general NSE
+company classification that was partially ingested; it IS the NIFTY
+Total Market index's own constituent industry tagging, which by that
+index's own published methodology covers only the ~750 largest
+companies by free-float market cap. Nothing was dropped in ingesting
+it -- the file is a complete, faithful copy of its source. **The 77
+unmapped October-basket names and ~820 unmapped universe names are
+missing because they fall outside this index's membership, not because
+of an ingestion failure within this source's own scope.**
+
+Whether NSE (or another source) publishes classification for the
+remaining ~2,000 listed companies outside NIFTY Total Market, and
+whether that is cheaply fetchable, is a **separate, open question this
+repo's own data cannot answer**. Checked for a broader source already
+on disk: Angel One's scrip master (`data/cache/angel_scrip_master_
+2026-11-17.json`, 167,808 instruments) carries no sector/industry field
+at all; no other raw sector file exists in this repo. **Not resolved
+either way -- "cheaply closable" and "permanent" are both still live
+possibilities, pending a check against an actual broader source, which
+was explicitly not performed here.**
+
+**Existing studies checked for inherited bias, per instruction -- report, not fix:**
+
+1. **`FINDINGS.md`'s "Sector concentration diagnostic"** (pre-holdout
+   momentum sector rotation, Study 1 and Study 2) already disclosed a
+   coverage caveat at the time it was written (Study 1/microcap: 44.9%
+   mean mapped, `data/sector_concentration_audit.csv`; Study 2/large-cap:
+   83.6% mean mapped, `data/study2_sector_concentration.csv`) -- but
+   never tested whether that gap was random or systematic. It is now
+   known to be systematic (this entry). The two studies' own coverage
+   gap (44.9% whole-market/microcap vs 83.6% large-cap) is itself
+   independent, structural confirmation of the same liquidity-driven
+   skew just found in the October basket: the more the universe skews
+   toward smaller/less-liquid names, the worse this classification
+   source's coverage gets, because the source is a large-cap index
+   product. The diagnostic's own surviving causal finding ("momentum
+   rotated into Healthcare in 2020, replicated in both the microcap and
+   large-cap universes," `FINDINGS.md` Section 8, post-Section-11
+   amendment) is a DIRECTIONAL, cross-universe-replicated claim, not
+   retracted here -- but its absolute concentration numbers for the
+   Study 1/microcap side specifically (e.g., "37.3% Healthcare") are
+   computed on the same kind of systematically liquid-skewed ~45%
+   subsample this entry describes, and should carry that caveat
+   wherever cited, not just the coverage percentage already stated.
+2. **The fundamental screener** (`src/reports/fundamental_screener.py`,
+   live infrastructure -- `PROJECT_CONTEXT.md`'s own "47 surviving names
+   from 147 momentum candidates"), applied to the momentum top-decile,
+   inherits the SAME ~48% coverage this entry found for the October
+   basket (same construction: momentum top-decile, whole-market
+   universe). Sector's only role in `evaluate_company` is to detect
+   Financial Services and exempt it from leverage checks
+   (`fundamental_screener.py:60`, `:167-169`); an unmapped financial-
+   services company is evaluated WITHOUT that exemption
+   (`sector_known=False` branch, `:443-444`) and could fail the
+   screener's leverage check incorrectly, purely because it is unmapped,
+   not because its leverage is actually a problem. Unquantified here --
+   not measured how many of the screener's current survivors/failures
+   are affected -- but structurally live in a tool still presented as
+   current infrastructure.
+3. **The per-stock weekly study's universe gate**
+   (`src/per_stock/universe.py::screener_gate`, same `evaluate_company`
+   mechanism) is exposed to the same defect in principle, but **checked
+   directly, not assumed**: its universe is the CURRENT top-50-by-
+   turnover entities, not the whole market, and coverage there is 94%
+   (47 of 50 mapped; unmapped: KANOHAR, MILKYMIST, VAML). A much smaller
+   residual than (1) or (2), because this study's own universe
+   construction already pre-filters to the most liquid names, which is
+   exactly the subset this classification source covers best.
+4. **Momentum Study 1/Study 2's own headline CAGR/Sharpe/margin
+   results do NOT use sector data anywhere** -- confirmed by the
+   absence of `sector`/`load_sector_map`/`symbol_industry_map` in any of
+   `run_momentum_backtest.py`, `run_holdout_study1*.py`, `run_study2_
+   largecap*.py`, or `run_momentum_basket_snapshot.py`. Sector only
+   enters via the SEPARATE, explicitly-labeled "does not spend a study
+   slot" diagnostic in item 1 above -- the momentum verdict itself does
+   not inherit this bias.
+
+Not fixed here, per instruction.
