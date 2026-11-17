@@ -2941,19 +2941,55 @@ concretely: **RELIANCE's own `momentum_12_1` is valid through
 2026-10-26, then NaN for every date from 2026-11-02 through 2026-11-17**
 -- a clean cutover at a specific date, not a blanket absence and not
 explained by the panel simply being short of history (it has 327 rows,
-comfortably past the ~273 needed). `load_current_price_panel`'s window
-is a ROLLING `PRICE_LOOKBACK_DAYS`-day truncation (moves forward with
-`as_of` every day, not a fixed historical start) -- the leading
-hypothesis, not confirmed, is that this rolling truncation is now
-landing close enough to the 273-trading-day requirement that something
-(the gap guard, or a jump guard with no `before` cutoff scanning the
-full warehouse per Bug #27/#28/#29's own generalization) is treating
-the truncation's own left edge as a disqualifying gap for an
-increasing share of entities as the rolling window advances. **Still
-not root-caused. This is a standing defect independent of the evening-
-job incident, not a symptom of it** -- recorded separately so it isn't
-mistaken for already fixed once the evening job itself is healthy
-again.
+comfortably past the ~273 needed).
+
+**ROOT CAUSE FOUND, same day, asked to chase the propagation rather
+than RELIANCE specifically.** It is NOT a merge/quantile/cutoff
+propagation bug -- `compute_momentum_universe`'s own merge/groupby/
+dropna/quantile chain is working exactly as designed. Checked directly:
+`mom.groupby('trade_date')['value']` shows 1,520 of 2,317 entities
+non-null on 2026-10-26, then **0 of 2,311 on 2026-11-02, and 0 on every
+date since (2026-11-04, -05, -16, -17)** -- a hard, universe-wide cliff
+on one specific calendar date, affecting every entity simultaneously,
+not RELIANCE specifically (RELIANCE was only the illustrative example
+chased first). Confirmed the calendar itself: `prices_eod` has rows for
+2026-10-26 then jumps straight to 2026-11-02 -- **2026-10-27 through
+2026-10-30 (four weekdays, confirmed NOT NSE holidays by `is_nse_
+holiday`) have ZERO price rows for ANY entity.** `fetch_log` shows why:
+the `NSE_BHAVCOPY_UDIFF` source has an `error` row for 2026-10-27 and
+**no row at all** -- not attempted, not failed, simply never run -- for
+2026-10-28, 2026-10-29, or 2026-10-30 (the `NSE_INDEX_CLOSE_ALL` source
+DOES have rows for all four dates, backfilled in a batch at 2026-10-31
+23:05-06 -- the index data was recovered, the PRICE data never was).
+This is a genuine ~7-calendar-day data gap (Oct 26 to Nov 2), already
+partially known (`OPERATIONS.md`'s "FiboEvening's SYSTEM switch cost
+two forward-test days" and the DuckDB-lock incidents name 2026-10-27
+and 2026-11-03 specifically) but **the 3-day extension, Oct 28-30 never
+even being attempted, does not appear to have been previously caught or
+backfilled.**
+
+**The mechanism, confirmed, not hypothesized**: `factors.momentum.
+compute_momentum`'s own gap guard (`_max_gap_in_window`, `STALE_GAP_
+DAYS=5`) correctly NaNs any `(entity, date)` whose 273-trading-day
+lookback window contains a calendar gap exceeding 5 days -- doing
+exactly what it is designed to do. Because the lookback window is
+RELATIVE (the past ~390 calendar days from whatever "today" is, not a
+fixed historical range), this ONE missing-data gap at Oct 27-30 now
+falls inside the lookback window of EVERY date from 2026-11-02 onward,
+for EVERY entity, and will continue to do so for roughly a year (until
+"today" advances far enough that a 273-trading-day window no longer
+reaches back to late October 2026) -- unless the missing bhavcopy data
+for 2026-10-28/29/30 is backfilled, which should still be possible
+(NSE's bhavcopy archive is a historical archive, not fetched here, not
+confirmed). **This is the actual "propagation": not a code defect in
+the screener, but a single multi-day ingestion gap whose blast radius
+in TIME is far larger than its blast radius in rows** -- three missing
+trading days silently zeroing every live momentum computation for the
+rest of this gap's roughly year-long shadow, with the screener crashing
+outright (Bug #30's original `IndexError`) as the only visible symptom
+anyone would have noticed. Not fixed here (no backfill attempted) --
+the diagnosis was the ask; the missing bhavcopy fetch for 2026-10-28
+through 2026-10-30 is the fix this points to, a separate action.
 
 ## Bug #31: evening job died silently at 20:00 Tuesday 2026-11-17 -- collision-timing evidence, not a reproduced code regression; and a second, independent issue -- the healthchecks.io check can be marked "up" without the job ever running
 
@@ -3012,10 +3048,26 @@ A collision between the job's own `git pull` and an in-flight `git
 commit`/`git add` from active work is not a one-off -- it recurs
 whenever both happen to land close together, and the signature (silent
 failure, zero log lines) is specifically hard to diagnose after the
-fact. Not fixed here, per instruction (report first) -- candidate
-mitigations (serializing the two, widening the collision window check,
-making `pull_before_appending` retry once before raising) are for a
-separate decision, not decided in this entry.
+fact.
+
+**FIXED, 2026-11-18, two layers, same day the risk was reported:**
+(1) `main()`'s own first statement, in both `fibo_evening.py` and
+`fibo_morning.py`, is now a `log()` call -- before argparse, before
+`pull_before_appending`, before anything else that can fail. "Exit 1,
+zero log lines" is now structurally impossible for either job: any
+later failure has at least this one line to be found next to.
+(2) `pull_before_appending` (`src/fibo_live/git_sync.py`) now retries
+`index.lock` contention specifically with the same backoff shape as
+`_open_warehouse_with_retry`'s own DuckDB fix (5 attempts, 3/6/12/24s
+delays) -- transient by nature, same reasoning as the DB case. A
+non-lock failure is still not retried (raises `GitPullError`
+immediately, as before -- waiting does not cure a real conflict). On
+exhausting retries against persistent lock contention: `sys.exit(1)`,
+deliberately bypassing `run_unattended`'s `except Exception` so Task
+Scheduler's own run history shows the failure too, on top of the
+dead-man's switch going overdue. Tests: `tests/test_git_sync_pull_lock_
+retry.py` (5 new tests, mirroring `test_fibo_evening_duckdb_lock_retry.
+py`'s own structure exactly).
 
 **Second, independent issue, found while diagnosing the above: the
 healthchecks.io check can be marked "up" without the evening job
@@ -3045,3 +3097,52 @@ Not fixed here. A mechanism that is NOT clearable by a dashboard click
 (task #78 below, a notification from a different job via a different
 channel) is a partial, independent mitigation, not a fix for this
 specific exposure.
+
+## Bug #32: tests could send real email -- Bug #24's shape in a new place
+
+**Found 2026-11-18, same day `fibo_morning.py`'s `log_refusal` grew its
+own `send_email` call (BUGS.md Bug #31's mitigation).** Had to add an
+explicit `monkeypatch.setattr(fibo_morning, "send_email", ...)` to
+every existing test exercising a REFUSED path, because this laptop's
+`.env` holds real, working Gmail credentials
+(`FIBO_EMAIL_FROM`/`APP_PASSWORD`/`TO`) and `send_email` would otherwise
+attempt a genuine SMTP send on every `pytest` run. **The per-test fix
+handled the instance, not the class** -- exactly Bug #24's own shape
+(a test could reach a real, external, credential-bearing side effect
+because nothing structural stopped it), in a new location: email,
+where Bug #24 was `data/fibo_live/v1/events.jsonl`.
+
+**Swept for other credential-bearing paths a test could reach, per
+instruction -- confirmed safe, not assumed:**
+- **Angel One** (`ANGEL_API_KEY`/`CLIENT_CODE`/`MPIN`/`TOTP_SECRET`):
+  `tests/test_fibo_auth_credential_safety.py` already patches
+  `SmartApi.smartConnect.requests.request` directly and uses a dummy
+  `api_key` -- no real credential or network reachable from any test.
+- **healthchecks.io ping URLs** (`FIBO_EVENING_HEALTHCHECK_URL`,
+  `OPTIONS_DEPTH_HEALTHCHECK_URL`, `WEEKLY_TEST_SUITE_HEALTHCHECK_URL`):
+  every test touching a heartbeat path monkeypatches `requests.get` or
+  the heartbeat function itself (confirmed in Bug #31's own
+  investigation of this exact file set).
+- **git push**: every test that runs a real `git push` subprocess
+  (`test_fibo_git_union_merge.py`, `test_git_sync_pull.py`) targets a
+  `tmp_path`-created bare repo as `origin`, created fresh within the
+  same test -- never this repo's real remote.
+- **Email was the one gap**, because `send_email` is a plain function
+  call, not something `conftest.py`'s existing file-based protections
+  (`_redirect_events_log`, `_protect_production_files`) have any reason
+  to touch.
+
+**FIXED, same day: `tests/conftest.py`'s new autouse `_block_real_email`
+fixture** patches `smtplib.SMTP` itself -- not `fibo_live.notify.
+send_email` (every current caller did `from fibo_live.notify import
+send_email`, binding its own reference at import time; patching the
+attribute on `notify.py` would not reach them, the identical shape of
+mistake `_redirect_events_log`'s own docstring already warns about, for
+a different function). Every caller still reaches `smtplib.SMTP`
+dynamically, so patching the stdlib module is the one place that blocks
+every current AND future call path regardless of which module imported
+what. A test that forgets to mock `send_email` now gets a loud
+`AssertionError`, absorbed by `send_email`'s own fail-soft contract
+into "EMAIL NOT SENT" and `False` -- safe by default, no per-test
+opt-in required, no silent success. Applies to all 717 tests
+automatically; confirmed by running the full suite after adding it.

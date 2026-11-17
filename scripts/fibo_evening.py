@@ -304,6 +304,18 @@ def notify_watchlist_digest(target_trade_date: dt.date, watchlist: pd.DataFrame)
 
 
 def main() -> None:
+    # THE FIRST STATEMENT OF main(), before argparse, before git pull,
+    # before anything that can fail (BUGS.md Bug #31, 2026-11-18): the
+    # 2026-11-17 20:00 crash exited nonzero with ZERO lines in
+    # scheduler.log, because everything that ran before this job's own
+    # first log() call -- pull_before_appending's git subprocess chief
+    # among it -- could fail silently from Task Scheduler's point of
+    # view. Once this line exists, "exit 1, zero log lines" is
+    # structurally impossible: any later failure has at least this one
+    # line to be found next to, and run_unattended's own exception
+    # logging has already proven the log file itself opens cleanly.
+    log("=== FIBO EVENING JOB -- starting ===")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", type=str, default=None, help="YYYY-MM-DD, default: today")
     args = parser.parse_args()
@@ -312,10 +324,11 @@ def main() -> None:
     # the IST laptop for now.
     requested_date = dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(IST).date()
 
-    # FIRST thing this job does, before any append_event call -- see
-    # fibo_live/git_sync.py's pull_before_appending docstring. Raises
-    # (abort, logged loudly via run_unattended) rather than proceeding
-    # against a possibly-stale local events.jsonl.
+    # FIRST thing this job does besides the log line above, before any
+    # append_event call -- see fibo_live/git_sync.py's
+    # pull_before_appending docstring. Raises (abort, logged loudly via
+    # run_unattended) rather than proceeding against a possibly-stale
+    # local events.jsonl.
     pull_before_appending(log)
 
     log(f"=== FIBO EVENING JOB -- requested {requested_date} ===")

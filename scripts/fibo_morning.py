@@ -697,6 +697,13 @@ def log_refusal(trade_date: dt.date, run_mode: str, reason: str) -> None:
 
 
 def main() -> None:
+    # THE FIRST STATEMENT OF main(), before argparse or anything else
+    # that can fail -- same structural fix as fibo_evening.py's main(),
+    # same reasoning (BUGS.md Bug #31, 2026-11-18): a silent exit before
+    # this job's own first log() call would otherwise be exactly as
+    # undiagnosable here as it was for the evening job on 2026-11-17.
+    log("=== FIBO MORNING JOB -- starting ===")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", type=str, default=None, help="YYYY-MM-DD, default: today")
     args = parser.parse_args()

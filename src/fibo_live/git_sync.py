@@ -26,9 +26,19 @@ from __future__ import annotations
 
 import datetime as dt
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 from fibo_live.config import ROOT
+
+# Mirrors data_layer.db's own warehouse-lock retry constants exactly
+# (scripts/fibo_evening.py's DB_OPEN_MAX_ATTEMPTS/DB_OPEN_RETRY_BASE_
+# SECONDS) -- same shape of problem (transient file-lock contention from
+# another process touching the same repo/file at the same moment), same
+# fix. 5 attempts, base 3s, doubling: sleeps of 3/6/12/24s.
+GIT_PULL_MAX_ATTEMPTS = 5
+GIT_PULL_RETRY_BASE_SECONDS = 3
 
 
 def _run_git(*args: str) -> subprocess.CompletedProcess:
@@ -37,11 +47,24 @@ def _run_git(*args: str) -> subprocess.CompletedProcess:
     )
 
 
+def _looks_like_index_lock_contention(output: str) -> bool:
+    """git's own wording for 'another git process is already running
+    here' -- e.g. "fatal: Unable to create '.../.git/index.lock': File
+    exists." -- confirmed transient: it clears the instant the other
+    process's git operation finishes, same as a DuckDB file-lock
+    IOException clears the instant the holder closes the connection."""
+    lowered = output.lower()
+    return "index.lock" in lowered or "unable to create" in lowered
+
+
 class GitPullError(Exception):
-    """Raised by pull_before_appending when the pre-run pull fails --
-    callers must let this propagate (main() aborts, run_unattended logs
-    the full traceback and still exits 0), never catch and continue
-    against a possibly-stale events.jsonl."""
+    """Raised by pull_before_appending when the pre-run pull fails for a
+    reason OTHER than transient index.lock contention (that case retries
+    with backoff and, on exhaustion, calls sys.exit(1) instead -- see
+    pull_before_appending's own docstring for why). Callers must let this
+    propagate (main() aborts, run_unattended logs the full traceback and
+    still exits 0), never catch and continue against a possibly-stale
+    events.jsonl."""
 
 
 def pull_before_appending(log) -> None:
@@ -85,18 +108,62 @@ def pull_before_appending(log) -> None:
     something else is genuinely wrong (no network, a conflict in some
     OTHER tracked file, a corrupted checkout) -- still worth refusing to
     run against, since proceeding on an unknown repo state is exactly
-    the scenario this function exists to prevent."""
-    result = _run_git("pull", "--no-rebase")
-    output = (result.stdout.strip() + " " + result.stderr.strip()).strip()
-    if result.returncode != 0:
-        raise GitPullError(
-            f"git pull --no-rebase failed ({result.returncode}): {output} -- refusing to run "
-            f"against a possibly-stale or conflicted events.jsonl. Resolve manually before "
-            f"re-running (a clean merge of events.jsonl should never conflict -- see "
-            f".gitattributes's merge=union driver -- so a failure here points at something "
-            f"else: no network, a conflict in a different tracked file, or a corrupted checkout)."
-        )
-    log(f"  git pull --no-rebase: {output or 'already up to date'}")
+    the scenario this function exists to prevent.
+
+    RETRY WITH BACKOFF on index.lock contention specifically (BUGS.md
+    Bug #31, 2026-11-18): this job now runs at 20:00 IST, inside the
+    window active development work happens in this same local
+    repository, and a `git commit`/`git add` from that work can hold
+    `.git/index.lock` for the brief moment this job's own `git pull`
+    tries to run -- transient by nature, confirmed in principle the same
+    way `_open_warehouse_with_retry` confirmed DuckDB's file lock is
+    transient (it clears the instant the other process's git operation
+    finishes). Up to `GIT_PULL_MAX_ATTEMPTS` attempts, `GIT_PULL_RETRY_
+    BASE_SECONDS` doubling backoff -- same constants, same shape as the
+    DuckDB fix. A pull failure NOT recognized as lock contention is not
+    retried at all (a real conflict or no network will not resolve
+    itself by waiting) and raises GitPullError immediately, as before.
+
+    On exhausting all attempts against persistent lock contention: calls
+    sys.exit(1), deliberately a SystemExit rather than a raised
+    GitPullError, so it is NOT caught by run_unattended's `except
+    Exception` and actually terminates the process non-zero -- the same
+    reasoning as `_open_warehouse_with_retry`'s own sys.exit(1): Task
+    Scheduler's own run history becomes a second, independent signal on
+    top of the dead-man's switch already going overdue (the heartbeat is
+    never reached either way, from this path or the ordinary
+    GitPullError path)."""
+    output = ""
+    for attempt in range(1, GIT_PULL_MAX_ATTEMPTS + 1):
+        result = _run_git("pull", "--no-rebase")
+        output = (result.stdout.strip() + " " + result.stderr.strip()).strip()
+        if result.returncode == 0:
+            log(f"  git pull --no-rebase: {output or 'already up to date'}")
+            return
+        if not _looks_like_index_lock_contention(output) or attempt == GIT_PULL_MAX_ATTEMPTS:
+            break
+        delay = GIT_PULL_RETRY_BASE_SECONDS * (2 ** (attempt - 1))
+        log(f"  git pull --no-rebase: index.lock contention (attempt {attempt}/{GIT_PULL_MAX_ATTEMPTS}): "
+            f"{output} -- retrying in {delay}s...")
+        time.sleep(delay)
+
+    if _looks_like_index_lock_contention(output):
+        log(f"FATAL: git pull --no-rebase still locked after {GIT_PULL_MAX_ATTEMPTS} attempts: "
+            f"{output}. LIKELY HOLDER: a concurrent git operation (a commit, another pull) in "
+            f"this same working copy -- this job runs at 20:00 IST, inside the window active "
+            f"development work happens here. Action: let the next scheduled run retry, or run "
+            f"this script by hand once the other git operation has finished. Exiting non-zero "
+            f"so this is visible in Task Scheduler's own run history, in addition to the "
+            f"dead-man's switch going overdue.")
+        sys.exit(1)
+
+    raise GitPullError(
+        f"git pull --no-rebase failed ({result.returncode}): {output} -- refusing to run "
+        f"against a possibly-stale or conflicted events.jsonl. Resolve manually before "
+        f"re-running (a clean merge of events.jsonl should never conflict -- see "
+        f".gitattributes's merge=union driver -- so a failure here points at something "
+        f"else: no network, a conflict in a different tracked file, or a corrupted checkout)."
+    )
 
 
 def sync_events_log_to_git(path: Path, log, job_label: str = "Fibo evening events") -> None:

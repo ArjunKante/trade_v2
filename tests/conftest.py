@@ -62,6 +62,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import smtplib
 import stat
 import sys
 from pathlib import Path
@@ -142,6 +143,45 @@ def _redirect_events_log(tmp_path, monkeypatch):
     fake_events_log = tmp_path / "events.jsonl"
     monkeypatch.setattr(fibo_config, "EVENTS_LOG", fake_events_log)
     yield fake_events_log
+
+
+@pytest.fixture(autouse=True)
+def _block_real_email(monkeypatch):
+    """BUGS.md: Bug #24's shape in a new place -- a per-test mock handles
+    one instance, not the class. This laptop's .env holds real, working
+    Gmail credentials (src/fibo_live/notify.py's FIBO_EMAIL_FROM/
+    APP_PASSWORD/TO); without this, a test exercising any REFUSED/setup/
+    trigger/digest notification path that forgets to mock send_email
+    sends a real email from this account. Confirmed necessary, not
+    assumed: tests/test_fibo_morning_refusal_logging.py and tests/
+    test_holiday_week_oct2026.py both needed an explicit per-test mock
+    added 2026-11-18 for exactly this reason, after log_refusal grew its
+    own send_email call -- the gap was real, not hypothetical.
+
+    Patches `smtplib.SMTP` itself, not `fibo_live.notify.send_email` --
+    a module that did `from fibo_live.notify import send_email` (every
+    current caller) binds its OWN reference to the function object at
+    import time, so patching the attribute on notify.py would not reach
+    them (the exact shape of mistake `_redirect_events_log`'s own
+    docstring already warns about, for a different function). Every
+    caller still reaches `smtplib.SMTP` dynamically via `import smtplib`
+    inside notify.send_email, so patching it there is the one place that
+    actually blocks every current AND future call path, independent of
+    which module imported what. `send_email`'s own fail-soft contract
+    (`except Exception: log(...); return False`) absorbs the resulting
+    AssertionError exactly like a real network failure would -- safe by
+    default, no per-test opt-in required. A test that specifically wants
+    to simulate a SUCCESSFUL send still mocks `send_email` itself
+    directly, same as before; that mock is set in the same test, after
+    this fixture runs, and takes precedence."""
+    def _must_not_connect(*args, **kwargs):
+        raise AssertionError(
+            "A test attempted a REAL smtplib.SMTP connection. This must never happen -- "
+            "mock send_email (or whichever function is under test) explicitly instead of "
+            "relying on this fixture to silently absorb it. See tests/conftest.py's "
+            "_block_real_email and BUGS.md's 'tests can send real email' entry."
+        )
+    monkeypatch.setattr(smtplib, "SMTP", _must_not_connect)
 
 
 @pytest.fixture(scope="session", autouse=True)
