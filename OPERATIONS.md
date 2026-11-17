@@ -2523,3 +2523,46 @@ failure and a missing watchlist both land as separate REFUSED emails
 with their own existing reason text, not a diagnosis. Tests:
 `tests/test_fibo_morning_refusal_logging.py`'s `notify_morning_
 refused` section.
+
+## 10 missing trading days backfilled; prices_nse.py's bhavcopy fetch only ever secures the latest day, never revisits a day it missed -- 2026-11-18
+
+**Full detail in `BUGS.md` Bug #30's closing update.** A full-history
+scan found 10 weekday trading days missing from `prices_eod`, all
+confirmed non-holidays: 2026-10-27/28/29/30 and
+2026-11-03/06/09/11/12/13. Six of the ten had **no** `NSE_BHAVCOPY_
+UDIFF` `fetch_log` row at all, while `NSE_INDEX_CLOSE_ALL` had already
+recovered every one of them via its own separate batch catch-up logic
+-- the index source backfills; the equity bhavcopy source does not.
+**Mechanism**: `fibo_evening.py`'s fetch loop walks backward from
+today only until it finds a day that already has data, then stops. If
+today's own fetch succeeds on the first try (the ordinary case), the
+loop never looks further back at all -- so a day missed on its own
+evening is only ever revisited by a RUN THAT ITSELF ALSO FAILS on a
+later day, which is why these came in scattered clusters rather than
+one contiguous block. `assert_data_current` (staleness.py) cannot see
+this either: it only compares "today" against the warehouse's latest
+date, and the latest date kept advancing normally around each gap.
+
+Backfilled all 10 via the existing idempotent
+`data_layer.prices_nse.backfill_range`. Margin tripwire run and passed
+both checks before and after (all 10 dates are outside the sealed
+holdout window; `corporate_actions`/`isin_lineage` untouched) -- 3.50
+and the 2026-10-26 basket file are confirmed, not assumed, unaffected.
+
+**A second cause, not the backfill itself, kept the momentum universe
+empty afterward**: `adjustment_factors` is a fully-recomputed derived
+table (`materialize_adjustment_factors` deletes and reinserts it from
+current `prices_eod`), so the newly-backfilled price rows had no
+matching adjustment-factor rows until it was re-run -- any future
+backfill into `prices_eod` must re-run `materialize_adjustment_
+factors(con)` afterward, or every read path that inner-joins against
+it will silently drop the new rows exactly like this one did.
+
+**Structural fix, built but not yet wired into the evening job**:
+`data_layer.price_gap_detector.find_missing_trading_days(con)` /
+`scripts/run_price_gap_check.py` -- compares `prices_eod`'s full
+history against the NSE holiday master and reports every gap. Run
+against the now-backfilled warehouse: zero gaps found, 2016-01-01
+through 2026-11-17 -- no other undiscovered gaps exist. Whether a
+found gap should auto-backfill or just raise loudly during the evening
+job is an open decision, deliberately left for a separate change.

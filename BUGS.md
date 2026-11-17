@@ -2991,6 +2991,64 @@ anyone would have noticed. Not fixed here (no backfill attempted) --
 the diagnosis was the ask; the missing bhavcopy fetch for 2026-10-28
 through 2026-10-30 is the fix this points to, a separate action.
 
+**CLOSED, 2026-11-18, backfilled and confirmed.** A full-history scan
+(`data_layer.price_gap_detector`, below) found the gap was bigger than
+the four dates above: **10** weekday trading days missing from
+`prices_eod`, all confirmed non-holidays -- 2026-10-27/28/29/30 and
+2026-11-03/06/09/11/12/13. Every one of the six November dates had
+**no** `NSE_BHAVCOPY_UDIFF` `fetch_log` row at all (not even an
+`error`), while `NSE_INDEX_CLOSE_ALL` had already recovered all of
+them via its own, separately-logged batch catch-up -- confirming
+prices_nse.py's per-run bhavcopy fetch only ever secures the *latest*
+trading day; a day it misses on its own scheduled evening is never
+revisited once a later evening succeeds on *its own* day directly, so
+the gap is permanent until someone goes looking for it by hand.
+
+Backfilled all 10 via `data_layer.prices_nse.backfill_range` (the
+existing idempotent fetch path `fibo_evening.py` itself uses) --
+29,704 rows loaded, zero rows lost (none of the 10 turned out to be a
+holiday the calendar had missed). **Margin tripwire run and PASSED
+both checks** (`assert_no_in_window_price_revision`,
+`assert_corporate_actions_and_lineage_still_frozen`) against the
+backfilled warehouse -- confirmed, not assumed: all 10 gap dates are
+outside the sealed holdout window `[2025-04-11, 2026-04-22]`, so no
+in-window price revision occurred, and `corporate_actions`/
+`isin_lineage` are untouched. 3.50's exclusion-list file, the October
+26 basket file, and the holdout access log are all byte-identical
+(`git status`) to before the backfill -- none of the three were
+touched, confirming the user's own reasoning that the basket's
+lookback (ending 2026-10-26) cannot span a gap that starts 2026-10-27.
+
+**Re-checking `compute_momentum_universe()` after the backfill still
+returned ZERO rows -- a second, independent cause, exactly as
+anticipated.** `adjustment_factors` is a fully-recomputed derived
+table (`data_layer.adjustment.materialize_adjustment_factors` deletes
+and reinserts the whole table from current `prices_eod`), not
+something the bhavcopy backfill updates as a side effect -- it had
+**zero** rows for all 10 newly-backfilled dates, so
+`load_current_price_panel`'s `INNER JOIN ... ON af.trade_date =
+p.trade_date` silently dropped every one of the new `prices_eod` rows
+again, leaving the gap intact from the panel's point of view even
+though the raw price data was already fixed. Re-ran
+`materialize_adjustment_factors(con)` (4,793,709 rows, full history) --
+margin tripwire re-run and still PASSED (this step touches neither
+`prices_eod` nor the frozen tables). `compute_momentum_universe()` now
+returns **1,556** rows; top candidate SHREEJISPG at momentum_12_1=2.68.
+**Bug #30 is closed.**
+
+**Structural fix, built but NOT wired in**:
+`data_layer.price_gap_detector.find_missing_trading_days(con)` compares
+every weekday in `prices_eod`'s own `[MIN(trade_date), MAX(trade_date)]`
+against NSE's holiday master and reports anything missing and not a
+confirmed holiday (`scripts/run_price_gap_check.py` is the standalone,
+read-only report; `tests/test_price_gap_detector.py` covers it,
+including the real 10-day shape above). Run against the now-backfilled
+warehouse: **zero gaps found across the full 2016-01-01 to 2026-11-17
+history** -- no older, previously-unknown gaps exist. Deliberately not
+yet wired into `fibo_evening.py`'s own run -- this report is step one;
+whether a found gap should auto-backfill or just raise loudly is an
+open decision for a separate change.
+
 ## Bug #31: evening job died silently at 20:00 Tuesday 2026-11-17 -- collision-timing evidence, not a reproduced code regression; and a second, independent issue -- the healthchecks.io check can be marked "up" without the job ever running
 
 **Incident**: `scripts/fibo_evening.py`'s 2026-11-17 20:00 IST Task
