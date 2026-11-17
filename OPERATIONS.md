@@ -2566,3 +2566,41 @@ against the now-backfilled warehouse: zero gaps found, 2016-01-01
 through 2026-11-17 -- no other undiscovered gaps exist. Whether a
 found gap should auto-backfill or just raise loudly during the evening
 job is an open decision, deliberately left for a separate change.
+
+## Gap detector wired into the evening job: auto-fill recent/unsealed gaps, alert-stop the rest -- 2026-11-18
+
+**Full detail in `BUGS.md` Bug #30's second closing update.**
+`scripts/fibo_evening.py` now calls `data_layer.gap_backfill.
+run_gap_check_and_autofill()` every run, right where it used to call
+`materialize_adjustment_factors()` unconditionally and nothing else. A
+missing trading day auto-fills if it is both recent (<= 30 days old)
+and outside any window a result has been recorded against; otherwise
+the whole run refuses (emails via the existing `notify_evening_skipped`
+path) rather than filling it.
+
+**The blocking set is derived, not a hardcoded date list.** Each sealed
+window carries its own `result_recorded_at` -- the first holdout blocks
+because 3.50 is recorded against it; the second momentum window
+(open-ended since 2026-10-23) does not block today, because nothing has
+been evaluated against it yet. This matters operationally: an earlier
+design blocked the second window unconditionally by date, and since
+that window never closes on its own, every future gap from 2026-10-23
+onward would have been permanently unfillable -- the auto-fill feature
+would have been dead on arrival. Flipping one field on that window's
+record is all a future change needs once a number actually gets
+recorded against it.
+
+**Any auto-fill landing inside the still-open second window is
+audit-logged** to `data/window_fill_audit_log.txt` (dates and row
+counts only, never price or entity-level data) -- so whoever evaluates
+that window later can see exactly which of its dates were mechanically
+backfilled, same discipline this project already applies to its
+persisted exclusion lists.
+
+**Any auto-fill triggers the full downstream rebuild** (adjustment_
+factors, entity panel) and an automatic margin-tripwire re-run before
+the run is allowed to continue -- a tripwire failure at that point
+refuses the same way a human-decision gap does. `isin_lineage`, the
+jump-detection functions, and `index_eod` are deliberately NOT part of
+this rebuild (`gap_backfill.py`'s module docstring has the full
+reasoning for each).

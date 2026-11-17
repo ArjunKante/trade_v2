@@ -112,6 +112,15 @@ def holiday_week(tmp_path, monkeypatch):
     # test_fibo_evening_staleness_ordering.py). Stubbed per this project's
     # "adjacent staleness -- same fact, fix it" standing rule.
     monkeypatch.setattr(fibo_evening, "backfill_index_range", lambda con, start, end, raw_dir: {"ok": 0, "no_data": 0})
+    # Same reasoning, same shape: data_layer.gap_backfill.run_gap_check_
+    # and_autofill has its own separately-bound load_bhavcopy_to_duckdb,
+    # which would call the REAL fetch_raw_zip (faked below to raise
+    # AssertionError for any unexpected date) if this simulation's
+    # incrementally-built prices_eod ever had an internal gap on a given
+    # day of the week being simulated. Stubbed rather than relying on the
+    # week-by-week simulation staying gap-free turn by turn.
+    monkeypatch.setattr(fibo_evening, "run_gap_check_and_autofill",
+                         lambda *a, **k: {"auto_filled": [], "alert": [], "rows_loaded": 0})
 
     # already_notified/record_notification are left as the REAL functions
     # imported into fibo_evening -- their own dedup logic (kind=

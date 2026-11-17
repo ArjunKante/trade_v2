@@ -793,6 +793,25 @@ documentation did not distinguish them until checked. Found 2026-11-17.
 See `PREREGISTRATION.md`'s post-hoc annotation and `FINDINGS.md`
 Section 2's addendum for the full trace and numbers.
 
+**21. Recovery logic that only triggers on repeat failure never recovers
+from isolated failures.** The evening job walked backward for missed
+bhavcopy only when the current day's fetch ALSO failed, so any day
+missed in isolation was never revisited once a later evening succeeded
+on its own. Ten trading days went missing across three weeks in
+scattered clusters, undetected, and NaN'd the momentum factor for every
+entity for roughly a year because the 273-day lookback spanned the gap.
+A four-day operational outage had a one-year blast radius. Same shape
+as Bug #15. Nothing in the system looked backwards until 2026-11-18.
+
+**22. A backfill that does not rematerialize derived tables is worse
+than no backfill.** After the ten gap days were restored to
+`prices_eod`, the momentum universe still returned zero candidates,
+because `adjustment_factors` had no rows for those dates and the
+panel's inner join dropped them again — silently, with the raw data
+now visibly present. Any backfill path must rebuild its full downstream
+chain and verify, or it restores the appearance of correctness without
+the substance.
+
 ---
 
 ## 8. THE STRUCTURAL FINDING

@@ -94,6 +94,16 @@ def isolated_evening_job(tmp_path, monkeypatch):
     monkeypatch.setattr(fibo_evening, "assert_data_current", fixed_as_of_assert_data_current)
     monkeypatch.setattr(fibo_evening, "materialize_adjustment_factors", lambda con: 0)
     monkeypatch.setattr(fibo_evening, "build_watchlist", _fake_build_watchlist)
+    # data_layer.gap_backfill.run_gap_check_and_autofill has its own,
+    # separately-bound load_bhavcopy_to_duckdb/materialize_adjustment_
+    # factors references -- mocking fibo_evening's copies above does not
+    # reach it. This fixture's two seeded dates (Friday, then the fetched
+    # Monday) never actually have a gap between them (only the weekend
+    # falls in between), but stubbed anyway rather than relying on that --
+    # same "don't rely on fixture dates happening to avoid a real side
+    # effect" standard backfill_index_range's own stub below already sets.
+    monkeypatch.setattr(fibo_evening, "run_gap_check_and_autofill",
+                         lambda *a, **k: {"auto_filled": [], "alert": [], "rows_loaded": 0})
     # Pre-existing gap, found while adding the heartbeat (unrelated to it):
     # this test never mocked backfill_index_range, so it was making a real
     # network call to NSE's index archive on every run -- a native access
@@ -177,6 +187,10 @@ def test_still_refuses_when_no_fetch_can_cure_the_gap(tmp_path, monkeypatch):
     # violation crash was observed live doing exactly this. Stubbed, same
     # as every other real side effect in this fixture.
     monkeypatch.setattr(fibo_evening, "backfill_index_range", lambda con, start, end, raw_dir: {"ok": 0, "no_data": 0})
+    # This test actually refuses via StaleDataError before the gap check is
+    # ever reached, but stubbed anyway -- same reasoning as the fixture above.
+    monkeypatch.setattr(fibo_evening, "run_gap_check_and_autofill",
+                         lambda *a, **k: {"auto_filled": [], "alert": [], "rows_loaded": 0})
 
     logged_events = []
     monkeypatch.setattr(fibo_evening, "append_event", lambda kind, payload: logged_events.append({"kind": kind, **payload}))

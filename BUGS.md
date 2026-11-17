@@ -3049,6 +3049,62 @@ yet wired into `fibo_evening.py`'s own run -- this report is step one;
 whether a found gap should auto-backfill or just raise loudly is an
 open decision for a separate change.
 
+**WIRED IN, 2026-11-18**, per explicit instruction: `data_layer.
+gap_backfill.run_gap_check_and_autofill(con, raw_dir, as_of, log)`,
+called from `fibo_evening.py`'s `main()` right where the old
+unconditional `materialize_adjustment_factors()` call used to stand
+alone. Policy, two independent reasons either of which refuses a fill
+(`GapRequiresHumanDecisionError`, same refusal idiom as
+`StaleDataError`/`HolidayCalendarMissing` elsewhere in this file --
+caught in `main()`, emails via `notify_evening_skipped`, returns before
+computing anything):
+
+  1. **Age** -- older than `RECENT_GAP_MAX_AGE_DAYS = 30` ("~30 days"
+     per the instruction).
+  2. **A sealed window with a recorded result** -- DERIVED, not a
+     hardcoded date list: `SealedWindow.blocks()` is true only once
+     `result_recorded_at` is set. The first sealed holdout
+     (`margin_tripwire.HOLDOUT_WINDOW_START/END`) blocks because 3.50 is
+     recorded against it. The second momentum window
+     (`holdout.MOMENTUM_WINDOW_2_START`, open-ended) does **NOT**
+     currently block -- nothing has been evaluated against it yet, and
+     an earlier draft that blocked it unconditionally was rejected after
+     testing against real dates: since that window has no end, every
+     date from 2026-10-23 onward would be permanently ALERT_STOP,
+     forever, making auto-fill unreachable from the day this was built.
+     The day a number IS recorded against window 2, flip its one
+     `result_recorded_at` field -- `classify_gap`'s own loop is generic
+     and needs no new code.
+
+Everything else -- no older window reason, no age reason -- auto-fills,
+then rebuilds the downstream chain (`materialize_adjustment_factors`,
+`materialize_entity_panel`) and re-runs the margin tripwire
+(`TripwireFailedAfterBackfillError` if it fails, same refusal idiom). A
+mix of easy and hard gaps in the same scan fills the easy ones first,
+then raises for the rest -- one unresolved old/sealed gap elsewhere in
+history does not hold an unrelated operational miss hostage.
+
+**Provenance inside the still-open second window**: a fill landing
+inside `MOMENTUM_WINDOW_2`'s span does not block, but is appended to
+`data/window_fill_audit_log.txt` -- dates and row counts only, never a
+price or entity-level value (same discipline as the persisted exclusion
+lists). Whoever evaluates that window later needs to know which dates
+inside it were mechanically backfilled.
+
+`src/data_layer/gap_backfill.py` (module docstring has the full
+downstream-chain rationale, including what is deliberately NOT
+rebuilt -- `isin_lineage`, jump detection, `index_eod` -- and why);
+`tests/test_gap_backfill.py` (17 tests: age/window boundaries, the
+generic derivation proof, the mixed-gap ordering, tripwire-failure
+propagation, the audit log and its no-price-data guarantee).
+Pre-existing `fibo_evening.main()` tests
+(`test_fibo_evening_staleness_ordering.py`,
+`test_holiday_week_oct2026.py`) now stub
+`fibo_evening.run_gap_check_and_autofill` -- it has its own, separately-
+bound `load_bhavcopy_to_duckdb`, so mocking `fibo_evening`'s copy alone
+would not have stopped a real network call if one of those synthetic
+fixtures ever produced an apparent gap.
+
 ## Bug #31: evening job died silently at 20:00 Tuesday 2026-11-17 -- collision-timing evidence, not a reproduced code regression; and a second, independent issue -- the healthchecks.io check can be marked "up" without the job ever running
 
 **Incident**: `scripts/fibo_evening.py`'s 2026-11-17 20:00 IST Task

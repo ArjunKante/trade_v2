@@ -19,6 +19,14 @@ top-200 universe amendment):
      own calendar day on the first try). The watchlist is then computed
      for the NEXT trading day after whatever day that data turns out to
      be, not for "today" or "--date" literally.
+  1b. Check prices_eod's FULL history against the NSE holiday master
+     (data_layer.gap_backfill, BUGS.md Bug #30) for any missing trading
+     day, not just today's. A gap that is recent (<=
+     gap_backfill.RECENT_GAP_MAX_AGE_DAYS) and outside every sealed/
+     holdout window is auto-filled and the downstream chain (adjustment_
+     factors, entity panel) rebuilt, then the margin tripwire is re-run.
+     A gap that is older, or inside a sealed/holdout window, refuses the
+     whole run instead of filling it -- see gap_backfill.py's docstring.
   2. Re-materialize adjustment_factors (needed so that day's adjusted
      close exists before any swing/zone computation reads it).
   3. For every top-200 universe member: Alligator uptrend, most recent
@@ -68,6 +76,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data_layer.adjustment import materialize_adjustment_factors
 from data_layer.db import get_connection
+from data_layer.gap_backfill import (
+    GapRequiresHumanDecisionError,
+    TripwireFailedAfterBackfillError,
+    run_gap_check_and_autofill,
+)
 from data_layer.index_nse import backfill_index_range
 from data_layer.nse_holidays import HolidayCalendarMissing, is_nse_holiday
 from data_layer.prices_nse import load_bhavcopy_to_duckdb
@@ -510,6 +523,25 @@ def main() -> None:
         notify_evening_skipped(requested_date, "stale data", str(e))
         con.close()
         return
+
+    log("Checking full price history for missing trading days...")
+    try:
+        gap_result = run_gap_check_and_autofill(con, RAW_PRICES_DIR, data_date, log, series_include=SERIES_INCLUDE)
+    except GapRequiresHumanDecisionError as e:
+        log(f"REFUSING TO COMPUTE: {e}")
+        notify_evening_skipped(requested_date, "price gap needs review", str(e))
+        con.close()
+        return
+    except TripwireFailedAfterBackfillError as e:
+        log(f"REFUSING TO COMPUTE: {e}")
+        notify_evening_skipped(requested_date, "margin tripwire failed after backfill", str(e))
+        con.close()
+        return
+    if gap_result["auto_filled"]:
+        log(f"  auto-filled {len(gap_result['auto_filled'])} missing day(s), "
+            f"{gap_result['rows_loaded']} rows -- margin tripwire passed.")
+    else:
+        log("  no missing trading days found.")
 
     log("Re-materializing adjustment_factors...")
     n_factors = materialize_adjustment_factors(con)
