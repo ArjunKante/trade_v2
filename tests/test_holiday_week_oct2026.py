@@ -446,6 +446,11 @@ def test_morning_main_logs_refused_session_status_when_calendar_missing(tmp_path
     # with holiday_week's own fixture above, independent of conftest.py.
     monkeypatch.setattr(fibo_morning, "assert_watchlist_current",
                          functools.partial(fibo_morning.assert_watchlist_current, log_path=events_path))
+    # This is a REFUSED (not NON_TRADING_DAY) path -- log_refusal now
+    # calls notify_morning_refused, which calls the REAL send_email.
+    # Never real network in a test (conftest.py's own rule); this
+    # laptop's own .env has real, working Gmail credentials.
+    monkeypatch.setattr(fibo_morning, "send_email", lambda *a, **k: False)
     monkeypatch.setattr(sys, "argv", ["fibo_morning.py", "--date", "2027-01-04"])
 
     def raise_for_2027(d):

@@ -2930,3 +2930,118 @@ infrastructure (`src/reports/screener_web.py`, the fundamental screener
 web app) is presumably affected identically, since it calls the same
 `compute_momentum_universe`. Worth a dedicated look before next relying
 on this tool for a live reading.
+
+**UPDATE, 2026-11-18, after the evening job's Tuesday failure was
+diagnosed (Bug #31 below) and prices caught up to 2026-11-17 for
+real**: **staleness is RULED OUT as the cause.** `compute_momentum_
+universe()` still returns **zero** rows against fully current data
+(`as_of=2026-11-17`, confirmed by direct query, the same run that
+produced tonight's real evening-job watchlist). Traced one entity
+concretely: **RELIANCE's own `momentum_12_1` is valid through
+2026-10-26, then NaN for every date from 2026-11-02 through 2026-11-17**
+-- a clean cutover at a specific date, not a blanket absence and not
+explained by the panel simply being short of history (it has 327 rows,
+comfortably past the ~273 needed). `load_current_price_panel`'s window
+is a ROLLING `PRICE_LOOKBACK_DAYS`-day truncation (moves forward with
+`as_of` every day, not a fixed historical start) -- the leading
+hypothesis, not confirmed, is that this rolling truncation is now
+landing close enough to the 273-trading-day requirement that something
+(the gap guard, or a jump guard with no `before` cutoff scanning the
+full warehouse per Bug #27/#28/#29's own generalization) is treating
+the truncation's own left edge as a disqualifying gap for an
+increasing share of entities as the rolling window advances. **Still
+not root-caused. This is a standing defect independent of the evening-
+job incident, not a symptom of it** -- recorded separately so it isn't
+mistaken for already fixed once the evening job itself is healthy
+again.
+
+## Bug #31: evening job died silently at 20:00 Tuesday 2026-11-17 -- collision-timing evidence, not a reproduced code regression; and a second, independent issue -- the healthchecks.io check can be marked "up" without the job ever running
+
+**Incident**: `scripts/fibo_evening.py`'s 2026-11-17 20:00 IST Task
+Scheduler run exited with **Last Result: 1** (`schtasks /query /tn
+FiboEvening /v`) and left **zero lines** in `data/fibo_live/
+scheduler.log` -- not even the git-pull line that is normally the
+first thing any run logs. Consequence: `prices_eod`/`index_eod` stayed
+at 2026-11-16 for the rest of the night; Wednesday's morning job had no
+fresh watchlist to read.
+
+**Three prime suspects from the previous day's work (`unexplained_jump_
+dates` default removal, the new holdout seal guard, `margin_tripwire`)
+are RULED OUT, confirmed by direct import-graph inspection**: none of
+the three appear anywhere in `fibo_evening.py`'s dependency chain. It
+uses its own, separate `fibo.jump_guard.combined_unexplained_jump_
+dates()` -- not `factors.momentum`/`factors.target` (where the default
+was removed), not `data_layer.holdout`, not `margin_tripwire`.
+
+**A manual diagnostic run (heartbeat URL unset, output captured) did
+NOT reproduce the crash** -- it ran cleanly through git pull, bhavcopy
+fetch, index backfill, the freshness check (PASSED), and adjustment-
+factor re-materialization, with no exception anywhere. No traceback
+exists for the original crash because it would not reproduce. **This
+is evidence AGAINST a reproducible code defect, not proof of one.**
+
+**Collision-timing evidence, found checking `git reflog`**: a real
+commit (`b66665c`) landed in THIS SAME repository at **2026-11-17
+20:01:01 IST** -- 61 seconds after the evening job's exact scheduled
+trigger (`0 20 * * 1-5`). `pull_before_appending()` is the literal
+first action `main()` takes, before any `log()` call succeeds --
+architecturally exactly where a `.git` lock collision with a concurrent
+`git add`/`git commit` in the same working copy would land. Checked
+the code's own exception handling for whether this would actually
+produce the observed zero-log-lines signature: `pull_before_appending`
+raises a plain `GitPullError` (an `Exception` subclass) on a nonzero
+git return code, and `run_unattended`'s `except Exception:` is
+designed to catch and loudly log exactly this (`_run_git` also has a
+60-second subprocess timeout, itself a catchable `Exception` if hit) --
+so a straightforward git-lock failure, by the code as written, SHOULD
+have left a traceback in scheduler.log, not silence. **The timing
+coincidence is real and verified; the exact mechanism that would make
+it silent is not fully explained from the code alone** -- the most
+likely remaining candidate is a failure in opening `scheduler.log`
+itself at that same moment (which would prevent both the normal log
+line AND the exception's own logging from landing), not independently
+confirmed. Could not recover more detail: Windows' Task Scheduler
+Operational event log is disabled (`Get-WinEvent -ListLog` confirms
+`IsEnabled: False`) -- the same known, never-acted-on gap already in
+`PROJECT_CONTEXT.md`'s operational constraints.
+
+**Structural consequence, regardless of the exact mechanism**: the
+evening job now runs at 20:00 IST, which is within the window this
+project's own development work happens in the same local repository.
+A collision between the job's own `git pull` and an in-flight `git
+commit`/`git add` from active work is not a one-off -- it recurs
+whenever both happen to land close together, and the signature (silent
+failure, zero log lines) is specifically hard to diagnose after the
+fact. Not fixed here, per instruction (report first) -- candidate
+mitigations (serializing the two, widening the collision window check,
+making `pull_before_appending` retry once before raising) are for a
+separate decision, not decided in this entry.
+
+**Second, independent issue, found while diagnosing the above: the
+healthchecks.io check can be marked "up" without the evening job
+having run at all.** The 21:00 DOWN alert fired correctly and was
+delivered (confirmed in the inbox). But the check went down->up again
+at 23:16 the same night, with further OK pings at 23:39, 23:48, and
+00:04 -- **with no corresponding Task Scheduler run (history shows
+only the one 8:00 PM, exit-1 run), no `scheduler.log` entries, and no
+`events.jsonl` entries for any of those times.** Ruled out as sources:
+every code path that can call `ping_evening_heartbeat` (grepped
+repo-wide: two call sites, both in `fibo_evening.py`, both gated behind
+a `log()` call that would have left a trace); `weekly_full_test_run.py`
+(reads a different, confirmed-distinct healthchecks.io URL/UUID, never
+the Fibo evening one); every heartbeat-adjacent test (all properly
+monkeypatch `requests.get` or `ping_evening_heartbeat` itself, no real
+network possible); and this session's own actions (never referenced
+the Fibo evening URL). Every ping's User-Agent is `python-requests/
+2.32.5`, consistent with healthchecks.io's own "Ping Now!" dashboard
+button (plausibly implemented server-side in the same stack). **Leading,
+UNCONFIRMED hypothesis: a manual "Ping Now!" click on the dashboard,
+most likely right after the 21:00 DOWN email arrived.** Cannot confirm
+who or what did this. **The operational consequence is what matters
+regardless of cause: this check's "up" status can be produced by an
+action that has nothing to do with the job actually succeeding, which
+defeats the dead-man's-switch's whole purpose the moment it happens.**
+Not fixed here. A mechanism that is NOT clearable by a dashboard click
+(task #78 below, a notification from a different job via a different
+channel) is a partial, independent mitigation, not a fix for this
+specific exposure.

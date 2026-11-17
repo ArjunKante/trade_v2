@@ -2471,3 +2471,55 @@ mark those checks explicit NA ("sector unknown... review manually")
 instead of silently deciding either way. Any future code that reads
 `load_sector_map()`/this file must make the same distinction: unmapped
 is UNKNOWN, a third state, not a default to either side of a binary.
+
+## Evening job died silently at 20:00, 2026-11-17 -- collision-timing evidence, a second masking issue, and a new independent alert -- 2026-11-18
+
+**Incident, full detail in `BUGS.md` Bug #31.** The scheduled 20:00
+evening run exited nonzero with zero log lines; prices stayed one
+trading day stale overnight; Wednesday's morning job had nothing fresh
+to read. A manual diagnostic run did not reproduce the crash. The one
+piece of hard evidence: a real commit landed in this same repository at
+20:01:01, 61 seconds after the job's own trigger -- `pull_before_
+appending()` runs before any logging exists, exactly where a `.git`
+lock collision with concurrent development work would land. **Not
+proven as the exact mechanism, but real enough to treat as a standing,
+recurring risk**: this job now runs at 20:00 IST, inside the window
+this project's own work happens in the same local repository. Running
+the evening job to completion once (as was done to produce Wednesday's
+watchlist) does not close this -- the next collision is a matter of
+timing, not of this specific incident being resolved.
+
+**Second, separate finding from the same incident**: healthchecks.io's
+own "up" status for the Fibo evening check was restored the same night
+by something that was NOT the evening job running -- ruled out every
+code path in this repository (BUGS.md Bug #31 has the full elimination).
+Leading, unconfirmed explanation is a manual "Ping Now!" dashboard
+click. **A dashboard click can silence this check without fixing
+anything it was meant to catch.**
+
+**Mitigation added for the second finding, 2026-11-18: a REFUSED
+morning session now emails independently of healthchecks.io.**
+`scripts/fibo_morning.py`'s `log_refusal` -- the one place every
+refusal path in `main()` already funnels through -- now calls
+`notify_morning_refused()` whenever the status is `REFUSED` (never
+`NON_TRADING_DAY`; a holiday is not alarming). Same idiom as
+`fibo_evening.py`'s own `notify_evening_skipped`: `send_email` is
+fail-soft, `already_notified`/`record_notification` dedupe per
+`trade_date` so the `*/15` schedule re-hitting the same refusal all
+morning sends one email, not nine. **This is deliberately a different
+job, a different trigger condition, and a different channel (email,
+not a ping a dashboard button can satisfy) from the healthchecks.io
+heartbeat** -- the two are meant to fail independently of each other.
+It does not require naming the evening job's cause: "No watchlist_run
+event targets {date}" is already in `StaleWatchlistError`'s own
+message, which is what gets emailed.
+
+**What this still does not catch**: a REFUSED morning session only
+fires once a human is at the point of reading email -- it is not a
+dead-man's-switch on its own (nothing pages anyone if the morning job
+itself never runs, the way healthchecks.io's overdue alert does for
+the evening job). It also does not identify root cause -- a login
+failure and a missing watchlist both land as separate REFUSED emails
+with their own existing reason text, not a diagnosis. Tests:
+`tests/test_fibo_morning_refusal_logging.py`'s `notify_morning_
+refused` section.

@@ -648,6 +648,28 @@ def is_non_trading_day(trade_date: dt.date) -> bool:
         return False
 
 
+def notify_morning_refused(trade_date: dt.date, reason: str) -> None:
+    """A REFUSED morning session (never NON_TRADING_DAY -- a holiday is
+    expected, not alarming) previously told nobody: the only signal was
+    healthchecks.io, which a dashboard click can silence without the
+    underlying problem being fixed (found 2026-11-17/18, the evening-job
+    collision incident). This is an INDEPENDENT signal, a different
+    mechanism, from a different job, that cannot be cleared by clicking
+    anything -- it only stops once a real morning run stops refusing.
+    Mirrors fibo_evening.py's notify_evening_skipped exactly: same
+    dedup idiom (already_notified/record_notification, one email per
+    trade_date no matter how many times the 15-minute schedule re-hits
+    the same refusal), same fail-soft send_email contract."""
+    if already_notified("morning_refused", trade_date):
+        return
+    subject = f"FIBO MORNING REFUSED - {trade_date}"
+    body = f"The morning job for {trade_date} refused to run.\n\nReason: {reason}"
+    if send_email(subject, body, log=log):
+        record_notification("morning_refused", trade_date, reason=reason)
+    else:
+        log("  morning-refused email NOT sent -- will retry next run")
+
+
 def log_refusal(trade_date: dt.date, run_mode: str, reason: str) -> None:
     """The ONE place every refusal path in main() funnels through.
     Logs `reason` to scheduler.log/stdout (as every refusal already did)
@@ -661,11 +683,17 @@ def log_refusal(trade_date: dt.date, run_mode: str, reason: str) -> None:
     a trading day (is_non_trading_day) -- so a holiday reads differently
     from a genuinely missed or broken evening run. Deduplicated per
     (trade_date, reason) by record_session_status -- a 15-minute
-    schedule re-hitting the same refusal all morning logs it once."""
+    schedule re-hitting the same refusal all morning logs it once.
+
+    Email fires for REFUSED only, never NON_TRADING_DAY -- a holiday is
+    not news. See notify_morning_refused's own docstring for why this
+    needs to be a mechanism independent of healthchecks.io."""
     status = NON_TRADING_DAY if is_non_trading_day(trade_date) else REFUSED
     log(f"REFUSING TO RUN ({status}): {reason}")
     if record_session_status(trade_date, "morning", status, reason, run_mode=run_mode) is None:
         log(f"  session_status: identical {status} for {trade_date} already logged today -- not duplicating.")
+    if status == REFUSED:
+        notify_morning_refused(trade_date, reason)
 
 
 def main() -> None:

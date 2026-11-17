@@ -47,6 +47,15 @@ def events_log(tmp_path, monkeypatch):
     # independent of whatever conftest.py does.
     monkeypatch.setattr(fibo_morning, "assert_watchlist_current",
                          functools.partial(real_assert_watchlist_current, log_path=log_path))
+    # UPDATE 2026-11-18: log_refusal now calls notify_morning_refused,
+    # which calls the REAL send_email -- and this laptop's own .env has
+    # real, working Gmail credentials. Without this, every test below
+    # that exercises a REFUSED refusal would attempt a real SMTP send on
+    # every pytest run. Never real network in a test (conftest.py's own
+    # rule) -- mocked here, once, for every test in this file, the same
+    # way test_fibo_evening_heartbeat_wiring.py mocks the evening job's
+    # equivalent call.
+    monkeypatch.setattr(fibo_morning, "send_email", lambda *a, **k: False)
     return log_path
 
 
@@ -164,3 +173,52 @@ def test_main_run_twice_on_the_same_missing_watchlist_logs_once(events_log, monk
 
     events = _session_status_events(events_log)
     assert len(events) == 1
+
+
+# --- notify_morning_refused -----------------------------------------------
+# A REFUSED morning must email -- an independent signal from healthchecks.io,
+# which a dashboard click can silence without the underlying problem being
+# fixed (found 2026-11-17/18, the evening-job collision incident).
+
+def test_log_refusal_emails_on_refused(events_log, monkeypatch):
+    sent = []
+    monkeypatch.setattr(fibo_morning, "send_email",
+                         lambda subject, body, log=print: sent.append((subject, body)) or True)
+    fibo_morning.log_refusal(ORDINARY_WEEKDAY, "LIVE", "No watchlist_run event targets this date")
+    assert len(sent) == 1
+    subject, body = sent[0]
+    assert str(ORDINARY_WEEKDAY) in subject
+    assert "No watchlist_run event targets this date" in body
+
+
+def test_log_refusal_does_not_email_on_non_trading_day(events_log, monkeypatch):
+    sent = []
+    monkeypatch.setattr(fibo_morning, "send_email",
+                         lambda subject, body, log=print: sent.append((subject, body)) or True)
+    fibo_morning.log_refusal(SATURDAY, "REPLAY", "no watchlist_run targets this date")
+    assert sent == []  # a holiday/weekend is expected, not alarming -- no email
+
+
+def test_log_refusal_email_dedupes_across_repeated_calls(events_log, monkeypatch):
+    """The same point as the session_status dedup test, for the email
+    path specifically: a 15-minute schedule hitting the same refusal all
+    morning must send one email, not nine."""
+    sent = []
+    monkeypatch.setattr(fibo_morning, "send_email",
+                         lambda subject, body, log=print: sent.append((subject, body)) or True)
+    for _ in range(9):
+        fibo_morning.log_refusal(ORDINARY_WEEKDAY, "LIVE", "no watchlist_run targets this date")
+    assert len(sent) == 1
+
+
+def test_log_refusal_email_retries_next_call_if_send_failed(events_log, monkeypatch):
+    """send_email failing (no network, bad credentials) must not be
+    treated as "notified" -- the next refusal should try again, same
+    fail-soft/retry contract notify_evening_skipped already has."""
+    monkeypatch.setattr(fibo_morning, "send_email", lambda *a, **k: False)
+    fibo_morning.log_refusal(ORDINARY_WEEKDAY, "LIVE", "no watchlist_run targets this date")
+    sent = []
+    monkeypatch.setattr(fibo_morning, "send_email",
+                         lambda subject, body, log=print: sent.append((subject, body)) or True)
+    fibo_morning.log_refusal(ORDINARY_WEEKDAY, "LIVE", "no watchlist_run targets this date")
+    assert len(sent) == 1  # the first (failed) attempt was not recorded as sent
