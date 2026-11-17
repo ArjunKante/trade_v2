@@ -31,8 +31,18 @@ single multi-arm test, Per-stock counts (stock, rule) combinations under
 one correction, others count one heading each — and no single running
 total survives mixing those units honestly. §3's trial-count table states
 each family's own count and correction separately, which is the form this
-fact actually has. **One strategy passed a clean sealed test. One passes
-under heavy caveats. Everything else enumerated in §5 is closed.**
+fact actually has. **63-day momentum passed its pre-registered sealed
+holdout — all three conditions met, margin +3.50pp against a 3.0pp
+threshold. The verdict stands as pre-registered. But the threshold was
+asserted, not derived (finding #20), and post-hoc calibration against
+5,000 random deciles on the same window places the result at the 92.6th
+percentile, below the 95th-percentile standard this project applies to
+every other study; 8.9% of momentum-blind random deciles clear 3.0pp on
+that window. The result is consistent with a real effect that a
+5-period sample cannot establish at this project's own standard. NO
+RESULT IN THIS PROJECT HAS CLEARED THE 95TH-PERCENTILE BAR ON SEALED
+DATA.** One other result (Fibo) passes under heavy caveats. Everything
+else enumerated in §5 is closed.
 
 The project's real output is not a strategy. It is a method for distinguishing
 a real result from a convincing one, and a long record of ideas that looked
@@ -79,7 +89,7 @@ convincing and were not.
 | Spread estimator validation | Specified, 24 names selected, awaiting market-hours collection |
 | Historical holdout (18-month, `SEALED_HOLDOUT_START`) | **RETIRED.** No window remains under THIS seal for any equity study except IPO listing's unread 199 trades. Two newer, separate seals now exist (next two rows) -- "no sealed window remains" no longer describes the project as a whole, only this specific retired resource. |
 | Earnings-event data (post-earnings-drift family) | **Still SEALED, still unread.** `known_date >= 2025-07-01` in `fundamentals_filings`/`fundamentals_xbrl_facts`. **Family CLOSED at trial 1, 2026-11-16** -- DEV failed Gate conditions 1 (CI includes zero) and 2 (TIMING null at the 0th percentile, decisively), per `EARNINGS_DRIFT_FINDINGS.md`. No sealed read happened and none will. `EARNINGS_DRIFT_PHASE0.md` Section 0, `data/holdout_access_log.txt`. |
-| Second momentum holdout window, declared 2026-11-16, RE-DECLARED 2026-11-17 | **SEALED, unread for evaluation.** `trade_date >= 2026-10-23` (`src/data_layer/holdout.py::MOMENTUM_WINDOW_2_START`, enforced in code via `guard_momentum_rebalance_dates`/`clip_momentum_rebalance_dates`, not just a note). The 2026-07-23 rebalance is permanently EXCLUDED, not sealed -- it was read twice (once directly, once via four unpinned "reproduction" scripts leaking an inflated 7.31-vs-3.64 margin) before any seal caught it; its actual figures are recorded as contaminated, non-evidential observations in `FINDINGS.md` Section 7. Confirmed by index arithmetic, not assumed: nothing computed this session reaches `>= 2026-10-23`. Not read until >=5 rebalance periods accumulate from there, then once, under a preregistration written first. |
+| Second momentum holdout window, declared 2026-11-16, RE-DECLARED 2026-11-17 | **SEALED, unread for evaluation.** `trade_date >= 2026-10-23` (`src/data_layer/holdout.py::MOMENTUM_WINDOW_2_START`, enforced in code via `guard_momentum_rebalance_dates`/`clip_momentum_rebalance_dates`, not just a note). The 2026-07-23 rebalance is permanently EXCLUDED, not sealed -- it was read twice (once directly, once via four unpinned "reproduction" scripts leaking an inflated 7.31-vs-3.64 margin) before any seal caught it; its actual figures are recorded as contaminated, non-evidential observations in `FINDINGS.md` Section 7. Confirmed by index arithmetic, not assumed: nothing computed this session reaches `>= 2026-10-23`. Not read until >=5 rebalance periods accumulate from there, then once, under a preregistration written first. **That preregistration must derive its margin threshold as the 95th percentile of a random-decile null on the DEV period before the window is read -- the first holdout's 3.0pp was asserted, not derived, and found uncalibrated (finding #20, `FINDINGS.md` Section 7).** |
 | Liquidity family | **CLOSED, 2026-11-07.** 4 DEV failures, 2 Phase 1 abandonments, 1 withdrawn measurement. No Study G. See `LIQUIDITY_FAMILY_CLOSED.md`, §10. |
 
 ### Known operational constraints
@@ -307,7 +317,10 @@ check-in. **Pre-committed interpretation recorded before that check-in**
 (`FINDINGS.md` Section 2, 2026-11-16): the holdout's own return is
 concentrated enough (top 10 of 336 entities = 63% of compounded return)
 that a single basket is an extremely weak test either way -- read
-before the outcome, not fitted to it afterward.
+before the outcome, not fitted to it afterward. **Cross-referenced,
+2026-11-18** (`FINDINGS.md` Section 2): the thing a January result would
+be a weak observation OF is itself unestablished at this project's own
+standard -- see finding #20 below.
 
 **FINAL RESTATEMENT, 2026-11-17 -- absent new information. Full
 reasoning and the measured numbers are in `FINDINGS.md` Section 2;
@@ -330,13 +343,33 @@ restated here in summary.**
   explain away one of the 14 in-window transitions and move the
   margin the other direction -- the more likely of the two, since that
   table is frozen by accident, not design. Both are now checked by
-  `src/data_layer/margin_tripwire.py`, not just written down here; not
-  yet wired into any entry point.
+  `src/data_layer/margin_tripwire.py` -- ~~not yet wired into any entry
+  point~~ **WIRED, 2026-11-17** into `tests/test_margin_tripwire.py`'s
+  data-gated `test_live_*` functions (runs in the weekly full-suite job
+  against real data, skips on CI; a failure there produces a real
+  healthchecks.io DOWN email, verified live end to end).
 - **Still open, unchanged**: 3.87, 3.64, and Study 2's 7.30 remain
   unreproducible with no exclusion list ever saved for them; the
   margin's sensitivity to exclusion-set *version* (as opposed to its
   current stability) still needs the as-of fix on the price/lineage
   path.
+
+**FINAL RESTATEMENT, 2026-11-18 -- the threshold the margin clears was
+never calibrated (finding #20 below). Supersedes the framing above as
+"clean pass," not the verdict itself.** 3.0pp was asserted ("within
+noise for a ~6-7 period sample"), never derived -- no standard error or
+MDE calculation backs it anywhere in this project. Calibrated after the
+fact against a 5,000-seed random-decile null on the same already-spent
+window: **+3.50pp sits at the 92.6th percentile, below the 95th-
+percentile bar this project uses everywhere else; 8.9% of random,
+momentum-blind deciles clear 3.0pp outright on this window.** The
+verdict stands -- conditions (a) and (c) are untouched, and this was
+pre-registered and properly earned -- but the record must say the
+margin cleared a bar whose stringency was never established, not a
+calibrated one. **No result in this project has cleared the
+95th-percentile bar on sealed data.** The second momentum window
+(§2's live-state table; `FINDINGS.md` Section 7) is now bound to derive
+its own threshold this way before it is ever read.
 
 ### Fibonacci/ORB intraday — passes with four caveats
 

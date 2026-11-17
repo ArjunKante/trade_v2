@@ -241,6 +241,17 @@ turnover predicts, not a discrepancy.
 > it lands, and should be recorded as one data point rather than read
 > as confirmation or refutation.
 
+**CROSS-REFERENCE, 2026-11-18, added after the blockquote above, not
+into it.** The blockquote says one basket is a weak observation OF the
+holdout result. What it is a weak observation of is itself not
+established at this project's own standard: the holdout's 3.0pp margin
+threshold was asserted, not derived, and calibrates to only the 92.6th
+percentile of a random-decile null on the same window -- below the
+95th-percentile bar this project applies everywhere else
+(`PROJECT_CONTEXT.md` finding #20). A January result, however it lands,
+updates a belief about a strategy whose own sealed-data margin has not
+cleared this project's standard for distinguishing it from chance.
+
 **PRE-COMMITTED, 2026-11-16, before the Bug #26 lineage-contamination
 check below is run:**
 
@@ -739,6 +750,13 @@ be read for evaluation until it has accumulated at least 5 rebalance
 periods -- roughly mid-2027 at the 63-trading-day cadence -- then read
 ONCE, under a preregistration written before that read, the same
 discipline as the first holdout.
+
+**BINDING ON THAT PREREGISTRATION, recorded now so it cannot be
+discovered late: the threshold for this window must be derived as the
+95th percentile of a random-decile null computed on the DEV period,
+before the window is read. The 3.0pp figure used for the first holdout
+was asserted and later found uncalibrated (`PROJECT_CONTEXT.md` finding
+#20). No asserted threshold is acceptable for this read.**
 
 **Rationale.** The first holdout was 5 rebalances over ~13 months,
 essentially one regime (`FINDINGS.md` Section 3: all three momentum
