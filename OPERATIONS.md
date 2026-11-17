@@ -2445,3 +2445,29 @@ going quiet again, or an in-window price row touched and then restored
 the warehouse's state at that moment, not everything that happened
 during the week. See `src/data_layer/margin_tripwire.py` for the exact
 two conditions it does check.
+
+## `data/raw/sector/symbol_industry_map.csv` is a NIFTY Total Market export, not a general industry classification -- 2026-11-18
+
+**Source**: byte-identical, symbol-for-symbol and label-for-label, to
+`data/raw/sector/ind_niftytotalmarket_list.csv` (confirmed directly,
+BUGS.md Bug #29) -- the NIFTY Total Market index's own constituent
+industry tagging. **Ceiling**: that index covers only NSE's ~750
+largest companies by free-float market cap, by its own published
+methodology, out of this project's ~2,700+-entity NSE universe.
+
+**Absence from this file means "outside the index," never
+"unclassified" or "a fetch that failed."** Nothing was dropped
+ingesting it -- it is a complete, faithful copy of its source. The
+coverage ceiling is structural and will not close by re-fetching this
+same source again. Whether NSE publishes classification for the
+remaining ~2,000 listed companies elsewhere, and whether it is cheaply
+fetchable, is open and was explicitly not chased (BUGS.md Bug #29).
+
+**Consequence, found live**: unmapped is NOT the same as "known
+non-financial." `src/reports/fundamental_screener.py`'s leverage-check
+exemption used to default an unmapped company to "not Financial
+Services" and apply the leverage checks anyway -- fixed 2026-11-18 to
+mark those checks explicit NA ("sector unknown... review manually")
+instead of silently deciding either way. Any future code that reads
+`load_sector_map()`/this file must make the same distinction: unmapped
+is UNKNOWN, a third state, not a default to either side of a binary.

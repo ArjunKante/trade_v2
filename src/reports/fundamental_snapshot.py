@@ -530,6 +530,19 @@ def compute_current_valuation(pl: pd.DataFrame, annual: pd.DataFrame, shares: pd
 # ---------------------------------------------------------------------------
 
 def load_sector_map() -> pd.DataFrame:
+    """`SECTOR_MAP_CSV` is NOT a general NSE industry classification --
+    confirmed byte-identical, symbol-for-symbol and label-for-label, to
+    `data/raw/sector/ind_niftytotalmarket_list.csv` (BUGS.md Bug #29).
+    It IS the NIFTY Total Market index's own constituent tagging, which
+    by that index's methodology covers only NSE's ~750 largest companies
+    by free-float market cap. A symbol absent from this map means
+    "outside the index," never "unclassified" or "fetch failed" -- the
+    coverage ceiling is structural (the source's own membership rule)
+    and will not close by re-fetching this file. See OPERATIONS.md for
+    the full note. Every caller of this function must treat an unmapped
+    symbol as UNKNOWN, not as "not Financial Services" or any other
+    default -- see `fundamental_screener.check_tier2`'s `sector_known`
+    handling for the shape of that mistake once it was made."""
     df = pd.read_csv(SECTOR_MAP_CSV)
     df.columns = [c.strip() for c in df.columns]
     return df.rename(columns={"Symbol": "symbol", "Industry": "sector"})

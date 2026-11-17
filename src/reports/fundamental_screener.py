@@ -150,7 +150,7 @@ def check_tier1(pl: pd.DataFrame) -> list[dict]:
 # Tier 2: balance sheet, FY2023+
 # ---------------------------------------------------------------------------
 
-def check_tier2(annual: pd.DataFrame, pl: pd.DataFrame, is_financials: bool) -> list[dict]:
+def check_tier2(annual: pd.DataFrame, pl: pd.DataFrame, is_financials: bool, sector_known: bool) -> list[dict]:
     checks = []
     if annual.empty:
         reason = "no FY2023+ balance-sheet data at all"
@@ -167,6 +167,17 @@ def check_tier2(annual: pd.DataFrame, pl: pd.DataFrame, is_financials: bool) -> 
                         "reason": "sector=Financial Services -- leverage checks not applied"})
         checks.append({"tier": 2, "check": "interest_coverage_min", "status": "SKIPPED (financials)",
                         "reason": "sector=Financial Services -- leverage checks not applied"})
+    elif not sector_known:
+        # BUGS.md Bug #29: this project's one sector source covers only
+        # NIFTY Total Market's ~750 constituents. Defaulting an unknown
+        # sector to "not financials" and running the leverage checks
+        # anyway silently decides, with information the code does not
+        # have, whether the financials exemption should apply. Surfaced
+        # as NA instead -- explicit, reviewed by a human, never guessed
+        # in either direction.
+        reason = "sector unknown -- leverage check not applicable with confidence; review manually"
+        checks.append({"tier": 2, "check": "debt_equity_max", "status": "NA", "reason": reason})
+        checks.append({"tier": 2, "check": "interest_coverage_min", "status": "NA", "reason": reason})
     else:
         borrC, borrN, equity = last.get("borrC"), last.get("borrN"), last.get("equity")
         total_debt = (borrC or 0) + (borrN or 0) if (pd.notna(borrC) or pd.notna(borrN)) else None
@@ -300,7 +311,7 @@ def evaluate_company(con: duckdb.DuckDBPyConnection, mom_row: pd.Series, sector_
     pl = build_quarterly_pl(con, isins)
     annual = build_annual_frame(con, isins)
 
-    checks = check_tier1(pl) + check_tier2(annual, pl, is_financials) + check_tier3(con, entity_id, isins, tercile_df)
+    checks = check_tier1(pl) + check_tier2(annual, pl, is_financials, sector_known) + check_tier3(con, entity_id, isins, tercile_df)
 
     fails = [c for c in checks if c["status"] == "FAIL"]
     nas = [c for c in checks if c["status"] == "NA"]
@@ -441,7 +452,7 @@ def _fmt_check(c: dict) -> str:
 def render_per_company_line(r: dict) -> str:
     sector_note = ""
     if not r["sector_known"]:
-        sector_note = "  [sector unknown -- leverage checks applied without financials exemption]"
+        sector_note = "  [sector unknown -- leverage checks marked NA, review manually (BUGS.md Bug #29)]"
     line = f"#{r['momentum_rank']:>4}  {r['symbol']:<12} {r['name'][:40]:<40} verdict={r['verdict']}{sector_note}"
     if r["verdict"] == "FAIL":
         for c in r["fails"]:

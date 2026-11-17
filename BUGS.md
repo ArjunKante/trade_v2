@@ -2809,10 +2809,24 @@ whether that is cheaply fetchable, is a **separate, open question this
 repo's own data cannot answer**. Checked for a broader source already
 on disk: Angel One's scrip master (`data/cache/angel_scrip_master_
 2026-11-17.json`, 167,808 instruments) carries no sector/industry field
-at all; no other raw sector file exists in this repo. **Not resolved
+at all; no other raw sector file exists in this repo. ~~Not resolved
 either way -- "cheaply closable" and "permanent" are both still live
 possibilities, pending a check against an actual broader source, which
-was explicitly not performed here.**
+was explicitly not performed here.~~ **RESOLVED FOR THIS SOURCE,
+2026-11-18: that framing conflated two different questions.
+`symbol_industry_map.csv`'s OWN coverage ceiling is structural and
+PERMANENT -- it will not close by re-fetching this same source again,
+because the source is a membership list, not a partial download; there
+is nothing more to fetch from it. The genuinely open question is
+narrower: whether a DIFFERENT, broader source exists somewhere that
+would cover the other ~2,000 names. That question is real but explicitly
+NOT WORTH CHASING TODAY -- documented as open (OPERATIONS.md) and left
+there, not pursued further in this entry.** Documented in `OPERATIONS.md`
+("symbol_industry_map.csv is a NIFTY Total Market export...") and in
+`load_sector_map`'s own docstring (`src/reports/fundamental_snapshot.py`)
+-- the file was not renamed (only two call sites reference its literal
+path, but documentation in three places achieves the same clarity
+without a migration risk a rename would carry for no real benefit).
 
 **Existing studies checked for inherited bias, per instruction -- report, not fix:**
 
@@ -2842,16 +2856,36 @@ was explicitly not performed here.**
    from 147 momentum candidates"), applied to the momentum top-decile,
    inherits the SAME ~48% coverage this entry found for the October
    basket (same construction: momentum top-decile, whole-market
-   universe). Sector's only role in `evaluate_company` is to detect
-   Financial Services and exempt it from leverage checks
-   (`fundamental_screener.py:60`, `:167-169`); an unmapped financial-
-   services company is evaluated WITHOUT that exemption
-   (`sector_known=False` branch, `:443-444`) and could fail the
-   screener's leverage check incorrectly, purely because it is unmapped,
-   not because its leverage is actually a problem. Unquantified here --
-   not measured how many of the screener's current survivors/failures
-   are affected -- but structurally live in a tool still presented as
-   current infrastructure.
+   universe). Sector's only role in `evaluate_company` was to detect
+   Financial Services and exempt it from leverage checks -- an unmapped
+   company was evaluated as if KNOWN non-financial, silently.
+
+   **QUANTIFIED, 2026-11-18**: of the 77 unmapped October-basket
+   holdings, evaluated against today's live fundamentals, **4 were
+   wrongly FAILed by this default alone** -- their only fail was
+   `interest_coverage_min`, which would have been skipped under the
+   financials exemption: **WHEELS (Wheels India), UNIVCABLES (Universal
+   Cables), OAL (Oriental Aromatics), AYMSYNTEX (AYM Syntex)**. (None of
+   these four are actually financial-services companies on inspection --
+   the fix below does not claim they should have passed, only that the
+   screener had no basis to decide the check applied to them either
+   way.) Separately, **17 unmapped holdings were silently PASSing** on
+   leverage ratios the screener had no basis to judge as applicable,
+   the fail-open mirror of the same defect.
+
+   **FIXED, 2026-11-18, same commit.** `check_tier2` now takes
+   `sector_known` and, when the sector is unknown (not merely "known
+   non-financial"), marks `debt_equity_max`/`interest_coverage_min` as
+   **NA** with reason "sector unknown -- leverage check not applicable
+   with confidence; review manually" -- neither fail-open nor
+   fail-closed, surfaced explicitly for a human to read. Post-fix
+   verdict distribution among the same 77: FAIL 41->37 (the 4 rescued),
+   PASS 17->0 (all moved to INSUFFICIENT DATA, since their leverage
+   checks are no longer silently resolved), INSUFFICIENT DATA 19->40.
+   No unmapped candidate can reach PASS or FAIL via a guessed leverage
+   judgment anymore. Tests: `tests/test_fundamental_screener.py::
+   test_tier2_leverage_checks_marked_na_when_sector_unknown_not_
+   silently_passed_or_failed`.
 3. **The per-stock weekly study's universe gate**
    (`src/per_stock/universe.py::screener_gate`, same `evaluate_company`
    mechanism) is exposed to the same defect in principle, but **checked
@@ -2870,4 +2904,29 @@ was explicitly not performed here.**
    slot" diagnostic in item 1 above -- the momentum verdict itself does
    not inherit this bias.
 
-Not fixed here, per instruction.
+Items 1, 3, 4 above: report only, nothing fixed, per instruction. Item
+2 (the screener): fixed, per explicit instruction to fix that one
+specifically, after reporting the quantification first.
+
+## Bug #30: compute_momentum_universe()/run_screener() currently return zero live candidates -- found incidentally, not investigated
+
+**Found 2026-11-18 while trying to quantify Bug #29 against a genuinely
+live run (not the frozen 2026-10-26 basket).** `run_screener(con)`
+crashed (`IndexError: single positional indexer is out-of-bounds` on an
+empty `universe` frame). Traced one level: of the 2,562 entities active
+within `fundamental_snapshot.ACTIVE_WINDOW_DAYS` (10 days) of 2026-11-16,
+**zero** have a non-null `momentum_12_1` value from
+`compute_momentum_universe`'s own pipeline; only 31 entities anywhere in
+the panel have a non-null value at all, and every one of them stopped
+trading between 2026-08-17 and 2026-10-26 -- i.e. the only entities with
+a computable momentum value today are ones that are no longer active.
+`load_current_price_panel`'s own lookback window (`PRICE_LOOKBACK_DAYS`)
+starts the panel at 2025-07-04 for an `as_of` of 2026-11-16, which
+should be comfortably more than the ~273 trading days `momentum_12_1`
+needs -- the proximate mechanism was not identified. **Not investigated
+further -- out of scope for the work this entry's sibling (Bug #29) was
+doing, substituted the 2026-10-26 basket instead and said so.** Live
+infrastructure (`src/reports/screener_web.py`, the fundamental screener
+web app) is presumably affected identically, since it calls the same
+`compute_momentum_universe`. Worth a dedicated look before next relying
+on this tool for a live reading.

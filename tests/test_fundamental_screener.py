@@ -80,7 +80,7 @@ def _annual(equity, borrC, borrN, cfo, curL=None, curA=None):
 def test_tier2_debt_equity_and_interest_coverage_skipped_for_financials_but_cfo_checks_still_apply():
     annual = _annual(equity=100.0, borrC=500.0, borrN=0.0, cfo=-10.0)  # D/E=5.0 (would FAIL), CFO negative (should still FAIL)
     pl = _pl(4, revenue=[100] * 4, ni=[10] * 4, ebit=[10] * 4)
-    checks = {c["check"]: c for c in check_tier2(annual, pl, is_financials=True)}
+    checks = {c["check"]: c for c in check_tier2(annual, pl, is_financials=True, sector_known=True)}
     assert checks["debt_equity_max"]["status"] == "SKIPPED (financials)"
     assert checks["interest_coverage_min"]["status"] == "SKIPPED (financials)"
     assert checks["cfo_negative_latest"]["status"] == "FAIL"  # NOT exempted
@@ -89,15 +89,38 @@ def test_tier2_debt_equity_and_interest_coverage_skipped_for_financials_but_cfo_
 def test_tier2_debt_equity_applies_normally_for_non_financials():
     annual = _annual(equity=100.0, borrC=500.0, borrN=0.0, cfo=10.0)
     pl = _pl(4, revenue=[100] * 4, ni=[10] * 4, ebit=[10] * 4)
-    checks = {c["check"]: c for c in check_tier2(annual, pl, is_financials=False)}
+    checks = {c["check"]: c for c in check_tier2(annual, pl, is_financials=False, sector_known=True)}
     assert checks["debt_equity_max"]["status"] == "FAIL"
     assert "5.00x" in checks["debt_equity_max"]["value"]
 
 
 def test_tier2_na_when_no_balance_sheet_at_all():
-    checks = {c["check"]: c for c in check_tier2(pd.DataFrame(), pd.DataFrame(), is_financials=False)}
+    checks = {c["check"]: c for c in check_tier2(pd.DataFrame(), pd.DataFrame(), is_financials=False, sector_known=True)}
     assert all(c["status"] in ("NA", "SKIPPED (financials)") for c in checks.values())
     assert checks["cfo_pat_avg_min"]["status"] == "NA"
+
+
+def test_tier2_leverage_checks_marked_na_when_sector_unknown_not_silently_passed_or_failed():
+    """BUGS.md Bug #29: sector_classification covers only NIFTY Total
+    Market's ~750 constituents. A company outside it must not have its
+    leverage checks silently resolved as if it were known non-financial
+    -- debt_equity_max/interest_coverage_min must come back NA, explicit
+    and reviewable, never a guessed PASS or FAIL, regardless of what the
+    underlying ratios would have been."""
+    # Deliberately clean numbers that would PASS outright if evaluated --
+    # proves this is withheld because the sector is unknown, not because
+    # the ratios themselves are borderline or bad.
+    annual = _annual(equity=100.0, borrC=10.0, borrN=0.0, cfo=10.0)
+    pl = _pl(4, revenue=[100] * 4, ni=[10] * 4, ebit=[10] * 4)
+    checks = {c["check"]: c for c in check_tier2(annual, pl, is_financials=False, sector_known=False)}
+    assert checks["debt_equity_max"]["status"] == "NA"
+    assert checks["interest_coverage_min"]["status"] == "NA"
+    assert "review manually" in checks["debt_equity_max"]["reason"]
+    assert "review manually" in checks["interest_coverage_min"]["reason"]
+    # CFO checks are unrelated to the financials exemption and must still
+    # be evaluated normally regardless of sector knowledge.
+    assert checks["cfo_pat_avg_min"]["status"] == "PASS"
+    assert checks["cfo_negative_latest"]["status"] == "PASS"
 
 
 # ---------------------------------------------------------------------------
