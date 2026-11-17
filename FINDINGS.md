@@ -261,10 +261,13 @@ section at the 2026-10-26 snapshot, not just the 147 recorded holdings.
 Checkpoint: reconstructed top-decile entity set matches the recorded
 147 holdings exactly (cutoff value 0.507271). The reconstructed cross-
 section itself came to 1,466, one short of the recorded 1,467 --
-immaterial to the basket (the 147-entity set is identical either way)
-and consistent with this project's own prior "off by one" pattern for a
-live-detector-dependent exclusion count (`FINDINGS.md` Section 2),
-flagged rather than silently reconciled.
+**UNEXPLAINED, cause not identified, not "immaterial."** The 147-entity
+top-decile set matching exactly is strong evidence the one-entity gap
+does not change the basket's composition -- that is evidence of no
+effect, a lower bar than an explanation of the cause. Per this
+project's own rule, a count that does not reconcile is a defect until
+explained; "explained" has not been reached here, only "shown probably
+harmless."
 
 Sector source: `data/raw/sector/symbol_industry_map.csv`, the same file
 `src/reports/fundamental_snapshot.py`'s `load_sector_map()` already
@@ -295,7 +298,21 @@ squared sector shares, 0-1 scale).
 | Textiles | 1 | 1.4% |
 | Services | 1 | 1.4% |
 
-**Basket HHI (mapped only): 0.1473.**
+**Basket HHI (mapped only): 0.1473 -- COVERAGE-BIASED, SYSTEMATICALLY,
+NOT RANDOMLY. Checked, not assumed: the mapped 70 and unmapped 77 differ
+sharply on every attribute available.** Mapped names: median listing
+age 10.8 years, median 20-day turnover ~Rs 80.6 crore, all 70 are
+high_liq (zero mid/low_liq). Unmapped names: median listing age 6.8
+years, median turnover ~Rs 17.0 crore (4.7x lower), split 48 high_liq /
+29 mid_liq. **The mapped half the HHI is computed on is the older,
+higher-turnover, exclusively-high_liq half of the basket -- every
+mid_liq holding in the basket is unmapped.** 0.1473 describes that
+subset's sector concentration, not the basket's. Unmapped names also
+rank better on average within the basket (median rank 66 vs 86.5 for
+mapped, lower rank = stronger momentum) -- the omitted half is not just
+smaller/younger, it is the somewhat stronger-momentum half too. This
+caveat belongs with the number permanently, not as a one-time mention.
+Script: `scripts/run_momentum_basket_sector_cap_descriptive.py`.
 
 **2. Liquidity-tercile ("market-cap band") distribution, basket
 (n=147, the same high_liq/mid_liq/low_liq bands used throughout this
@@ -331,8 +348,20 @@ basket was drawn from):**
 | Diversified | 3 | 0.5% |
 | Forest Materials | 1 | 0.2% |
 
-**Universe HHI (mapped only): 0.0817.** Universe liquidity-tercile
-distribution: high_liq 616 (42.0%), mid_liq 554 (37.8%), low_liq 296
+**Universe HHI (mapped only): 0.0817 -- SAME COVERAGE BIAS, LARGER
+SAMPLE, DIFFERENT SHAPE THAN THE BASKET'S.** Mapped (646): median
+turnover ~Rs 29.5 crore, 518 of 646 (80%) high_liq, zero low_liq.
+Unmapped (820): median turnover ~Rs 1.6 crore (18x lower), only 98 of
+820 (12%) high_liq, 296 low_liq. Listing age is NOT the driver at
+universe scale (median 10.8 vs 10.7 years, mapped vs unmapped --
+essentially identical) -- unlike the basket, where mapped names were 4
+years older on median. **Turnover/liquidity is the dominant, consistent
+driver of the mapping gap in both the basket and the universe; listing
+age only diverges within the basket's own narrower, high-momentum
+population.** 0.0817 describes the sector concentration of the
+universe's higher-turnover half, not the universe. Universe liquidity-
+tercile distribution (unaffected by sector mapping, recorded
+separately): high_liq 616 (42.0%), mid_liq 554 (37.8%), low_liq 296
 (20.2%).
 
 **Read against the universe, not in isolation**: the basket's HHI
@@ -343,7 +372,12 @@ basket (15.3% -> 11.4%). On liquidity, the basket is concentrated into
 high_liq names far more than the universe is (42.0% -> 80.3%) and
 contains zero low_liq names against 20.2% of the universe. Descriptive
 only -- no claim that this tilt is intentional, informative, or
-persistent.
+persistent. **The 1.8x comparison itself inherits both sides' coverage
+bias** -- it compares the basket's higher-turnover 48% against the
+universe's higher-turnover 44%, not the full basket against the full
+universe. Whether the 1.8x gap would widen, narrow, or hold on complete
+coverage is not established by this measurement, only by one that maps
+the other half.
 
 **The basket is also concentrated by SECTOR, not only by name. The
 existing pre-commitment notes that the top 10 of 336 historical

@@ -61,12 +61,21 @@ p["_tercile"] = p.groupby("trade_date")["_liq"].transform(
     lambda s: pd.qcut(s, 3, labels=["low_liq", "mid_liq", "high_liq"], duplicates="drop")
     if s.notna().sum() >= 3 else pd.Series([np.nan] * len(s), index=s.index)
 )
-liq = p[["entity_id", "trade_date", "_tercile"]]
+liq = p[["entity_id", "trade_date", "_liq", "_tercile"]]
 m = mom.merge(liq, on=["entity_id", "trade_date"]).dropna(subset=["value", "_tercile"])
 
-day = m[m["trade_date"] == snapshot_date].copy()
+day = m[m["trade_date"] == snapshot_date].copy().sort_values("value", ascending=False).reset_index(drop=True)
+day["rank"] = day.index + 1
 print(f"\nCHECKPOINT -- reconstructed cross-section at {snapshot_date.date()}: n={len(day)} "
       f"(expect {basket_record['n_eligible_cross_section']})")
+
+# Listing age: first trade_date for this entity ANYWHERE in the
+# entity-resolved panel (spans ISIN-lineage chains) -- a lower bound,
+# not a true listing date, left-censored at the panel's own 2016-01-01
+# start for anything already trading then.
+first_date = panel.groupby("entity_id")["trade_date"].min()
+day["first_trade_date"] = day["entity_id"].map(first_date)
+day["listing_age_years"] = (snapshot_date - day["first_trade_date"]).dt.days / 365.25
 
 cutoff = day["value"].quantile(1 - DECILE_FRAC)
 top = day[day["value"] >= cutoff].sort_values("value", ascending=False)
@@ -124,20 +133,44 @@ def tercile_breakdown(df, label):
         print(f"  (unclassified) {nanc:>4d}  {nanc / len(df) * 100:>5.1f}%")
 
 
+def mapped_vs_unmapped(df, label):
+    """Is the sector-mapping gap random or systematic? Compares the
+    MAPPED subset the HHI is actually computed on against the UNMAPPED
+    rest on every attribute already in hand."""
+    print(f"\n=== {label}: mapped vs. unmapped, on attributes already in hand ===")
+    g = df.groupby(df["sector"].notna().rename("mapped"))
+    med = g[["listing_age_years", "_liq", "rank"]].median()
+    med.index = med.index.map({True: "mapped", False: "unmapped"})
+    print(med.rename(columns={"listing_age_years": "median_listing_age_yrs",
+                               "_liq": "median_turnover_rs", "rank": "median_rank"}))
+    print("n:", {("mapped" if k else "unmapped"): v for k, v in g.size().to_dict().items()})
+    print("tercile crosstab (mapped x liquidity tercile):")
+    ct = pd.crosstab(df["sector"].notna().map({True: "mapped", False: "unmapped"}), df["_tercile"])
+    print(ct)
+
+
 print("\n" + "=" * 70)
 print(f"BASKET ({len(basket_df)} holdings)")
 print("=" * 70)
 sector_breakdown(basket_df, "BASKET")
 tercile_breakdown(basket_df, "BASKET")
+mapped_vs_unmapped(basket_df, "BASKET")
 
 print("\n" + "=" * 70)
 print(f"UNIVERSE ({len(day)} eligible)")
 print("=" * 70)
 sector_breakdown(day, "UNIVERSE")
 tercile_breakdown(day, "UNIVERSE")
+mapped_vs_unmapped(day, "UNIVERSE")
 
 print("\n" + "=" * 70)
 print("Context, recorded not inferred")
 print("=" * 70)
 min_mom = min(h["momentum_12_1"] for h in recorded_holdings.values())
 print(f"Weakest holding's momentum_12_1: {min_mom:.6f} ({min_mom * 100:.2f}%)")
+
+print(f"\nUniverse-count status: recorded basket says "
+      f"n_eligible_cross_section={basket_record['n_eligible_cross_section']}; this reconstruction gets "
+      f"{len(day)}. UNEXPLAINED, not immaterial -- cause not identified. The 147-entity top-decile set "
+      f"matching exactly is strong evidence the one-entity gap does not change the basket's composition, "
+      f"but that is evidence of no effect, not an explanation of the cause.")
