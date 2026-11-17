@@ -728,8 +728,37 @@ null either holds entity+day fixed and only randomizes intraday
 daily-bar exception (Darvas), anchors its window to start AT the
 entity's own selecting event, never before it. SELECTION nulls cannot
 have this defect by construction (no real selecting signal to precede).
-Momentum has no null of this kind. See `BUGS.md`'s sweep entry for the
-full per-study table and code citations.
+Momentum has no null of this kind. **The dividing line is not horizon
+but anchoring: a null's window must start at the entity's own selecting
+event, never at an arbitrary calendar boundary. Darvas randomizes
+across 20 days and is clean because the window begins at breakout
+confirmation; earnings drift randomized across a year from January 1st
+and is not.** See `BUGS.md`'s sweep entry for the full per-study table
+and code citations.
+
+**20. A margin threshold needs its own calibration evidence, not a
+plausible-sounding sample-size argument.** Study 1's 3.0pp margin
+requirement (`PREREGISTRATION.md`, decision rule (b)) was justified
+only as "within noise for a ~6-7 period sample" -- no standard error,
+variance-of-the-difference, or MDE calculation anywhere backs the
+number 3.0. **UNVERIFIED**, same shape as the Liquidity family's "~5
+regimes" figure: stated in advance (real and valuable -- not fit to the
+result afterward), but never shown to follow from a calculation. Since
+it was asserted rather than derived, it was calibrated after the fact,
+on the already-spent holdout, with a random-decile null (same universe,
+costs, benchmark; nothing about the strategy varied, no new data read):
+the real +3.50pp margin sits at only the **92.6th percentile** of 5,000
+random decile draws over the identical window -- below the 95th-
+percentile bar this project uses everywhere else, and 8.9% of random,
+momentum-blind deciles would have cleared 3.0pp outright on this same
+window. **The verdict stands -- this does not retract Study 1's
+pass.** What it corrects is the record's own description of that pass:
+the margin cleared a bar whose stringency was never established, not a
+calibrated one. A threshold "fixed in advance" is not the same claim as
+a threshold "shown to be stringent," and this project's own
+documentation did not distinguish them until checked. Found 2026-11-18.
+See `PREREGISTRATION.md`'s post-hoc annotation and `FINDINGS.md`
+Section 2's addendum for the full trace and numbers.
 
 ---
 

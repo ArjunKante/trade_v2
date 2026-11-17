@@ -462,12 +462,15 @@ the two.
 revision` for (a), `assert_corporate_actions_and_lineage_still_frozen`
 for (b)) -- the natural location since it sits alongside `data_layer.
 staleness`, the module every price-panel consumer already calls before
-computing anything, per `BUGS.md` Bug #13. Not yet wired into any entry
-point; the functions exist and both currently pass against the live
-warehouse (confirmed 2026-11-17), but nothing calls them automatically
-yet. If either raises -- `FrozenTableResumedError` or `HoldoutWindow
-PriceRevisionError` -- 3.50 must be recomputed and this section
-revisited before the number is cited again.
+computing anything, per `BUGS.md` Bug #13. ~~Not yet wired into any
+entry point~~ **WIRED, 2026-11-17**: `tests/test_margin_tripwire.py`'s
+`test_live_*` functions, data-gated (skip on CI, run for real in the
+Saturday weekly full-suite job per `OPERATIONS.md`'s "Weekly full-suite
+run against real data" section) -- verified live end-to-end, including
+a real "DOWN" email on a forced failure. If either raises --
+`FrozenTableResumedError` or `HoldoutWindowPriceRevisionError` -- 3.50
+must be recomputed and this section revisited before the number is
+cited again.
 
 **Still open, unchanged**: the older figures (3.87, 3.64, Study 2's
 7.30) remain unreproducible, with no exclusion list ever saved for any
@@ -475,6 +478,24 @@ of them; the sensitivity of the margin to exclusion-set VERSION (as
 opposed to whether the window-level set is currently stable) remains
 unmeasured and needs the as-of work on the price/lineage path (`BUGS.
 md`'s resolution-path entry, corrected 2026-11-17).
+
+**ADDENDUM, 2026-11-18 -- the 3.0pp threshold itself was never
+calibrated.** Traced its provenance in `PREREGISTRATION.md`: stated as
+"within noise for a ~6-7 period sample," with no standard-error or MDE
+calculation shown anywhere backing the number 3.0 -- marked UNVERIFIED.
+Since it is asserted, not derived, ran the calibration it never got: a
+5,000-seed random-decile null over the identical already-spent holdout
+window (same universe, same costs, same benchmark, `scripts/run_
+holdout_study1_random_decile_null.py`). **The recorded +3.50pp margin
+sits at the 92.6th percentile of random, momentum-blind decile
+selections -- below the 95th-percentile bar this project uses
+everywhere else, and 8.9% of random deciles clear 3.0pp outright on
+this same window.** The verdict is unaffected -- conditions (a) and (c)
+don't depend on this, and the pre-registration already called a pass
+"weak evidence... on a thin sample" before the holdout was read. What
+changes: the margin clears a bar whose stringency was never
+established, not a calibrated one. Full numbers and the provenance
+trace are in `PREREGISTRATION.md`'s own 2026-11-18 post-hoc annotation.
 
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 

@@ -228,3 +228,71 @@ known-uncertain input with directly measured, low leverage on the
 strategy's headline result -- closed on that basis, not on a live
 re-measurement, which was deliberately not pursued because it could not
 change this conclusion either way.
+
+---
+
+## Post-hoc annotation (2026-11-18) -- the 3.0pp margin threshold's
+provenance, and a calibration check. Does not alter the locked
+pre-registration above, does not reopen the spent holdout, and does not
+retract the verdict.
+
+**Provenance, traced verbatim.** Decision rule (b) above reads in full:
+"The margin is at least 3 percentage points annualized. Below that is
+within noise for a ~6-7 period sample (see below) and would not be
+distinguishable from chance at this sample size." "See below" points to
+the "Sample size" section, which states the holdout is ~6-7
+non-overlapping periods, calls it "a thin base," and says a pass or
+fail at this size is "weak evidence" either way. **No standard error,
+variance-of-the-difference, or minimum-detectable-effect calculation
+for the margin appears anywhere in this document, or anywhere else in
+the repository, backing the specific number 3.0.** This is the same
+shape as `PROJECT_CONTEXT.md` Section 7's prior finding on the Liquidity
+family's "~5 regimes" figure and similar asserted-not-derived
+thresholds: a plausible-sounding number, stated in advance (which is
+real and valuable -- it was fixed before the result existed, so it was
+not fit to it), but not shown to follow from any calculation. **Marked
+UNVERIFIED, the same convention used elsewhere in this project for a
+stated-but-undemonstrated figure.** A real derivation exists for a
+*different*, later, related study (`scripts/run_portfolio_power_calc.py`,
+`PREREGISTRATION_PORTFOLIO.md` Section 7's own MDE calculation) -- that
+work was never retrofitted to this one.
+
+**Calibration check, since the threshold is asserted, not derived.**
+`scripts/run_holdout_study1_random_decile_null.py`: at each of the 5
+holdout rebalance dates, drew a random subset of entities of the same
+size as the real top-decile, from the same point-in-time eligible pool,
+compounded through the same 63-day hold, same turnover-weighted cost
+model, against the same (decile-independent) benchmark. 5,000 seeds.
+Reused the saved, already-produced WINDOW-LEVEL exclusion list
+(`results/exclusions/run_holdout_study1_lineage_check.window_level.
+json`, loaded not recomputed) -- nothing about the strategy varies and
+no new data is read; the window stays exactly as spent.
+
+**The verdict is unaffected and stands: Study 1's holdout was read once
+against a design fixed in advance, and all three conditions passed,
+honestly and correctly.** What this check adds: **the 3.0pp threshold
+itself was never shown to be a stringent bar, and measured here, it is
+not one.** The recorded +3.50pp margin sits at the **92.6th percentile**
+of 5,000 random-decile draws over the identical window -- below the
+95th-percentile bar this project uses everywhere else for a null
+comparison. **8.9% of random, momentum-blind decile selections over
+this exact 5-rebalance window would also have cleared the 3.0pp
+threshold outright**, purely from which stocks happened to be in a
+random tenth of the eligible universe at each of 5 dates. The margin
+condition, as stated, does not reliably separate the real momentum
+selection from chance at this sample size -- which is close to what the
+"~6-7 periods... thin sample" language already warned about in prose,
+now given a number instead of an adjective.
+
+**This does not mean momentum's pass was lucky or should be
+retracted** -- condition (a) (CAGR exceeds benchmark) and condition (c)
+(MaxDD slack) are untouched by this, and the pre-registration's own
+"Interpretation" section already called a pass "weak evidence... on a
+thin sample," not strong evidence, before the holdout was ever read.
+What changes is narrower and more precise: the record must say that the
+margin clears a bar whose stringency was never established, not that it
+cleared a calibrated 95th-percentile-equivalent bar. A future
+pre-registration spending a NEW holdout should derive (or explicitly
+decline to derive, flagged as such) its own margin threshold the way
+`PREREGISTRATION_PORTFOLIO.md` did, rather than asserting one by
+analogy to sample-size intuition.
