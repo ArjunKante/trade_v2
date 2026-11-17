@@ -241,7 +241,7 @@ turnover predicts, not a discrepancy.
 > it lands, and should be recorded as one data point rather than read
 > as confirmation or refutation.
 
-**CROSS-REFERENCE, 2026-11-18, added after the blockquote above, not
+**CROSS-REFERENCE, 2026-11-17, added after the blockquote above, not
 into it.** The blockquote says one basket is a weak observation OF the
 holdout result. What it is a weak observation of is itself not
 established at this project's own standard: the holdout's 3.0pp margin
@@ -251,6 +251,113 @@ percentile of a random-decile null on the same window -- below the
 (`PROJECT_CONTEXT.md` finding #20). A January result, however it lands,
 updates a belief about a strategy whose own sealed-data margin has not
 cleared this project's standard for distinguishing it from chance.
+
+**DESCRIPTIVE ADDENDUM, 2026-11-17 -- measurement only, no strategy
+claim, pre-outcome, committed before the 2027-01-26 check-in.**
+Reconstructed the exact universe-construction pipeline `scripts/run_
+momentum_basket_snapshot.py` used (same exclusions, same liquidity-
+tercile convention) to recover the full 1,467-name eligible cross-
+section at the 2026-10-26 snapshot, not just the 147 recorded holdings.
+Checkpoint: reconstructed top-decile entity set matches the recorded
+147 holdings exactly (cutoff value 0.507271). The reconstructed cross-
+section itself came to 1,466, one short of the recorded 1,467 --
+immaterial to the basket (the 147-entity set is identical either way)
+and consistent with this project's own prior "off by one" pattern for a
+live-detector-dependent exclusion count (`FINDINGS.md` Section 2),
+flagged rather than silently reconciled.
+
+Sector source: `data/raw/sector/symbol_industry_map.csv`, the same file
+`src/reports/fundamental_snapshot.py`'s `load_sector_map()` already
+uses -- on disk since 2026-09-20, before the 2026-10-26 snapshot, so no
+look-ahead. Coverage is partial and stated, not hidden: only 70 of 147
+holdings (47.6%) and 646 of 1,466 universe names (44.1%) match a symbol
+in this map; percentages below are of MAPPED names only, same
+convention as `data/sector_concentration_audit.csv`'s own HHI (sum of
+squared sector shares, 0-1 scale).
+
+**1. Sector distribution, basket (n_mapped=70 of 147):**
+
+| sector | count | share |
+|---|---:|---:|
+| Capital Goods | 20 | 28.6% |
+| Healthcare | 11 | 15.7% |
+| Automobile and Auto Components | 9 | 12.9% |
+| Financial Services | 8 | 11.4% |
+| Chemicals | 5 | 7.1% |
+| Consumer Durables | 2 | 2.9% |
+| Fast Moving Consumer Goods | 2 | 2.9% |
+| Information Technology | 2 | 2.9% |
+| Metals & Mining | 2 | 2.9% |
+| Oil Gas & Consumable Fuels | 2 | 2.9% |
+| Construction | 2 | 2.9% |
+| Power | 2 | 2.9% |
+| Consumer Services | 1 | 1.4% |
+| Textiles | 1 | 1.4% |
+| Services | 1 | 1.4% |
+
+**Basket HHI (mapped only): 0.1473.**
+
+**2. Liquidity-tercile ("market-cap band") distribution, basket
+(n=147, the same high_liq/mid_liq/low_liq bands used throughout this
+project's momentum/portfolio work, already recorded per-holding in the
+basket file itself):** high_liq 118 (80.3%), mid_liq 29 (19.7%),
+low_liq 0 (0.0%).
+
+**3. Same two breakdowns, universe (n=1,466 eligible, the pool the
+basket was drawn from):**
+
+| sector | count | share |
+|---|---:|---:|
+| Financial Services | 99 | 15.3% |
+| Capital Goods | 94 | 14.6% |
+| Healthcare | 62 | 9.6% |
+| Automobile and Auto Components | 42 | 6.5% |
+| Chemicals | 42 | 6.5% |
+| Fast Moving Consumer Goods | 39 | 6.0% |
+| Consumer Services | 39 | 6.0% |
+| Consumer Durables | 36 | 5.6% |
+| Information Technology | 34 | 5.3% |
+| Services | 22 | 3.4% |
+| Power | 20 | 3.1% |
+| Construction | 20 | 3.1% |
+| Metals & Mining | 20 | 3.1% |
+| Oil Gas & Consumable Fuels | 17 | 2.6% |
+| Construction Materials | 15 | 2.3% |
+| Realty | 13 | 2.0% |
+| Telecommunication | 10 | 1.5% |
+| Textiles | 8 | 1.2% |
+| Media Entertainment & Publication | 6 | 0.9% |
+| Utilities | 4 | 0.6% |
+| Diversified | 3 | 0.5% |
+| Forest Materials | 1 | 0.2% |
+
+**Universe HHI (mapped only): 0.0817.** Universe liquidity-tercile
+distribution: high_liq 616 (42.0%), mid_liq 554 (37.8%), low_liq 296
+(20.2%).
+
+**Read against the universe, not in isolation**: the basket's HHI
+(0.1473) is roughly 1.8x the universe's (0.0817). Capital Goods nearly
+doubles its share (14.6% universe -> 28.6% basket); Financial Services,
+the universe's single largest sector, is under-represented in the
+basket (15.3% -> 11.4%). On liquidity, the basket is concentrated into
+high_liq names far more than the universe is (42.0% -> 80.3%) and
+contains zero low_liq names against 20.2% of the universe. Descriptive
+only -- no claim that this tilt is intentional, informative, or
+persistent.
+
+**The basket is also concentrated by SECTOR, not only by name. The
+existing pre-commitment notes that the top 10 of 336 historical
+entities carried 63% of compounded return; sector concentration is a
+separate and additive exposure, measured here before the outcome. A
+result driven by one sector running or stalling is not evidence about
+the momentum signal, and that reading must not be offered afterwards.**
+
+**Context, recorded not inferred, explicitly not a prediction**: the
+weakest holding's trailing `momentum_12_1` was 0.509 -- every one of
+the 147 names had returned 51% or more over its own 12-month-skip-1
+ranking window. This basket was formed after a very strong trailing
+year in small caps. The fact is recorded; no inference is drawn from
+it.
 
 **PRE-COMMITTED, 2026-11-16, before the Bug #26 lineage-contamination
 check below is run:**
@@ -490,7 +597,7 @@ opposed to whether the window-level set is currently stable) remains
 unmeasured and needs the as-of work on the price/lineage path (`BUGS.
 md`'s resolution-path entry, corrected 2026-11-17).
 
-**ADDENDUM, 2026-11-18 -- the 3.0pp threshold itself was never
+**ADDENDUM, 2026-11-17 -- the 3.0pp threshold itself was never
 calibrated.** Traced its provenance in `PREREGISTRATION.md`: stated as
 "within noise for a ~6-7 period sample," with no standard-error or MDE
 calculation shown anywhere backing the number 3.0 -- marked UNVERIFIED.
@@ -506,7 +613,7 @@ don't depend on this, and the pre-registration already called a pass
 "weak evidence... on a thin sample" before the holdout was read. What
 changes: the margin clears a bar whose stringency was never
 established, not a calibrated one. Full numbers and the provenance
-trace are in `PREREGISTRATION.md`'s own 2026-11-18 post-hoc annotation.
+trace are in `PREREGISTRATION.md`'s own 2026-11-17 post-hoc annotation.
 
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 

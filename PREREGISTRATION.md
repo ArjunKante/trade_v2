@@ -231,7 +231,7 @@ change this conclusion either way.
 
 ---
 
-## Post-hoc annotation (2026-11-18) -- the 3.0pp margin threshold's
+## Post-hoc annotation (2026-11-17) -- the 3.0pp margin threshold's
 provenance, and a calibration check. Does not alter the locked
 pre-registration above, does not reopen the spent holdout, and does not
 retract the verdict.

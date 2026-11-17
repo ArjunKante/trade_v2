@@ -318,7 +318,7 @@ check-in. **Pre-committed interpretation recorded before that check-in**
 concentrated enough (top 10 of 336 entities = 63% of compounded return)
 that a single basket is an extremely weak test either way -- read
 before the outcome, not fitted to it afterward. **Cross-referenced,
-2026-11-18** (`FINDINGS.md` Section 2): the thing a January result would
+2026-11-17** (`FINDINGS.md` Section 2): the thing a January result would
 be a weak observation OF is itself unestablished at this project's own
 standard -- see finding #20 below.
 
@@ -354,7 +354,7 @@ restated here in summary.**
   current stability) still needs the as-of fix on the price/lineage
   path.
 
-**FINAL RESTATEMENT, 2026-11-18 -- the threshold the margin clears was
+**FINAL RESTATEMENT, 2026-11-17 -- the threshold the margin clears was
 never calibrated (finding #20 below). Supersedes the framing above as
 "clean pass," not the verdict itself.** 3.0pp was asserted ("within
 noise for a ~6-7 period sample"), never derived -- no standard error or
@@ -693,7 +693,7 @@ rank correlation 0.030. It passed the SELECTION null at the 99th-100th
 percentile, so it genuinely identifies outperforming stocks, and it is
 not momentum in disguise. No tradeable form has been identified: ~~the
 TIMING null showed the post-announcement 60 days is the worst window of
-the year for these names~~ -- **AMENDED, 2026-11-18**: that null's random
+the year for these names~~ -- **AMENDED, 2026-11-17**: that null's random
 entry was not constrained to post-announcement days (48.3% of its draws
 fell before the event's own announcement, unattainable by construction).
 Restricted to achievable post-announcement entries only, the real
@@ -701,7 +701,7 @@ spread sits at the 12th (raw) / 2nd (winsorized) percentile of the
 corrected null, not the 0th -- still underperforming other
 post-announcement entry points on these names, but "the worst window of
 the year" overstates it; "a below-median post-announcement window" is
-the supported claim. **AMENDED FURTHER, 2026-11-18**: read the other
+the supported claim. **AMENDED FURTHER, 2026-11-17**: read the other
 way, those percentiles also say entry timing AMONG attainable days
 barely moves the result -- the selection signal is close to
 time-insensitive within the post-announcement window, not merely "less
@@ -789,7 +789,7 @@ pass.** What it corrects is the record's own description of that pass:
 the margin cleared a bar whose stringency was never established, not a
 calibrated one. A threshold "fixed in advance" is not the same claim as
 a threshold "shown to be stringent," and this project's own
-documentation did not distinguish them until checked. Found 2026-11-18.
+documentation did not distinguish them until checked. Found 2026-11-17.
 See `PREREGISTRATION.md`'s post-hoc annotation and `FINDINGS.md`
 Section 2's addendum for the full trace and numbers.
 
