@@ -2506,6 +2506,45 @@ the table. The detector just does not apply it. This is not a new
 mechanism to invent, only a filter to add to one query in each of two
 functions, propagated through `has_nearby_ca_record`'s own computation.
 
+**CORRECTION, 2026-11-17 -- target redirected, not the existence of the
+gap above.** The paragraph above is still literally true (the
+`corporate_actions` read in both detectors is unfiltered, and the
+columns to fix it with already exist) but it names the wrong primary
+target for THIS drift. `corporate_actions` has been frozen since
+2026-09-19 23:09:03 (727 rows, one `fetched_at` value, confirmed by
+direct query -- see Bug #27's own correction above). An as-of filter on
+a table that never changes cannot explain, and fixing it would not
+stop, any of the observed disagreement across re-runs. The drift traces
+instead to the detectors' OTHER unfiltered read: `prices_eod`/
+`adjustment_factors`, which grow continuously (`fetched_at` up to
+2026-11-16) and feed `boundary_ratio` (`lineage_jump_guard.py:60-67`)
+and `ratio`/`gap_days` (`same_isin_jump_guard.py:51-62`) directly. In
+`find_unexplained_jumps`, the `prices` query is not even restricted by
+the caller's own `before=` cutoff -- only the `lineage_sql` query is;
+the price read that determines `last_pred`/`first_cur`, and therefore
+`boundary_ratio`, runs against the FULL, ever-growing `prices_eod` table
+regardless of what cutoff the caller passed for the transition date
+itself. `find_unexplained_same_isin_jumps` does apply `before` to its
+price read, but every one of the 14/13 in-window transitions found
+below (item 2) is, by definition, a case where new rows appended after
+the original run can still change which pre-existing row pairs cross
+the jump threshold, or shift a boundary ratio enough to cross
+`RATIO_HIGH`/`1/RATIO_HIGH`.
+
+**Corrected priority**: the as-of predicate this project needs most is
+on the PRICE/LINEAGE detection path (`prices_eod`, `adjustment_factors`,
+and `isin_lineage` reads inside both `find_unexplained_jumps` and
+`find_unexplained_same_isin_jumps`), not on the `corporate_actions`
+read. `corporate_actions` remains a real instance of the same missing-
+filter shape (Bug #27, Bug #28 stand as written -- the code defect
+they describe is real) and the fix below should still cover it for
+completeness, but doing ONLY that fix would be a no-op against observed
+drift today: fixing a filter on a table that cannot move changes
+nothing. `corporate_actions` becomes load-bearing again only if that
+table resumes receiving new rows (a future bulk load, a resumed feed) --
+at that point, and not before, its own unfiltered read would start
+contributing drift of its own, on top of the price/lineage path's.
+
 **Scope, counted not guessed**: at least 14 consumers across both
 detectors (`same_isin_jump_excluded_entities`, `unexplained_same_isin_
 jump_entities`, `find_unexplained_same_isin_jumps`, `unexplained_jump_
@@ -2526,3 +2565,154 @@ exists, every future study built on either detector inherits the same
 reproducibility hole Bug #27 and Bug #28 just made visible, and will
 not know it until someone happens to re-run an old check script and
 notice the number moved.
+
+## Holdout-window drift-reachability check, 2026-11-17 -- does the Bug #27/#28 drift mechanism reach the recorded 3.50 margin?
+
+**Answer: no observed or currently-possible drift reaches the holdout
+window [2025-04-11, 2026-04-22] today, and this is a provable property
+of the current exclusion set given forward-only data growth (see the
+next section), not reassurance.** This check does not reopen the
+margin and is not a recomputation -- it asks only whether the figure
+already recorded can move, given what is actually in the warehouse.
+
+**Of the 45 unexplained lineage transitions, 14 have `transition_date`
+inside the window:**
+
+| symbol | isin | predecessor_isin | transition_date | boundary_ratio |
+|---|---|---|---|---|
+| SUMEETINDS | INE235C01028 | INE235C01010 | 2025-07-03 | 24.464 |
+| INDOTHAI | INE337M01021 | INE337M01013 | 2025-09-15 | 1.714 |
+| MCX | INE745G01043 | INE745G01035 | 2026-01-02 | 0.202 |
+| SKMEGGPROD | INE411D01023 | INE411D01015 | 2026-01-12 | 0.465 |
+| AJMERA | INE298G01035 | INE298G01027 | 2026-01-14 | 0.203 |
+| KOTAKBANK | INE237A01036 | INE237A01028 | 2026-01-14 | 0.197 |
+| BESTAGRO | INE052T01021 | INE052T01013 | 2026-01-16 | 0.068 |
+| DELPHIFX | INE726L01027 | INE726L01019 | 2026-02-13 | 0.073 |
+| ANGELONE | INE732I01021 | INE732I01013 | 2026-02-26 | 0.099 |
+| VGL | INE273D01027 | INE273D01019 | 2026-03-02 | 0.539 |
+| AQYLON | INE416A01051 | INE416A01044 | 2026-03-05 | 0.105 |
+| SILVERTUC | INE625X01026 | INE625X01018 | 2026-03-06 | 0.105 |
+| V2RETAIL | INE945H01021 | INE945H01013 | 2026-03-25 | 0.102 |
+| PASHUPATI | INE124Y01028 | INE124Y01010 | 2026-04-17 | 0.099 |
+
+**Of the 292 canonical (`gap_days<=5`) unexplained same-ISIN jump rows
+(82 entities), 13 have `jump_date` inside the same window:**
+
+| symbol | isin | prev_date | jump_date | ratio | gap_days |
+|---|---|---|---|---|---|
+| ABFRL | INE647O01011 | 2025-05-21 | 2025-05-22 | 0.334 | 1 |
+| TATAMOTORS | INE155A01022 | 2025-10-13 | 2025-10-14 | 0.598 | 1 |
+| AIIL | INE206F01022 | 2026-01-12 | 2026-01-13 | 0.216 | 1 |
+| SADHNANIQ | INE888C01040 | 2026-02-17 | 2026-02-18 | 0.296 | 1 |
+| INFOBEAN | INE344S01016 | 2026-02-26 | 2026-02-27 | 0.258 | 1 |
+| CUPID | INE509F01029 | 2026-03-06 | 2026-03-09 | 0.228 | 3 |
+| ECLERX | INE738I01010 | 2026-03-12 | 2026-03-13 | 0.500 | 1 |
+| METROPOLIS | INE112L01020 | 2026-03-19 | 2026-03-20 | 0.242 | 1 |
+| MAHAPEXLTD | INE843B01013 | 2026-03-19 | 2026-03-20 | 0.445 | 1 |
+| KILITCH | INE729D01010 | 2026-03-23 | 2026-03-24 | 0.487 | 1 |
+| HIRECT | INE835D01023 | 2026-03-25 | 2026-03-27 | 0.452 | 2 |
+| IRB | INE821I01022 | 2026-03-27 | 2026-03-30 | 0.541 | 3 |
+| RMDRIP | INE219Y01026 | 2026-04-09 | 2026-04-10 | 0.594 | 1 |
+
+None of this is new exposure: all 14+13 are already inside the
+exclusion lists `run_holdout_study1_lineage_check.py` used to produce
+the recorded 3.50 figure (verified directly against `results/
+exclusions/run_holdout_study1_lineage_check.window_level.json` -- 13 of
+its own 40 `jump_dates` entries fall inside the window, which is
+expected: the window-level correction exists specifically to mask
+in-window transitions, not a sign of new drift).
+
+**Of the entities added since the pinned 78/79-entity snapshot
+(`before=2026-09-28`), zero have jump dates inside the window:**
+
+| symbol | isin | jump_date | inside window? |
+|---|---|---|---|
+| AASTHA | INE2FMX01012 | 2026-09-28 | no |
+| MOLDTKPAC | INE893J01029 | 2026-10-09 | no |
+| CONCORDBIO | INE338H01029 | 2026-11-04 | no |
+
+**This is the pre-committed "none" branch.** Per the user's own
+pre-commitment: recorded as a property, with proof, not as reassurance.
+
+**Property**: under window-level correction, the recorded 3.50 margin
+is structurally immune to same-ISIN exclusion-set drift, because (a)
+the three entities added since the pinned snapshot all have jump dates
+after 2026-04-22, outside the holdout window, so their addition changes
+the live 79->82 entity count but reads nothing the 3.50 computation
+touches; and (b) the next section establishes that `prices_eod` grows
+forward-only -- no row with a `trade_date` inside [2025-04-11,
+2026-04-22] has ever been written with a `fetched_at` after the window
+closed, so no future ingestion can retroactively manufacture a new
+in-window jump out of data that already exists for that range. The
+only way a same-isin jump gets a `jump_date` inside the window at all
+is if that trade-date pair already existed with that date -- which
+means it was already present (and already counted, if unexplained)
+when the 3.50 figure was computed.
+
+**Condition under which this stops holding**: a future run of either
+detector reporting an unexplained jump/transition with `transition_
+date`/`jump_date` inside [2025-04-11, 2026-04-22] that is not already
+one of the 14+13 listed above. Structurally, that requires either (a)
+`prices_eod` starts being backfilled retroactively for dates inside the
+window in a way that newly crosses the ratio threshold for an
+already-existing row pair -- checked in the next section, no evidence
+of this happening anywhere in the warehouse to date -- or (b) a new
+ISIN-lineage transition is recorded with a `known_date` inside the
+window -- not checked here, not ruled out structurally, and the one
+way this property could still fail even if (a) never happens.
+
+## Exclusion-set growth source, 2026-11-17 -- forward trading days, not retroactive backfill
+
+**Answer: forward growth, not retroactive backfill -- evidenced, not
+assumed.**
+
+`fetched_at` lag for the 3 entities added since the pinned snapshot
+(each `trade_date` == its own `jump_date`):
+
+| symbol | isin | trade_date | fetched_at | lag (days) |
+|---|---|---|---|---|
+| CONCORDBIO | INE338H01029 | 2026-11-04 | 2026-11-04 18:30:19 | 0 |
+| MOLDTKPAC | INE893J01029 | 2026-10-09 | 2026-10-11 20:48:30 | 2 |
+| AASTHA | INE2FMX01012 | 2026-09-28 | 2026-10-08 23:38:58 | 10 |
+
+All three were fetched within days of their own trade date, not
+inserted long after as a historical backfill would look.
+
+**Repo-wide check, not limited to these 3 entities**: zero rows in
+`prices_eod` anywhere in the warehouse have `trade_date < 2025-04-11`
+AND `fetched_at > 2026-09-20` (query result: 0 rows). If retroactive
+backfill into the holdout window's calendar range were happening at
+all, this query would show it directly; it does not, for any entity.
+
+**Lag-day distribution for every row fetched since 2026-09-20** (the
+date `corporate_actions`/`isin_lineage` froze), ~85k rows:
+
+| lag (days) | rows |
+|---|---|
+| 0 | 35,492 |
+| 1 | 11,836 |
+| 2 | 5,880 |
+| 3 | 2,950 |
+| 7 | 2,934 |
+| 8 | 2,930 |
+| 9 | 2,929 |
+| 10 | 2,944 |
+| 13 | 2,926 |
+| 14 | 2,927 |
+| 15 | 2,928 |
+| 16 | 2,921 |
+| 17 | 2,942 |
+
+Clean 0-17 day range, no long tail, heavily clustered at 0-3 days --
+the signature of ordinary same-day-to-few-weeks ingestion catching up
+to the calendar as trading days occur, not historical backfill filling
+old gaps. There is no gap in this distribution that would indicate a
+batch of old rows being inserted together long after their trade date.
+
+**Consequence for the reachability property above**: because growth is
+forward-only, a historical window that has already closed (the
+holdout's [2025-04-11, 2026-04-22]) cannot acquire new rows inside it
+from future ingestion -- new `fetched_at` activity only ever lands on
+recent `trade_date`s. This is the structural mechanism behind the
+reachability property recorded above, not an independent reassurance:
+the two findings are one proof, not two separate pieces of good news.

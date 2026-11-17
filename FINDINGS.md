@@ -382,8 +382,14 @@ pre-registered design, and all three conditions passed.
 The margin does not stand the same way. Computed at **+3.87** at read
 time against the 3.0 threshold. Subsequent corrections gave 3.64, 3.50,
 and 5.97, each clearing 3.0 when run. **None of these four numbers is
-reproducible.** All four depend on `corporate_actions` state at the
-moment the computation ran. The margin has never been reproducibly
+reproducible.** ~~All four depend on `corporate_actions` state at the
+moment the computation ran.~~ **CORRECTED, 2026-11-17**: `corporate_
+actions` has been frozen since 2026-09-19 and cannot be the moving part
+-- the dependency is on `prices_eod`/`adjustment_factors` state (which
+grow continuously) feeding the detectors' own ratio/boundary
+computation, not on the corporate-actions match. See `BUGS.md`'s
+resolution-path entry, corrected the same day, for the full redirection.
+The margin has never been reproducibly
 quantified; its sensitivity to warehouse state is unmeasured; and
 whether the pass depended on contaminated entities is therefore **OPEN**
 -- not "resolved at 3.50," not "bounded by a 3.50-5.97 range."
@@ -396,6 +402,28 @@ reported 7.30 (the table above) is **also unreproduced**: re-running
 cause undiagnosed (`BUGS.md` Bug #27). Lower stakes -- Study 2 was
 CV-only, no holdout spent -- but it does not sit in this record as
 verified either.
+
+**ADDENDUM, 2026-11-17 -- structural stability of 3.50 specifically,
+not a reopening.** Checked whether the drift mechanism above can
+actually reach the holdout window [2025-04-11, 2026-04-22]: of 45
+unexplained lineage transitions, 14 fall inside it; of 82 canonical
+same-ISIN entities, 13 do: all already inside the exclusion lists that
+produced 3.50, none new. Of the 3 entities added to the same-ISIN set
+since the pinned 79-entity snapshot, zero have jump dates inside the
+window. Because `prices_eod` is confirmed forward-growth-only (no row
+with a `trade_date` before the window's close has ever been written
+with a `fetched_at` after it), a closed historical window cannot
+acquire a new in-window jump from future ingestion. **Property:** under
+window-level correction, 3.50's inputs cannot move from same-ISIN
+drift as currently observed, and will keep not moving unless a future
+run reports a NEW unexplained jump/transition dated inside the window
+itself -- the one failure mode not ruled out here. This does not make
+3.50 reproducible from first principles, and does not un-OPEN the
+margin -- it establishes that the specific drift mechanism already
+observed elsewhere does not, in fact, reach this particular number.
+Full transition/entity lists and the forward-growth evidence are in
+`BUGS.md`'s "Holdout-window drift-reachability check" and "Exclusion-
+set growth source" entries, both 2026-11-17.
 
 ## 3. The mechanism in the holdout: downside protection, not upside capture
 
