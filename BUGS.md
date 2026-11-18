@@ -3530,11 +3530,46 @@ numbered checks above) and does NOT touch `entity_prices_daily` either
 authorized`'s own fresh `prices_eod`x`isin_lineage`x`adjustment_factors`
 join, per that function's own docstring). What specifically moved is
 NOT identified -- the "frozen inputs" proof above and this "data, not
-code" result are in direct tension, and resolving that tension needs
-more than the remaining timebox allowed (one candidate, not checked:
-whether `prices_eod` carries undeduplicated multiple-revision_seq rows
-for some (isin, trade_date) that a bare `SELECT *` -- unlike `data_
-layer.db.read_latest` -- would double-count). Stopped here per
-instruction; margin status unchanged (OPEN, unreproducible, Section 2's
-verdict itself not affected either way) -- finding the mechanism
+code" result are in direct tension.
+
+**The one untested candidate from above, RULED OUT, 2026-11-19**:
+`SELECT isin, trade_date, COUNT(*) FROM prices_eod GROUP BY 1,2 HAVING
+COUNT(*) > 1` returns **zero rows** -- no duplicate (isin, trade_date)
+pairs exist anywhere in `prices_eod`, in the holdout window or out of
+it. The bare, undeduplicated `SELECT` in `read_full_entity_panel_
+authorized`/`read_adjusted_prices`/`materialize_entity_panel` is not
+currently a live defect (there is nothing to double-count), so this is
+NOT the tenth instance of "fixed where noticed, not everywhere the
+pattern recurs" -- the premise (duplicates existing) is false, not
+confirmed-and-unpropagated. Worth re-running this exact query
+periodically regardless, since the defect SHAPE (no revision_seq dedup
+on a read path) is real even with zero current duplicates; not elevated
+to its own bug entry for lack of a live instance.
+
+Resolving the "frozen inputs vs. data moved" tension needs more than
+the remaining timebox allowed. Stopped here per instruction; margin
+status unchanged (OPEN, unreproducible, Section 2's verdict itself not
+affected either way) -- finding the mechanism
 restores a number, not a verdict, and does not block anything else.
+
+**Incident from this same test, caught and fixed, verified by hash not
+inspection**: `git worktree remove` on the e9aa5e0 worktree deleted the
+real `results/exclusions/*.json` files in the MAIN repo -- `results`
+had been junction-linked (not copied) from the worktree back to the
+live directory so the old script could save/compare against real
+exclusion lists, and the worktree-removal cleanup treated the junction
+as content it owned. Restored via `git checkout HEAD -- results/`
+immediately; `git status` showed clean after. Verified properly
+afterward: ran `load_exclusion_list` (which recomputes `content_hash`
+from `components` and raises `ValueError` on any mismatch, per `src/
+data_layer/exclusion_list.py`'s own design) against all 9 files in
+`results/exclusions/`. The 5 real exclusion-list records (`run_holdout_
+study1_bug11_check`, `run_holdout_study1_lineage_check.entity_level`,
+`.window_level`, `run_momentum_backtest_bug11_check`, `run_study2_
+largecap_bug11_check`) all pass: recomputed hash matches recorded hash.
+The other 4 (`*.stub.json`) raise `KeyError: 'components'` -- not a
+restore failure, their own intentional `{"status": "NOT_RECOVERABLE",
+...}` schema never had a `components`/`content_hash` field to begin
+with (they mark permanently-unreproducible figures, e.g. the original
+3.87, that predate this persistence mechanism). See OPERATIONS.md for
+the standing hazard note this incident produced.

@@ -2604,3 +2604,43 @@ refuses the same way a human-decision gap does. `isin_lineage`, the
 jump-detection functions, and `index_eod` are deliberately NOT part of
 this rebuild (`gap_backfill.py`'s module docstring has the full
 reasoning for each).
+
+## HAZARD: `git worktree remove` can delete real files in `results/` -- 2026-11-19
+
+**`results/` holds this project's persisted exclusion lists
+(`results/exclusions/*.json`, `src/data_layer/exclusion_list.py`) --
+real, committed, reproducibility-critical artifacts, not disposable
+cache.** A one-off investigation (BUGS.md Bug #34's code-vs-data test)
+created a `git worktree` at an old commit and junction-linked that
+worktree's `results` directory back to the SAME live directory in the
+main repo (so the old code being tested could read/compare against the
+real, current exclusion lists without a copy). `git worktree remove`'s
+own cleanup does not know the junction's target is shared, owned
+content living elsewhere -- it deleted the real files in the main
+repo's `results/exclusions/` as part of removing the worktree.
+
+**Caught immediately by `git status` showing unexpected deletions in
+the main working tree** (not expected, since worktree operations are
+supposed to be isolated) -- restored via `git checkout HEAD --
+results/`, then verified every restored file's `content_hash` actually
+recomputes correctly (`load_exclusion_list`), not just that the files
+visually looked present. See BUGS.md Bug #34 for the full incident and
+verification.
+
+**The rule, going forward: never junction- or symlink-link a worktree's
+`results/` (or any directory containing real, non-gitignored project
+artifacts) back to the main repo's live directory.** If a worktree
+needs to read real data that `git` itself won't check out into it
+(this project's pattern is `data/`, gitignored, linked the same way for
+the SAME test and NOT affected by this incident -- `git worktree
+remove` correctly left `data/warehouse.duckdb`'s hardlink alone, only
+the `results/` junction was destructive), either: copy the needed files
+into the worktree instead of linking them, or link only a file the
+worktree's own code writes to-and-reads-from exclusively (never a
+directory the MAIN repo also treats as its own), or avoid a worktree
+entirely for that case (e.g. `git show <commit>:path > tempfile` to
+extract old code, run it with `ROOT` pointed at the real repo directly,
+no worktree at all). This is a `git worktree`/junction interaction
+hazard, not a `data_layer.exclusion_list` defect -- that module's own
+design (never falling back to recomputation, verifying by content hash)
+is exactly what caught this quickly once it happened.
