@@ -3276,3 +3276,35 @@ lives only where it was written doesn't survive).
 
 **Closes when**: it's determined whether a lineage transition can be
 created or changed by prices inside the 30-day auto-fill window.
+
+**DETERMINED, 2026-11-18: confirmed, not narrow.** Built two synthetic
+warehouses (in-memory, no real data touched) reproducing the real
+ISIN-reissue shape `isin_lineage.py`'s own docstring cites (same
+issuer+type, increasing serial), and ran `build_lineage()` before and
+after filling in an ordinary missing day:
+
+  1. A successor ISIN's recorded first trading day was 2 days late
+     because the evening job missed its real first two days --
+     `known_date` (the transition date) came out as the later, wrong
+     date. Backfilling those two ordinary missing days shifted
+     `known_date` to the true, earlier date.
+  2. Separately: a predecessor ISIN's true last trading day was
+     under-recorded by one missed day. Before backfilling that single
+     day, the pair linked cleanly into one entity. Backfilling that one
+     ordinary day revealed an apparent one-day overlap between the two
+     ISINs' date ranges, and `build_lineage` reclassified the pair as
+     `overlapping_date_ranges_not_a_clean_handover` -- **both ISINs
+     reverted to `predecessor_isin=None`, splitting one entity's
+     continuous history into two.**
+
+Both reproduced with a single ordinary, recent, non-sealed gap --
+exactly the class `run_gap_check_and_autofill` fills without
+hesitation. The mechanism is not rare in kind, only in how often a
+given gap happens to land on an ISIN's first/last observed day;
+`gap_backfill.py` currently has no check for this at all. **Not fixed
+here** -- determining the mechanism was the ask, not the fix. Candidate
+fix (not yet built): before auto-filling, check whether the gap date is
+within some margin of any (symbol, isin) pair's current first/last
+observed date; if so, downgrade that specific date to ALERT_STOP (or
+re-run `build_lineage` and diff against the prior `isin_lineage` table,
+refusing on any changed/dropped link) rather than filling silently.
