@@ -829,6 +829,19 @@ An exclusion from the rebuild chain needs the same verification as an
 inclusion — "derived table" has no silent exception for "this one is
 harder to rebuild safely."
 
+**23. A non-deterministic function in a reproducibility-critical chain
+defeats every downstream guarantee.** `isin_lineage.build_lineage`
+returned different `known_date` values for 74-104 ISINs between
+consecutive calls on unchanged data, for any ISIN that traded under more
+than one symbol, because it took `.iloc[0]` of an unordered group rather
+than `.min()`. Every result derived through lineage — jump detection,
+the same-ISIN exclusion set, the momentum margin — was therefore
+run-dependent, and the saved exclusion lists were masking it rather than
+solving it. Pinning inputs does not make a result reproducible if the
+function between them is not deterministic. Found 2026-11-18 while
+building a before/after diff that would otherwise have fired on every
+run.
+
 ---
 
 ## 8. THE STRUCTURAL FINDING

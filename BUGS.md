@@ -3308,3 +3308,124 @@ within some margin of any (symbol, isin) pair's current first/last
 observed date; if so, downgrade that specific date to ALERT_STOP (or
 re-run `build_lineage` and diff against the prior `isin_lineage` table,
 refusing on any changed/dropped link) rather than filling silently.
+
+**FIXED, 2026-11-19: the candidate fix's diff variant, built.**
+`gap_backfill.py` now calls `build_lineage` once BEFORE this run's fill
+touches `prices_eod` and once AFTER, and diffs the two fresh
+computations against EACH OTHER -- deliberately not against what is
+currently persisted in `isin_lineage` (that snapshot is frozen as of
+2026-09-19 for `margin_tripwire.py`'s own purposes and has already
+drifted ~135-171 isins from "what a fresh rebuild produces today" for
+unrelated reasons; diffing against it would find a mismatch on every
+single run regardless of what any one fill touched, making auto-fill
+unreachable -- the same trap this module's docstring already names
+twice for other mechanisms). If nothing differs, nothing is written
+(isin_lineage stays physically untouched, so `margin_tripwire`'s freeze
+invariant holds). If something does, `LineageWouldChangeError` is
+raised instead of silently persisting a different link -- the raw price
+fill and the `adjustment_factors`/`entity_prices_daily` rebuilds are not
+reverted (same precedent as `TripwireFailedAfterBackfillError`), but the
+run ends in a required human decision. Wired into `fibo_evening.py`'s
+existing refusal/notification path. 26 new tests
+(`tests/test_gap_backfill.py`), full suite 743/743.
+
+**Blocking prerequisite found and fixed first**: `isin_lineage.
+build_lineage`'s `known_date` fallback used `.iloc[0]` of an unordered
+multi-row match for any isin that traded under more than one symbol (a
+rename) -- non-deterministic across calls on byte-identical data
+(confirmed: two calls back to back, nothing else touching `prices_eod`,
+disagreed on 74-104 isins). Without fixing this first, the before/after
+diff above would have false-fired on every autofill. Fixed with `.min()`
+(`src/data_layer/isin_lineage.py`) -- deterministic and the
+semantically correct earliest-observed date regardless of row order.
+See PROJECT_CONTEXT.md finding #23 for the general lesson.
+
+**Operational note, 2026-11-19**: `LineageWouldChangeError` blocks the
+WHOLE evening job for that one run (no watchlist produced), same shape
+as Bug #19 -- but does not recur automatically the next night, because
+the triggering gap is no longer missing by then (the raw fill already
+happened and is not reverted). It does NOT self-correct, either: the
+underlying lineage mismatch stays silently unresolved until a human runs
+`scripts/inspect_lineage_drift.py` (review) and `scripts/build_isin_
+lineage.py` (accept), then updates `margin_tripwire.py`'s
+`ISIN_LINEAGE_FROZEN_ROWS`/`ISIN_LINEAGE_FROZEN_AT` to match -- full
+recovery procedure in OPERATIONS_UNATTENDED.md.
+
+## Bug #34: FINDINGS.md Section 2's 3.50 margin does not currently reproduce -- found while re-verifying Bug #33's fix, cause not isin_lineage, not yet identified
+
+**Why this was even checked**: Bug #33's fix (above) depends on
+`build_lineage` being deterministic to mean anything, and that
+non-determinism bug, by the same logic, could in principle have reached
+any OTHER consumer of `isin_lineage`. The most consequential one is
+FINDINGS.md Section 2's 3.50 holdout margin, which is reproducibility-
+tripwired (`margin_tripwire.py`) specifically because it was once
+already found unstable. Re-ran `scripts/run_holdout_study1_lineage_
+check.py` three times to check.
+
+**Result: stable across repeated runs, but not at 3.50.** All three runs
+produced bit-identical output -- baseline margin +5.71pts, window-level
++5.81pts, entity-level +3.97pts, same-ISIN exclusion 79 entities every
+time, 40 lineage entities every time, identical saved exclusion-list
+JSON content. Zero live non-determinism, confirmed empirically, not
+assumed. But none of these numbers match the recorded baseline (3.64),
+window-level (3.50), or original (3.87) figures FINDINGS.md Section 2
+reports.
+
+**Confirmed NOT caused by Bug #33's non-determinism, structurally, not
+just by observation**: `build_lineage` has exactly three callers in this
+entire codebase (`src/data_layer/isin_lineage.py` itself, `scripts/
+build_isin_lineage.py`, and `src/data_layer/gap_backfill.py`, added
+tonight). `run_holdout_study1_lineage_check.py` and everything it calls
+(`find_unexplained_jumps`, `find_unexplained_same_isin_jumps`,
+`read_full_entity_panel_authorized`, `compute_momentum_12_1`,
+`compute_forward_return`) read the PERSISTED `isin_lineage` table
+directly via SQL -- none of them call `build_lineage` at all, so
+tonight's fix could not have moved this number either way, confirmed by
+import-graph inspection, not inference from the stable-but-wrong result
+alone.
+
+**Checked and ruled out, the two things `margin_tripwire.py` exists to
+catch**: `assert_no_in_window_price_revision` and `assert_corporate_
+actions_and_lineage_still_frozen` both PASS against the live warehouse
+right now -- `corporate_actions` is still exactly 727 rows, `isin_
+lineage` still exactly 3357 rows, no `prices_eod` row inside [2025-04-11,
+2026-04-22] has a `fetched_at` after `MARGIN_LAST_VERIFIED_AT`. Also
+checked the one blind spot the tripwire's own WHERE clause doesn't
+cover: no row in the 63-trading-day (`HORIZON_DAYS`) window immediately
+AFTER the holdout window has a late `fetched_at` either, so a previously-
+NaN forward return quietly becoming real is also ruled out.
+
+**A documented sibling case exists, same shape, not yet connected to
+this one.** Commit `e4ce43c` (2026-11-17 00:38, the `unexplained_jump_
+dates` keyword-only signature change) self-reported, as a side effect:
+"re-running `run_holdout_study1_bug11_check.py` today reproduces 7.31,
+not 3.64 -- its own holdout window isn't pinned to the original 5
+rebalances and has grown a 6th (2026-07-23)." That script's own pinning
+bug does not apply here -- `run_holdout_study1_lineage_check.py`
+hardcodes `ORIGINAL_HOLDOUT_LAST_DATE = 2026-04-22` and filters
+`holdout_rebalance_dates` to it explicitly, confirmed by reading the
+script, not assumed. That same commit's diff to THIS script is
+mechanical only (a required-keyword signature change, `{}` passed
+explicitly where `None` was implicit before) and could not itself change
+a computed value if `compute_momentum_12_1`/`compute_forward_return`
+treat `None` and `{}` identically internally (not independently verified
+here). Whether some subtler version of the sibling's growth mechanism --
+e.g. `all_dates[::REBALANCE_DAYS]`'s stride landing on different
+calendar dates if the FULL panel's early-history dropna membership
+shifted for any reason, even outside the holdout window -- is the real
+cause here is NOT determined. The actual 5 holdout rebalance dates this
+run selected were not printed by the script and were not separately
+extracted.
+
+**Not fixed, not fully root-caused.** The empirical, load-bearing
+finding is narrower and solid: Bug #33's non-determinism did not reach
+this number (ruled out structurally); 3.50 does not currently reproduce
+regardless (ruled in, by direct, repeated recomputation); the specific
+mechanism is unidentified. FINDINGS.md Section 2's headline conclusion
+rests on a number that no longer reproduces, for a reason that is not
+the one this bug was being checked for. Closes when the actual
+mechanism is identified -- candidate next step: instrument `run_variant`
+to print its 5 selected holdout rebalance dates and diff them against
+whatever the 2026-11-17 03:43 run would have selected, to tell "same
+dates, different realized returns" apart from "different dates
+entirely."
