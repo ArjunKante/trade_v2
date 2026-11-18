@@ -3509,3 +3509,32 @@ which land in `mom_sel`) against the same date's raw `prices_eod`
 values; separately, check whether `pandas`/`numpy`'s installed versions
 have changed since 2026-11-17 (current: pandas 3.0.0, numpy 2.5.2 --
 no pre-2026-11-17 snapshot exists to compare against).
+
+**ONE-RUN CODE-VS-DATA TEST, 2026-11-19, ~20min timebox: DATA, not
+CODE.** `git worktree add` at `e9aa5e0` (the commit immediately before
+the guard-default-removal `e4ce43c` -- i.e. before that change, Bug
+#30's backfill, and Bug #33's gap_backfill/isin_lineage fix, all of
+them at once), hardlinked to the SAME live `data/warehouse.duckdb` (no
+copy -- `data/` is gitignored so the worktree checkout doesn't bring
+its own), ran the OLD `scripts/run_holdout_study1_lineage_check.py`
+unmodified. Result: **+5.81 / +3.97pts, identical to tonight's figures
+from current HEAD.** Code held constant (literally the same file that
+originally produced 3.50) across "then" and "now"; only the warehouse
+differs. Conclusion is clean by elimination: none of e4ce43c, Bug #30's
+backfill, or Bug #33's fix moved this number -- the underlying
+warehouse data changed between 2026-11-17 03:43 and now, through some
+path that does NOT touch `corporate_actions` or `isin_lineage` row
+count/`fetched_at` (both independently confirmed frozen, see the
+numbered checks above) and does NOT touch `entity_prices_daily` either
+(this script bypasses that table entirely via `read_full_entity_panel_
+authorized`'s own fresh `prices_eod`x`isin_lineage`x`adjustment_factors`
+join, per that function's own docstring). What specifically moved is
+NOT identified -- the "frozen inputs" proof above and this "data, not
+code" result are in direct tension, and resolving that tension needs
+more than the remaining timebox allowed (one candidate, not checked:
+whether `prices_eod` carries undeduplicated multiple-revision_seq rows
+for some (isin, trade_date) that a bare `SELECT *` -- unlike `data_
+layer.db.read_latest` -- would double-count). Stopped here per
+instruction; margin status unchanged (OPEN, unreproducible, Section 2's
+verdict itself not affected either way) -- finding the mechanism
+restores a number, not a verdict, and does not block anything else.
