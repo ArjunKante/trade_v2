@@ -68,7 +68,7 @@ corrected version.
 | B.8c Options depth: crossed book | 0 | N/A |
 | B.8d Options depth: LTP outside [bid1,ask1] by >1% | 679 / 3,972 | UNEXPLAINED |
 | B.8e Options depth: symbol inconsistent with its own columns | 3,972 / 3,972 | UNEXPLAINED (see Section 4) |
-| C.9 Intraday session OHLC vs bhavcopy, >0.5% (Bug #18's shape) | 81,801 new / 81,812 total / 419,379 (19.51%) | PARTIALLY EXPECTED (see Section 4) |
+| C.9 Intraday session OHLC vs bhavcopy, >0.5% (Bug #18's shape) | 81,801 new / 81,812 total / 419,379 (19.51%) | EXPECTED, confirmed resolved for the 54 checked TEST trades -- see Section 4 |
 | D.10 Frozen consecutive depth snapshots | 0 new / 368 total | PARTIALLY EXPECTED (all already in invalidated_snapshots.csv) |
 | D.11 Depth snapshots off-hours/non-trading-day | 0 new / 3 total | PARTIALLY EXPECTED (all already flagged) |
 | D.12a Invalidated rows with no matching real snapshot | 0 | N/A |
@@ -147,52 +147,77 @@ list is exhaustively verified.
 
 ## 4. Deep dive: the 19.51% scale disagreement (Section C.9)
 
-**It touches 25% of the published 216-trade TEST result.** Of the 216
-corrected-scale TEST trades (`FIBO_FINDINGS.md` Section 13, `data/
-fibo_test_results_corrected_scale.pkl`), 65 (30%) have a signal-day
-disagreement; splitting out close-only deviation (plausibly NSE's
-closing-auction convention differing from the last 1-minute trade, not a
-scale issue) from genuine high/low mismatches leaves **54 of 216 (25%)**
-with a real high/low scale disagreement on their own entry day. The
-reverse side: 6,635 of 48,608 `setup_off` rejected-candidate entity-days
-(13.6%) carry the same disagreement -- not directly comparable to Bug
-#18's stated 6x without rebuilding the selection logic itself (not done
-here). **Zero** disagreeing entity-days fall inside the live forward-test
-window, but only because `bars_1min`'s archive (max 2026-09-18) ends
-before the forward test starts (2026-10-08) -- there is nothing there to
-check yet, not evidence of cleanliness.
+### 4a. The question that decides this: does the mitigation actually fire? Yes, for all 54 checked.
 
-**Not the same defect as Bug #18 -- same family, already-fixed defect
-resurfacing at a different comparison.** Bug #18 was `scale_probe`
-(candles) disagreeing with the table method (reference level) *with each
-other*, inside `zones_overlap` -- fixed in `src/fibo/backtest.py`, which
-is why the 216-trade population exists at all. This check never touches
-`scale_probe`; it compares `bars_1min`'s own raw session OHLC directly
-against `prices_eod`'s raw daily bhavcopy -- the literal Angel-vs-NSE
-divergence `scale_probe` exists to work around for cross-referencing, not
-to eliminate at the source (bars_1min is used unconverted as the actual
-candle series). Several of the entities driving the "new" (not
-previously-cited) mismatches -- `INE423A01024`, `INE628A01036`,
-`INE774D01024` -- are *already named* in Bug #18's own blast-radius list,
-just for specific dates; the full archive shows the same stable
-per-entity ratio recurring on many more dates than Bug #18's original
-measurement ever checked. Conclusion: not a new mechanism, but a larger,
-previously-unscoped quantification of a known one.
+For every one of the 54 TEST trades with a genuine (not close-only)
+high/low raw disagreement, `fibo.scale_probe.decide_scale_for_day` was
+run exactly as `src/fibo/backtest.py` calls it -- D-1's own bhav-vs-Angel
+high/low ratio -- and the resulting scale was applied to day D's own
+session high/low, then re-compared against bhavcopy D directly:
 
-**The 0.111x BSE case is fully explained, not a mystery.** BSE Ltd
-(`INE118H01025`) is a legitimate NSE-listed equity (the exchange's own
-listed stock) -- no data-source mixup. `corporate_actions` records two
-real 2:1 bonuses (ratio 3.0 each): 2022-03-21 and 2025-05-23. The
-mismatch ratios are exactly `1/3` (780 dates, spanning 2022-03-21 to
-2025-05-22, i.e. *between* the two bonuses) and `1/9 = 1/3^2` (52 dates,
-all *before* the first bonus, Jan-Mar 2022). This is the signature of
-Angel's historical-candle API auto-adjusting for corporate actions known
-at *fetch time*: the same calendar dates return different raw numbers
-depending on when they were pulled into this archive -- consistent with
-the already-recorded "Angel adjusted-vs-raw price bug" from the IPO
-listing study. BSE touches **0** of the 216 trades (never appears there)
+- **54/54 resolved to `SCALED`** (a real, non-identity factor, range
+  1.03x-3.00x). None returned `UNRESOLVED`, `GAP_GUARD_SKIP`, or
+  `EX_DATE_SKIP`, and none silently fell back to an identity (1.0)
+  conversion.
+- **Post-conversion deviation: 0/54 still exceed 0.5%.** Max residual
+  0.31%, mean 0.03%, median 0.005% -- noise, not a mismatch.
+
+**Conclusion: the raw sources diverge exactly as documented, and the
+mitigation the live backtest actually applies resolves every single one
+of these 54 cases correctly.** This is not "the mitigation didn't fire" --
+it is "the raw-vs-raw check in Section C.9 is deliberately measuring the
+exact population `scale_probe` exists to correct, and correctly
+measuring that it IS corrected before the 216-trade result was produced."
+The earlier framing of this as live financial risk to the 216-trade
+result was wrong; corrected below and in Section 7.
+
+### 4b. Generalizing the BSE finding -- the fetch-time theory was wrong, checked and replaced
+
+The original explanation offered in chat ("Angel's historical API
+auto-adjusts for corporate actions known at fetch time, so the same
+dates return different numbers depending on when they were pulled") does
+**not** hold up: BSE's entire archive, both the 1/3-ratio and 1/9-ratio
+segments alike, was fetched within one ~90-second window on
+2026-09-28/30 -- long after both real bonuses (2022-03-21, 2025-05-23)
+had already occurred. A single fetch, well after all relevant actions,
+cannot produce two different adjustment states by a "known at fetch
+time" mechanism; that explanation is retracted.
+
+**What the data actually shows**: the ratio is a function of how many
+corporate actions fall between a bar's own `trade_date` and the present
+(or the archive's own effective "now"), not of when it was fetched --
+the standard "continuously back-adjusted" charting convention. BSE's
+dates before the first bonus absorb both subsequent bonuses (1/9 = 1/3 x
+1/3); dates between the two bonuses absorb only the second (1/3); dates
+after the second need no adjustment (1.0). `bars_1min` is not raw
+Angel-as-traded data for any entity that has had a corporate action since
+its earliest archived bar -- it is back-adjusted to a moving present,
+while `prices_eod` (bhavcopy) is raw, as-traded-that-day. This is a
+structural property of the data source, not a transient fetch artifact,
+and it is exactly the condition `scale_probe` was built to detect and
+correct per-day (Section 4a confirms it does, for the checked sample).
+
+**Scope, measured directly** (joining `corporate_actions` to
+`bars_1min` via `isin_lineage`, the same join `scale_probe.is_ex_date`
+uses):
+
+- Literal fetch-time question as originally framed (an entity with a
+  `corporate_actions.ex_date` *after* its own bars' `fetched_at`): **0
+  entities**. Confirms the fetch-time theory is categorically wrong, not
+  just wrong for BSE.
+- Corrected scope (an entity whose own `bars_1min` date range *spans* at
+  least one corporate-action `ex_date`): **80 of 386 entities (20.7%)**
+  that have any intraday data at all.
+- Of the 216 TEST trades: **64 (29.6%, across 33 distinct entities)**
+  sit on such an entity. This is close to, but not identical with,
+  Section 4a's 54/65 raw-disagreement counts -- expected, since not every
+  pre-action day's disagreement crosses the 0.5% flag threshold, and
+  `scale_probe`'s own `EX_DATE_SKIP` already excludes the ex_date itself.
+
+BSE specifically: touches **0** of the 216 trades (never appears there)
 and **324** `setup_off` rejections -- whether any of those were wrongly
-rejected because of this is not verified here.
+rejected is not verified here (Section 4a's clean result was checked
+against the 54 *selected* trades, not the rejected population).
 
 ## 5. Deep dive: the one signal/outcome ordering violation (Section E.15)
 
@@ -229,12 +254,17 @@ pool, or the live system.
 
 ## 7. Open decisions (not resolved by this document)
 
-- Whether the 25% TEST-trade exposure to Section C's disagreement
-  warrants re-running the 216-trade result through a `scale_probe`-based
-  (not raw-bhavcopy) reconciliation, or is already adequately handled by
-  the existing fix.
-- Whether `setup_off`'s 13.6%/6,635-row exposure (and BSE's 324) hides
-  any wrongly-rejected candidate -- not rebuilt or re-evaluated here.
+- **Resolved, not open**: whether the 216-trade result needed re-running
+  through a `scale_probe`-based reconciliation -- no. Section 4a checked
+  this directly: `scale_probe` is already applied, already resolves all
+  54 affected trades to <0.31% residual, and no fix or re-run is needed
+  on the selected side.
+- Whether `setup_off`'s 6,635-row exposure (13.6%) and BSE's 324
+  rejections hide any wrongly-rejected candidate -- Section 4a's clean
+  result was checked only against the *selected* 54, not the rejected
+  population; not rebuilt or re-evaluated here. This is the "other
+  direction" PROJECT_CONTEXT.md finding #9 (as amended 2026-11-18) warns
+  is structurally unable to be inferred from the selected side alone.
 - Whether the B.8e symbol/expiry year-digit inconsistency needs
   normalizing anywhere downstream, or is cosmetic.
 - Whether the 2023-03-03 and 2024-03-02 clusters warrant a source-side
@@ -245,6 +275,27 @@ pool, or the live system.
 - Whether options-depth's 77.3% missed-snapshot rate is within the
   collector's own documented loss tolerance or needs the Task Scheduler
   job investigated.
+
+## 7a. Corrections made to this document after its first version (2026-11-18, same day)
+
+Section 4's original text claimed two things that follow-up investigation
+disproved before they could be acted on:
+
+1. It framed the 25% TEST-trade exposure as an open risk to the published
+   result. Directly checking whether `scale_probe`'s actual mitigation
+   resolves it (Section 4a) shows it does, cleanly, for every one of the
+   54 checked trades -- no re-run is needed.
+2. It asserted BSE's 1/9 ratio came from Angel adjusting historical
+   candles based on corporate actions known *at fetch time*. BSE's own
+   `fetched_at` timestamps contradict this (the whole archive was pulled
+   in one narrow window, after both bonuses) -- replaced with the
+   correct mechanism (continuous back-adjustment to the present) in
+   Section 4b, and the literal fetch-time claim was re-tested across the
+   whole archive and found to apply to **zero** entities.
+
+Left here rather than silently edited away, for the same reason Section 0
+exists: a checker (or a chat answer) that was wrong should have its own
+correction on the record, not just a replaced conclusion.
 
 ## 8. Script
 

@@ -633,7 +633,15 @@ V1 did not.
 hourly. Any timeframe comparison must hold time windows constant in minutes.
 
 **9. Blast radius must be measured in both directions.** A selection bug that
-wrongly includes also wrongly excludes.
+wrongly includes also wrongly excludes. Both directions must also be measured
+across EVERY affected date, not a sample of them: Bug #18's own blast-radius
+check only re-tested the specific dates the already-published 188+67 trade
+lists happened to cover, and separately measuring the same per-entity ratio
+against the full archive (2026-11-18 data integrity audit) found it recurring
+on far more dates for the same entities than were ever checked. A per-entity
+defect sampled on a subset of that entity's dates understates its true extent
+by roughly the ratio of unchecked to checked dates -- the same structural gap
+as checking only one direction, one level down.
 
 **10. Jensen's inequality on ratio tests.** Testing mean log(payoff/price) = 0
 reports overpricing even when options are fairly priced, because payoffs are
