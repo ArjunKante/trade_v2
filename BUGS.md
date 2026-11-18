@@ -3429,3 +3429,83 @@ to print its 5 selected holdout rebalance dates and diff them against
 whatever the 2026-11-17 03:43 run would have selected, to tell "same
 dates, different realized returns" apart from "different dates
 entirely."
+
+**FOLLOW-UP, 2026-11-19, four specific mundane explanations checked and
+all four RULED OUT, not just the one originally suspected.**
+
+1. **Did tonight's runs read into the SECOND sealed momentum window
+   (`data_layer.holdout.MOMENTUM_WINDOW_2_START = 2026-10-23`)? No.**
+   `run_holdout_study1_lineage_check.py` does not call `guard_momentum_
+   rebalance_dates` at all -- a real procedural gap, worth fixing
+   separately -- but reproducing only its date-selection logic (no
+   entity-level computation) shows `rebalance_dates_all` tops out at
+   2026-07-23 (38 dates total). The next stride candidate is
+   2026-10-23 EXACTLY (the seal boundary itself) but is excluded by the
+   unrelated `HORIZON_DAYS=63` forward-data-availability filter (needs
+   63 more trading days than currently exist) before the per-date loop
+   ever runs -- coincidence, not seal-awareness, but the outcome is the
+   same: zero rebalance dates >= the second seal in any of tonight's
+   three runs. Logged to `data/holdout_access_log.txt` (this check
+   itself is also an authorized access, logged in turn).
+
+2. **How many rebalances -- 5, or more? Exactly 5, confirmed directly**:
+   2025-04-11, 2025-07-14, 2025-10-14, 2026-01-14, 2026-04-22 -- the
+   identical five dates implied by "5 rebalances ending 2026-04-22."
+   The sibling script's own growth problem (a 6th rebalance,
+   2026-07-23) does NOT apply here; this script's explicit
+   `ORIGINAL_HOLDOUT_LAST_DATE` pin works as designed.
+
+3. **Does the SAVED exclusion-list path (load, not recompute) still
+   reproduce 3.50? No -- it gives 5.81, identical to live recompute.**
+   Recovered the pre-tonight `results/exclusions/run_holdout_study1_
+   lineage_check.window_level.json` (margin=3.50, generated
+   2026-11-17T03:43:12) from git history (`619f9ee~1`, since tonight's
+   runs had already overwritten the live file) and confirmed its
+   `entity_ids`/`jump_dates`/`detector_source_hashes` are BYTE-IDENTICAL
+   to tonight's freshly-recomputed exclusion set. Loading that frozen
+   file explicitly (via `load_exclusion_list`, never recomputing the
+   detectors) and running the identical 5-rebalance window against it
+   gives +5.81pts, not 3.50. This rules OUT detector/exclusion-set
+   drift as the cause entirely -- the exclusion inputs are provably
+   unchanged; only the panel/factor data they're applied to differs.
+
+4. **Did `adjustment_factors` change for historical dates on
+   rematerialization? No -- proven, not just unrecoverable.** No
+   backup of the pre-rematerialization warehouse exists (`data/` is
+   gitignored, both `adjustment_factors` and `entity_prices_daily` are
+   full DELETE+INSERT materializations with no row history), so a
+   direct before/after value diff is NOT recoverable. But it isn't
+   needed: `factor(entity_id, trade_date) = product over ex_date >
+   trade_date of (1/ratio)`, built ENTIRELY from `corporate_actions`
+   and `isin_lineage` (`src/data_layer/adjustment.py`) -- and both are
+   independently confirmed frozen (727 / 3357 rows respectively,
+   unchanged since 2026-09-19, which is before BOTH the 2026-11-17
+   margin verification and today). With both inputs provably identical
+   throughout the entire period in question, `factor(d)` for any
+   historical `d` cannot have changed, full stop -- not an inference,
+   a direct consequence of the formula. Checked the chain one level
+   further too: `read_full_entity_panel_authorized` (what this script
+   actually uses) computes `adjusted_close = p.close * af.factor`
+   directly; `p.close` (raw) is also confirmed unrevised, broadened
+   beyond the narrow tripwire window to the FULL `prices_eod` history --
+   every row with `fetched_at` after the 2026-11-17 baseline is dated
+   2026-10-27 through 2026-11-18 (Bug #30's backfill + ordinary forward
+   ingestion), nowhere near the holdout window or its 12-month lookback.
+
+**All four of the obvious mechanisms are ruled out by direct evidence,
+not absence of a counter-example.** The script's own code is
+byte-identical to its original 2026-11-17-reproducing version except
+for two confirmed-mechanical diffs (checked via full `git diff` against
+the script's first commit, `39cc30b`); `factors/momentum.py`/
+`factors/target.py` have exactly two commits each, total, and the
+second is the same confirmed-mechanical signature change. The margin
+discrepancy is real, reproducible, and -- as of tonight -- genuinely
+unexplained by any of: seal breach, rebalance-count drift, exclusion-set
+drift, or adjustment-factor drift. Not investigated further tonight per
+instruction ("four checks, nothing else"). Candidate next steps, for
+whoever picks this up: hand-trace one rebalance date's full entity-level
+computation end to end (which entities are in `pool`, what `cutoff` is,
+which land in `mom_sel`) against the same date's raw `prices_eod`
+values; separately, check whether `pandas`/`numpy`'s installed versions
+have changed since 2026-11-17 (current: pandas 3.0.0, numpy 2.5.2 --
+no pre-2026-11-17 snapshot exists to compare against).
