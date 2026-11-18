@@ -298,3 +298,23 @@ propagates the flag instead of raising; both `main()`s complete
 normally (heartbeat reached / no holiday-calendar `REFUSED` event) and
 each sends exactly one `HOLIDAY CALENDAR DEGRADED` email. Full `fibo`/
 `holiday` selection (211 tests) passes.
+
+---
+
+## Fibo morning job: the 10:45/11:00/11:15 candles aren't examined until the 15:20 run
+
+cron-job.org dispatches at 09:35/10:00/11:00 leave the 10:45, 11:00 and
+11:15 candle-starts unexamined until the 15:20 run — 17.1% of backtest
+trades (37 of 216) enter in that slice. Detecting them only at 15:20
+means the signal and its outcome are committed at the same moment, after
+the result is knowable, which defeats the pre-outcome timestamp the
+forward test's credibility rests on. Fix: add a dispatch at 11:35 (the
+last in-window candle closes 11:30). Found 2026-11-19, code trace not
+yet observed live — zero triggers logged to date.
+
+**The first thing to verify once a real trigger in this slice (entry_ts
+10:59, 11:14, or 11:29) actually occurs**: check that slice's trigger's
+own logged `ts` (`events.jsonl`) against its `entry_ts` -- if `ts` lands
+near 15:20 rather than near the candle's own close, this gap is
+confirmed live, not just a code trace, and the 11:35 dispatch fix above
+is no longer optional.
