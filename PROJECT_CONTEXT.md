@@ -91,6 +91,7 @@ convincing and were not.
 | Earnings-event data (post-earnings-drift family) | **Still SEALED, still unread.** `known_date >= 2025-07-01` in `fundamentals_filings`/`fundamentals_xbrl_facts`. **Family CLOSED at trial 1, 2026-11-16** -- DEV failed Gate conditions 1 (CI includes zero) and 2 (TIMING null at the 0th percentile, decisively), per `EARNINGS_DRIFT_FINDINGS.md`. No sealed read happened and none will. `EARNINGS_DRIFT_PHASE0.md` Section 0, `data/holdout_access_log.txt`. |
 | Second momentum holdout window, declared 2026-11-16, RE-DECLARED 2026-11-17 | **SEALED, unread for evaluation.** `trade_date >= 2026-10-23` (`src/data_layer/holdout.py::MOMENTUM_WINDOW_2_START`, enforced in code via `guard_momentum_rebalance_dates`/`clip_momentum_rebalance_dates`, not just a note). The 2026-07-23 rebalance is permanently EXCLUDED, not sealed -- it was read twice (once directly, once via four unpinned "reproduction" scripts leaking an inflated 7.31-vs-3.64 margin) before any seal caught it; its actual figures are recorded as contaminated, non-evidential observations in `FINDINGS.md` Section 7. Confirmed by index arithmetic, not assumed: nothing computed this session reaches `>= 2026-10-23`. Not read until >=5 rebalance periods accumulate from there, then once, under a preregistration written first. **That preregistration must derive its margin threshold as the 95th percentile of a random-decile null on the DEV period before the window is read -- the first holdout's 3.0pp was asserted, not derived, and found uncalibrated (finding #20, `FINDINGS.md` Section 7).** |
 | Liquidity family | **CLOSED, 2026-11-07.** 4 DEV failures, 2 Phase 1 abandonments, 1 withdrawn measurement. No Study G. See `LIQUIDITY_FAMILY_CLOSED.md`, §10. |
+| Equity strategy scoreboard | **21 specified, 1 passed, 20 closed.** The one pass is momentum (63-day), at the 92.6th percentile against a random-decile null -- clearing its holdout but not the 95th-percentile bar this project now uses everywhere (finding #20). Delivery Study 1 closed 2026-11-19, the 20th closure -- `DELIVERY_FINDINGS.md`. |
 
 ### Known operational constraints
 
@@ -842,6 +843,17 @@ function between them is not deterministic. Found 2026-11-18 while
 building a before/after diff that would otherwise have fired on every
 run.
 
+**24. An MDE computed from a random-assignment null's spread SD is
+optimistic.** A signal-selected decile concentrates exposures by sector,
+size and volatility, so its realized spread is more dispersed than a
+random decile's — measured here at 4.26% against the null's 2.12%, a
+factor of two. Delivery Study 1's true detectable effect was therefore
+near 2%, not the ~1% its Phase 0 reported, making it more underpowered
+than it appeared before running. Any future MDE must use the realized
+dispersion of the selected portfolio, not the null's, or state that it
+is a lower bound. Applies retroactively to the earnings-drift MDE.
+Found 2026-11-19.
+
 ---
 
 ## 8. THE STRUCTURAL FINDING
@@ -980,6 +992,17 @@ liquidity as the binding constraint and the actual cause was structural
 (position sizing, follow-through, entry timing, timing-window latency).
 Treat any prediction of mine that friction is the binding constraint as
 carrying negative information value until that record changes.
+
+**Delivery Study 1**: pre-committed that DEV would fail, most likely at
+the SELECTION-null percentile condition (b). The verdict was right; the
+mechanism was not — the result failed earlier and more plainly, at
+condition (a) itself (mean spread vs. benchmark, net of costs: -0.20%,
+indistinguishable from zero at this sample's own SE), never reaching
+the null-percentile question at all. **That is seven consecutive wrong
+mechanism predictions.** The user's own prediction for this study named
+no mechanism at all, explicitly, citing this same record before it
+reached seven — treat that abstention as itself informed by the pattern
+documented here, not a missing data point.
 
 ---
 

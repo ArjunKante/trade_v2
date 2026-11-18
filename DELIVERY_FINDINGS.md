@@ -5,6 +5,14 @@ Companion to `PREREGISTRATION_DELIVERY.md` (frozen rules, commit
 existed). Records what was actually run and found, per that document's
 Process section.
 
+**Bottom line, stated first per this project's "bad results first"
+discipline: DEV's mean quarterly spread is indistinguishable from zero**
+(-0.20%, SE 0.69%, 38 quarters) **-- not a negative edge, simply no
+signal at this power. FAMILY CLOSED, 2026-11-19, per rule 7, without
+running the SELECTION null** (`PROJECT_CONTEXT.md` §3: a decisive
+failure of the first gate condition kills the run; the nulls cannot
+rescue it).
+
 ## Hand-trace verification (done before any aggregate number -- Section 10 step 3)
 
 Per instruction, these five traces were chosen deliberately to be the
@@ -116,13 +124,13 @@ step 4 (the real DEV run, the SELECTION null, and the gate) is next.
 
 **The user's prediction, for the calibration record -- verdict only, no
 mechanism claim**: **this fails the gate.** Stated reasons: this
-project's base rate is 20 strategies tested and 1 passed; the ~1% MDE
-(Section 6) requires an effect as large as momentum's own per-period
-margin to clear; and the signal is only weakly related to momentum
-(Spearman 0.15-0.21), so it gets no free ride from the one mechanism
-that has actually worked here. Explicitly a prediction about the
-VERDICT, not about WHY -- the user's own mechanism-prediction record in
-this project stands at 0 for 6.
+project's base rate (before this study) was 20 strategies specified, 1
+passed; the ~1% MDE (Section 6) requires an effect as large as
+momentum's own per-period margin to clear; and the signal is only
+weakly related to momentum (Spearman 0.15-0.21), so it gets no free
+ride from the one mechanism that has actually worked here. Explicitly a
+prediction about the VERDICT, not about WHY -- the user's own
+mechanism-prediction record in this project stands at 0 for 6.
 
 This is recorded alongside, not in place of, Claude's own prediction
 already fixed in `PREREGISTRATION_DELIVERY.md` Section 9 (DEV fails,
@@ -147,53 +155,77 @@ produced the Swing family's six variants and its own holdout failure,
 named explicitly as the failure mode this pre-commitment exists to
 block.
 
-## DEV result -- Phase A (real portfolio vs. benchmark), checkpoint before the null
+## DEV result -- FAMILY CLOSED
 
-**Bad result first: the mean quarterly spread is negative, -0.20% net of
-costs, across all 38 usable DEV rebalance dates (2016-07-07 to
-2025-12-15).** Per the pre-committed outcome table above, a negative
-spread is a NULL result and closes the family -- this does not depend
-on the SELECTION null, which has not been run.
+**Bad result first: the mean quarterly spread is indistinguishable from
+zero.** -0.20% net of costs across 38 usable DEV rebalance dates
+(2016-07-07 to 2025-12-15), with a realized quarterly SD of 4.26%, gives
+a standard error near 0.69% -- the interval comfortably contains zero.
+Calling this a "negative edge" would be over-reading it; it is simply
+no signal, measured at this power.
 
 | | value |
 |---|---|
 | usable quarters | 38 of 38 attempted (0 skipped for an empty pool) |
 | mean quarterly spread, net of costs | -0.20% |
-| SD of quarterly spread | 4.26% (Phase 0's own random-decile-null proxy, Section 6, was 2.12% -- this run's REAL dispersion is roughly double that, see note below) |
+| SD of quarterly spread | 4.26% |
 | SE of the mean | 0.69% |
 | win rate (spread > 0) | 42.1% (16/38) |
-| mean spread dropping the single best quarter (2021-05-17, +15.97%) | -0.64% -- WORSE, not better, so the headline number is not an artifact of one bad quarter either |
+| mean spread dropping the single best quarter (2021-05-17, +15.97%) | -0.64% -- WORSE, not better, so the near-zero headline is not an artifact of one good quarter propping it up |
 
 Full per-rebalance detail: `results/run_delivery_study1_dev_portfolio.csv`
 (`scripts/run_delivery_study1_dev_portfolio.py`).
 
-**The real spread's own SD (4.26%) is about double Phase 0's 2.12%
-random-decile figure.** That 2.12% was explicitly a null-world number
-(spread under RANDOM decile assignment, where the real signal plays no
-role) -- it was never claimed to equal the REAL strategy's own
-dispersion, and Section 6 did not promise it would. It is still worth
-flagging plainly: if the SELECTION null run in Phase B reproduces
-something close to 4.26% (not 2.12%) under random assignment too, the
-~35-quarter power claim in Section 6 would need revisiting -- the
-0.69% SE above alone already implies this specific -0.20% mean is not
-distinguishable from zero on this sample (well under 1 SE from either
-side).
+**BUG, found and fixed in the same step, before this number was
+reported**: `delivery.signal.rebalance_dates` originally strided over
+the full PRICE panel's own date range, which extends past
+`delivery_eod`'s 2016-2025 coverage into 2026. That produced two
+degenerate candidate rebalance dates (2026-03-18, 2026-06-23) with
+eligible pools of 12 and 1 entities -- a data-coverage artifact, not a
+reading. Fixed by clipping candidates to `delivery_eod`'s own max date
+before striding, matching what `PREREGISTRATION_DELIVERY.md` Section 1
+already specified in words; 40 usable dates became 38 (see the
+Hand-trace section above, which was re-run on the fix -- no trace's
+conclusion changed).
 
-**Verdict, per the pre-committed table (`DELIVERY_FINDINGS.md`
-"Pre-commitments" section) and rule 7: NULL. The family closes.** The
-user's own prediction (fails the gate) is confirmed; Claude's own
-Section 9 prediction (fails, most likely at condition (b)) is NOT
-confirmed in its specific mechanism -- the result fails earlier, at
-condition (a) itself (spread must simply exceed the benchmark net of
-costs), never reaching the null-percentile question at all.
+**The SELECTION null was NOT run, and will not be.**
+`PROJECT_CONTEXT.md` §3's own rule: "If the first condition fails
+decisively, the run is killed -- the nulls cannot rescue it." Condition
+(a) (spread exceeds the benchmark, net of costs) already fails, and no
+null percentile can turn an indistinguishable-from-zero mean into a
+pass against condition (b). Spending the null's 5,000 seeds -- the
+expensive, previously-unreliable stage the user flagged ("this
+environment has killed long runs before -- a job estimated at four
+hours once took seventeen") -- would buy a number with no decision
+value.
 
-**The SELECTION null (Phase B, 5,000 seeds) has deliberately NOT been
-run.** The pre-committed outcome table decides this case (negative
-spread) without it, and running an expensive, previously-unreliable
-stage (user's own caution: "this environment has killed long runs
-before -- a job estimated at four hours once took seventeen") to
-compute a number that cannot change an already-decided verdict is not
-justified by the gate alone. Stated here as a checkpoint for the user
-to confirm: run it anyway for the completeness of this write-up
-(reports the actual null SD, useful given the 2.12%-vs-4.26% question
-above), or close the family now without it.
+**Both predictions, on the record:**
+
+- **The user's prediction (fails the gate): CONFIRMED on verdict.** No
+  mechanism was claimed, consistent with the user's own 0-for-6
+  mechanism record stated in the Pre-commitments section above.
+- **Claude's prediction (`PREREGISTRATION_DELIVERY.md` Section 9: fails,
+  most likely at condition (b), the SELECTION-null percentile): WRONG
+  on mechanism.** The result failed earlier and more plainly, at
+  condition (a) itself -- the null-percentile question was never
+  reached. **That is seven consecutive wrong mechanism predictions**
+  for Claude in this project (`PROJECT_CONTEXT.md` §9, extended from six
+  to seven by this study).
+
+**Verdict, per the pre-committed outcome table and rule 7: NULL. FAMILY
+CLOSED, 2026-11-19.** Per amendment 4 / rule 7, there is no retry at a
+90-day baseline, all-days delivery, up-minus-down-days delivery,
+volume-weighted delivery, or any other configuration (Section 1's three
+named alternatives, and the baseline-width variants Section 5 preempted
+explicitly). Any of those is a new, separately pre-registered trial --
+not a continuation of this one. `PROJECT_CONTEXT.md`'s equity strategy
+scoreboard updated: 21 specified, 1 passed, 20 closed.
+
+**One finding carried forward, not specific to delivery**: the real
+portfolio's own spread SD (4.26%) is roughly double Section 6's Phase 0
+random-decile-null SD (2.12%) -- a signal-selected decile concentrates
+exposures (sector, size, volatility) in a way a random decile does not,
+so its realized dispersion is wider. Section 6's ~1% MDE was therefore
+optimistic; the true detectable effect here was closer to ~2%. Recorded
+as `PROJECT_CONTEXT.md` §7 finding #24, applied retroactively to the
+earnings-drift MDE as well.
