@@ -242,9 +242,11 @@ rebalance, or return exists, per Section 10 step 1.
   re-measured here -- ported by reference, not re-derived.
 - The low-liquidity cost estimate (118bps) carries the same uncertainty
   `PREREGISTRATION.md` already flags for momentum; not re-assessed here.
-- The Section 6 power calculation's variance input is borrowed from
-  momentum's own measured per-quarter decile-spread variance as a
-  proxy, stated plainly as such -- see Section 6.
+- The Section 6 power calculation's 2.12% SD figure comes from a Phase 0
+  feasibility check that was not persisted as its own script/output
+  file in this repository -- the SELECTION null actually run in Section
+  10 will re-measure the same quantity at full scale, and that figure,
+  not this one, is what the gate is evaluated against (see Section 6).
 
 ## Section 4: the validation path -- DEV-only, no TEST window, and why
 
@@ -302,16 +304,39 @@ revision of this one.
 
 **~40 nominal quarters exist** in `delivery_eod`'s own 2016-2025
 coverage (10 years x 4). Detecting a 1% per-quarter spread at 80% power
-needs approximately **35** of them in a single window. This figure uses
-the per-quarter decile-spread variance already measured for momentum's
-own holdout check (`PREREGISTRATION.md`'s 2026-11-17 random-decile-null
-annotation) as a **working proxy, stated plainly as a proxy** -- not
-this study's own measured variance, because no abnormal-delivery spread
-series exists yet to measure. The real variance, once this study's own
-DEV result is computed, will be reported alongside it (Section 10); if
-it is materially wider than this proxy, that will be reported as a
-limitation on this power claim, never retrofitted into a revised
-threshold or a revised split.
+needs approximately **35** of them in a single window.
+
+**CORRECTED, before any code in `src/delivery/` existed**: the first
+draft of this section mischaracterized this figure's own provenance,
+describing it as borrowed from momentum's measured variance as a
+"working proxy." That was wrong, caught before being relied on. The
+actual input is **this study's own Phase 0 feasibility check**: the SD
+of the quarterly spread under RANDOM decile assignment is **2.12%** --
+measured on `delivery_eod`'s own coverage window, with the real
+abnormal-delivery signal, not borrowed from a different study by
+analogy. Under random assignment the signal itself is irrelevant by
+construction, so this is already exactly the quantity Section 10's
+SELECTION null (Section 5b) is built around -- not a proxy standing in
+for it. The arithmetic checks out exactly: at 2-sided alpha=0.05,
+80% power (z-sum ~2.8), `MDE = 2.8 * 2.12% / sqrt(N)` gives ~1.00% at
+N=35 and ~2.97% at N=4 -- matching both figures below to two decimal
+places, not merely "in the right ballpark." There is no borrowed-proxy
+limitation here; this was a provenance error in drafting, not a gap in
+the underlying calculation. Section 3's limitations list is corrected
+to match.
+
+The Phase 0 script that produced 2.12% was run before this document was
+frozen (the template's own Section 6 instruction: "computed from the
+DEVELOPMENT-period distribution's own variance," which this feasibility
+check already is -- Section 2's "no computation has run" refers to the
+SIGNAL/portfolio/aggregate computation this document gates, not to the
+Phase 0 feasibility check that justified going DEV-only in the first
+place). It was not persisted as its own script/output file in this
+repository; the SELECTION null actually run in Section 10 step 4 will
+re-measure this same quantity at full scale, against the pinned
+exclusion set, and that figure -- not this one -- is what Section 5b's
+gate is actually evaluated against. If the two differ, that will be
+reported as-is, not reconciled after the fact.
 
 **Splitting any DEV/TEST boundary within this window is infeasible**:
 holding out 2025 alone as a TEST slice (~4 quarters) leaves an MDE near
@@ -400,9 +425,9 @@ would not be surprised by it, only mildly so.
    clustered bootstrap -- the periods are non-overlapping by
    construction, amendment 1/2); all three gate conditions, stated
    plainly; the SELECTION null's own percentile; the measured abnormal-
-   delivery spread's own variance (Section 6's real figure, replacing
-   the momentum-borrowed proxy). **Bad results are reported in the
-   first sentence.**
+   delivery spread's own variance (compared against Section 6's 2.12%
+   Phase 0 figure, not silently reconciled if it differs). **Bad
+   results are reported in the first sentence.**
 5. Apply the gate (Section 5). **>>> STOP. Report to the user.** There
    is no TEST step in this family at all (Section 4) -- a pass justifies
    proposing a forward paper test as a separate, later decision; a fail
