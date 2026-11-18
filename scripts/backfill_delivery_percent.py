@@ -17,17 +17,23 @@ factor/universe code resolves ISINs to `entity_id` via `isin_lineage`
 (lineage has already produced Bugs #7, #11, #33 -- a history of silent
 misresolution in this exact join). Checked directly before writing
 anything (2026-11-19): of 3,344 distinct ISINs with delivery data in
-`trade-info` (2016-2025), 369 (11.0%) are NOT in this project's own
-`isin_lineage` at all -- 7.0% of delivery ROWS. This is NOT a lineage
-MISLINK (Bug #7/#11/#33's shape) -- it is a universe-coverage gap in this
-project's own price ingestion: unmatched ISINs skew heavily toward
-recently-listed names (85.4% first traded after 2016-06, median first
-trade 2022-10-17, vs 49.3%/2016-03-14 for matched) and toward lower
-liquidity (median avg turnover ~5.0M vs ~39.2M for matched, ~8x). These
-369 ISINs are simply never fetched into this project's `prices_eod` at
-all, under any ISIN -- there is nothing for `isin_lineage` to have
-mis-resolved. Confirmed, not assumed: checked against `prices_eod`
-directly below, not inferred from the `isin_lineage` absence alone.
+`trade-info` (2016-2025), 369 (11.0%, 7.0% of rows) are NOT in this
+project's own `isin_lineage` at all.
+
+**CORRECTED, same day, before this script's first real run finished
+being reviewed**: the first pass characterized this as a universe-
+coverage gap (unmatched ISINs skewing toward recent listings and lower
+liquidity). Checked the actual unmatched ISIN list directly and that
+framing was wrong -- **all 369 of them, 100%, are `INF`-prefixed**
+(fund/ETF units), which `isin_lineage.build_isin_date_ranges`
+(`EQUITY_ISIN_PREFIXES = ("INE", "IN9")`) excludes BY DESIGN -- INF uses
+a different NSDL allocation scheme entirely and was never equity in
+scope for that module's structural rule to begin with. There is no real
+entity-resolution gap at all: every genuine equity ISIN in `trade-info`'s
+delivery data resolves cleanly. The listing-age/liquidity skew observed
+is just a property of fund/ETF products as a category (many newly
+launched, more thinly traded) and has nothing to do with lineage
+coverage -- coincidental correlation, not the cause.
 
 UNMATCHED ISINS ARE SKIPPED, NEVER SILENTLY DROPPED: this script writes a
 full report (`results/delivery_import_unmatched_isins.csv`) listing every
@@ -42,8 +48,13 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
+import sys
+
 import duckdb
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from data_layer.db import get_connection  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 TRADE_INFO_DB = Path(r"C:\projects\trade-info\data\nsepit.duckdb")
@@ -101,6 +112,21 @@ def main() -> None:
     unmatched_profile.to_csv(UNMATCHED_REPORT, index=False)
     print(f"  Unmatched-ISIN profile written to {UNMATCHED_REPORT}.")
 
+    # Verified property, not just documented prose: as of 2026-11-19, every
+    # unmatched ISIN is INF-prefixed (fund/ETF units, out of scope for
+    # isin_lineage's equity-only structural rule by design -- see module
+    # docstring's correction). A non-INF ISIN showing up unmatched on a
+    # future re-run would mean an actual equity coverage gap has appeared
+    # and this printed warning is what would surface it.
+    non_inf_unmatched = sorted(set(unmatched_profile.loc[~unmatched_profile["isin"].str.startswith("INF"), "isin"]))
+    if non_inf_unmatched:
+        print(f"  WARNING: {len(non_inf_unmatched)} unmatched ISIN(s) are NOT fund/ETF (INF-prefixed) -- "
+              f"a real equity coverage gap, not the fund-exclusion explained in this script's docstring: "
+              f"{non_inf_unmatched[:10]}")
+    else:
+        print("  Confirmed: all unmatched ISINs are INF-prefixed (fund/ETF units) -- "
+              "no real equity entity-resolution gap.")
+
     matched["known_date"] = matched["trade_date"]
     matched["fetched_at"] = dt.datetime.now()
     matched["source"] = SOURCE_NAME
@@ -108,7 +134,7 @@ def main() -> None:
     out = matched[["isin", "trade_date", "delivery_volume", "delivery_percent",
                     "known_date", "fetched_at", "source", "revision_seq"]]
 
-    con = duckdb.connect(str(WAREHOUSE_DB))
+    con = get_connection(WAREHOUSE_DB)
     con.execute(
         "DELETE FROM delivery_eod WHERE source = ? AND trade_date BETWEEN ? AND ?",
         [SOURCE_NAME, SCOPE_START, SCOPE_END],
