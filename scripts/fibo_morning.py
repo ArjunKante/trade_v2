@@ -192,7 +192,7 @@ class StaleWatchlistError(Exception):
     continue."""
 
 
-def previous_trading_day(d: dt.date) -> dt.date:
+def previous_trading_day(d: dt.date) -> tuple[dt.date, bool]:
     """The trading day immediately before `d`: steps back one calendar
     day at a time, always skipping Saturday/Sunday, and also skipping a
     weekday when src/data_layer/nse_holidays.py's calendar confirms it
@@ -201,30 +201,45 @@ def previous_trading_day(d: dt.date) -> dt.date:
     That calendar (data/raw/nse_cm_holidays.pkl) is deliberately NOT
     committed to git (see nse_holidays.py's own docstring); a GitHub
     Actions runner's fresh checkout relies on the committed fallback JSON
-    instead (nse_holidays.py's `_load`), which covers fewer years. When
-    NEITHER covers `candidate`'s year (HolidayCalendarMissing), this used
-    to fall back to a weekend-only heuristic, silently -- a documented
-    intention to keep the fallback JSON current is exactly the pattern
-    PROJECT_CONTEXT.md Section 7 finding #15 names (a flag nobody is
-    forced to act on dies). REFUSES LOUDLY instead, 2026-11-15 on
-    (OPERATIONS.md's "2027 NSE holiday master" section): HolidayCalendarMissing
-    now propagates uncaught. The caller (main(), below) catches it and
-    calls log_refusal, the same durable, visible path every other morning
-    refusal already uses -- an uncovered year becomes a REFUSED
-    session_status event the same morning, not a silently-wrong
-    NON_TRADING_DAY/trading-day guess discovered later."""
+    instead (nse_holidays.py's `_load`), which covers fewer years.
+
+    DEGRADES to weekend-only, 2026-11-19 (OPERATIONS_UNATTENDED.md
+    "Holiday-calendar guard now degrades instead of refusing", a
+    DELIBERATE REVERSAL of the 2026-11-15 refuse-loudly change -- read
+    that entry for why the operating context changed). From 2026-11-15
+    to 2026-11-19 this let HolidayCalendarMissing propagate uncaught and
+    the caller refused the whole morning run. That was right for a gap
+    someone could fix the same day; it is the wrong trade for a
+    three-month unattended window, where refusing means the forward
+    test silently stops for weeks with nobody watching. Now: when
+    NEITHER calendar source covers `candidate`'s year, that candidate is
+    treated as an ORDINARY TRADING DAY (weekend-only from here on)
+    rather than skipped -- logged as a visible WARNING, and returned as
+    `degraded=True` so the caller can alert loudly (notify_
+    holiday_calendar_degraded, below) without refusing the run.
+
+    Returns (previous_trading_day, degraded) -- `degraded` is True iff
+    ANY candidate day along the way hit an uncovered year."""
     candidate = d - dt.timedelta(days=1)
+    degraded = False
     while True:
         if candidate.weekday() >= 5:  # Saturday=5, Sunday=6
             candidate -= dt.timedelta(days=1)
             continue
-        if is_nse_holiday(candidate):  # raises HolidayCalendarMissing if candidate.year is uncovered -- see docstring
-            candidate -= dt.timedelta(days=1)
-            continue
-        return candidate
+        try:
+            if is_nse_holiday(candidate):
+                candidate -= dt.timedelta(days=1)
+                continue
+        except HolidayCalendarMissing:
+            log(f"WARNING: previous_trading_day cannot confirm whether {candidate} is an NSE "
+                f"holiday -- no calendar entry for {candidate.year}. Degrading to weekend-only "
+                f"for this date (treating it as an ordinary trading day) rather than refusing -- "
+                f"see this function's own docstring. An explicit alert is sent by the caller.")
+            degraded = True
+        return candidate, degraded
 
 
-def assert_watchlist_current(trade_date: dt.date, log_path: Path | None = None) -> dict:
+def assert_watchlist_current(trade_date: dt.date, log_path: Path | None = None) -> tuple[dict, bool]:
     """The events.jsonl-only replacement for the old
     data_layer.staleness.assert_data_current(warehouse) check, now that
     this script never opens the warehouse. Checks the two facts the
@@ -250,8 +265,11 @@ def assert_watchlist_current(trade_date: dt.date, log_path: Path | None = None) 
     Raises StaleWatchlistError if no watchlist_run targets trade_date at
     all (the evening job hasn't logged tonight's watchlist, or hasn't
     run at all), or if every run that does target it has the wrong
-    as_of_date. Returns the matching event (the most recently logged, by
-    `ts`, if more than one correctly targets trade_date) on success.
+    as_of_date. Returns (event, degraded) on success -- the matching
+    event (the most recently logged, by `ts`, if more than one correctly
+    targets trade_date), and whether previous_trading_day had to degrade
+    for an uncovered year (2026-11-19, see that function's docstring --
+    the caller alerts on this, it does not refuse).
 
     `log_path=None` resolves `fibo_live.config.EVENTS_LOG` fresh at call
     time, not a value bound once at import (2026-11-15, see
@@ -265,7 +283,7 @@ def assert_watchlist_current(trade_date: dt.date, log_path: Path | None = None) 
             f"No watchlist_run event targets {trade_date} -- the evening job has not "
             f"logged tonight's watchlist (or hasn't run at all)."
         )
-    expected_as_of = previous_trading_day(trade_date)
+    expected_as_of, degraded = previous_trading_day(trade_date)
     valid = [e for e in runs if e.get("as_of_date") == str(expected_as_of)]
     if not valid:
         found = sorted({e.get("as_of_date") for e in runs})
@@ -274,7 +292,7 @@ def assert_watchlist_current(trade_date: dt.date, log_path: Path | None = None) 
             f"not the expected previous trading day {expected_as_of} -- this watchlist "
             f"was not computed from {trade_date}'s own previous trading day's data."
         )
-    return max(valid, key=lambda e: e["ts"])
+    return max(valid, key=lambda e: e["ts"]), degraded
 
 
 def latest_watchlist(trade_date: dt.date) -> pd.DataFrame:
@@ -670,6 +688,34 @@ def notify_morning_refused(trade_date: dt.date, reason: str) -> None:
         log("  morning-refused email NOT sent -- will retry next run")
 
 
+def notify_holiday_calendar_degraded(trade_date: dt.date) -> None:
+    """The loud alert for previous_trading_day's degrade path
+    (2026-11-19) -- kept at FULL VOLUME even though the run no longer
+    refuses: this is the one signal a human has that the holiday
+    calendar needs reloading, now that an uncovered year no longer
+    produces a REFUSED session_status event. Mirrors fibo_evening.py's
+    notify_holiday_calendar_degraded exactly; deduped per trade_date,
+    same idiom as notify_morning_refused."""
+    if already_notified("holiday_calendar_degraded", trade_date):
+        return
+    subject = f"FIBO MORNING: HOLIDAY CALENDAR DEGRADED - {trade_date}"
+    body = (
+        f"previous_trading_day could not confirm {trade_date}'s own previous-trading-day "
+        f"calculation against the NSE holiday calendar (data_layer.nse_holidays."
+        f"HolidayCalendarMissing) -- degraded to weekend-only instead of refusing. The run "
+        f"continued normally; this email is the only signal that the calendar needs "
+        f"reloading.\n\n"
+        f"Reload data/raw/nse_cm_holidays.pkl (and, for CI, data/raw/nse_cm_holidays_"
+        f"fallback.json) with the new year's NSE trading-holiday circular -- see "
+        f"OPERATIONS_UNATTENDED.md's dated holiday-reload entry for the exact command.\n\n"
+        f"trade_date={trade_date}"
+    )
+    if send_email(subject, body, log=log):
+        record_notification("holiday_calendar_degraded", trade_date)
+    else:
+        log("  holiday-calendar-degraded email NOT sent -- will retry next run")
+
+
 def log_refusal(trade_date: dt.date, run_mode: str, reason: str) -> None:
     """The ONE place every refusal path in main() funnels through.
     Logs `reason` to scheduler.log/stdout (as every refusal already did)
@@ -719,18 +765,18 @@ def main() -> None:
     log(f"=== FIBO MORNING JOB -- {trade_date} (run_mode={run_mode}) ===")
 
     try:
-        latest_run = assert_watchlist_current(trade_date)
+        latest_run, calendar_degraded = assert_watchlist_current(trade_date)
         log(f"Watchlist freshness check OK: watchlist_run {latest_run['run_id']} "
             f"targeting {trade_date}, logged {latest_run['ts']}.")
     except StaleWatchlistError as e:
         log_refusal(trade_date, run_mode, str(e))
         return
-    except HolidayCalendarMissing as e:
-        # REFUSE LOUDLY, don't degrade -- see previous_trading_day's own
-        # docstring. Same durable session_status path every other morning
-        # refusal uses, not a silent weekend-only fallback.
-        log_refusal(trade_date, run_mode, f"holiday calendar missing: {e}")
-        return
+    if calendar_degraded:
+        # DEGRADE, don't refuse -- see previous_trading_day's own
+        # docstring and OPERATIONS_UNATTENDED.md. The run continues; this
+        # is the loud, independent alert that replaces the REFUSED
+        # session_status event a refusal used to produce.
+        notify_holiday_calendar_degraded(trade_date)
 
     watchlist = latest_watchlist(trade_date)
     log(f"{len(watchlist)} qualifying stock(s) from last night's watchlist.")

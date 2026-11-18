@@ -83,7 +83,7 @@ convincing and were not.
 
 | Thing | Status |
 |---|---|
-| Momentum basket | Recorded 2026-10-26, 147 holdings, check-in ~2027-01-27 (calendar-uncertain -- checked 2026-11-15, not just unaddressed: NSE has not yet published its 2027 trading-holiday calendar at all (confirmed on nseindia.com itself, Year selector offers only 2026), so there is nothing to load yet; re-check monthly from December 2026, OPERATIONS.md) |
+| Momentum basket | Recorded 2026-10-26, 147 holdings, check-in ~2027-01-27 (calendar-uncertain -- checked 2026-11-15, not just unaddressed: NSE has not yet published its 2027 trading-holiday calendar at all (confirmed on nseindia.com itself, Year selector offers only 2026), so there is nothing to load yet; re-check monthly from December 2026, OPERATIONS.md. A one-command loader now exists -- `python scripts/fetch_nse_holiday_calendar.py --year 2027`, `OPERATIONS_UNATTENDED.md`'s "2026-12" entry -- and the Fibo jobs degrade rather than refuse in the meantime, 2026-11-19) |
 | Fibo forward test | Running. Morning job on GitHub Actions, triggered by cron-job.org, monitored by healthchecks.io. Evening job on the laptop at 20:00 (moved from 18:30, 2026-11-15), also monitored by healthchecks.io (dead-man's switch), manual if missed. |
 | Options depth collector | Scheduled on the laptop, 10:30/12:30/14:30, monitored by healthchecks.io (dead-man's switch, added 2026-11-15) |
 | Spread estimator validation | Specified, 24 names selected, awaiting market-hours collection |

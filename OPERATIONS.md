@@ -2027,6 +2027,14 @@ local-only, and not something this fix should silently edit or truncate.
 
 ## 2027 NSE holiday master -- checked, not loaded: NSE has not published it yet (2026-11-15)
 
+**UPDATE 2026-11-19**: this entry's own guard description below (refuse
+loudly) is now REVERSED -- see `OPERATIONS_UNATTENDED.md`'s "Holiday-
+calendar guard now degrades instead of refusing." A one-command loader,
+`scripts/fetch_nse_holiday_calendar.py`, also now exists (`OPERATIONS_
+UNATTENDED.md`'s "2026-12: load next year's NSE holiday calendar"
+entry) -- the "do not fabricate or guess 2027 dates" decision below is
+unaffected; this script fetches the real circular, it does not guess.
+
 **Checked at the source, not assumed either way.** NSE's own official
 Holidays page (nseindia.com, Resources > Holidays, Equities segment) has
 a Year selector whose only option is **2026** -- no 2027 entry exists in
@@ -2077,6 +2085,16 @@ January outage entirely -- worth doing, but the guard is what makes this
 safe even if nobody does.
 
 ## Trading-day logic now refuses loudly on an uncovered year, instead of degrading -- 2026-11-15
+
+**REVERSED 2026-11-19** -- see `OPERATIONS_UNATTENDED.md`'s "Holiday-
+calendar guard now degrades instead of refusing" for the full reasoning.
+Refusing was right for the problem that existed on 2026-11-15 (a human
+checking in daily, able to fix it the same day); it is the wrong trade
+for the 2026-12/2027-01 unattended window, where refusing means the
+forward test silently stops for weeks. Both functions now degrade to
+weekend-only and send a loud, independent email instead of stopping the
+run. The section below is kept as the historical record of the original
+decision and its reasoning, not edited in place.
 
 **Replaced, not just flagged.** `scripts/fibo_evening.py`'s
 `next_trading_day` and `scripts/fibo_morning.py`'s `previous_trading_day`

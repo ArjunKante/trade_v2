@@ -168,7 +168,7 @@ def _open_warehouse_with_retry(path, log):
     sys.exit(1)
 
 
-def next_trading_day(d: dt.date) -> dt.date:
+def next_trading_day(d: dt.date) -> tuple[dt.date, bool]:
     """Next trading day after `d`: skips Saturday/Sunday, and skips a
     weekday CONFIRMED an NSE holiday by data_layer.nse_holidays.
     is_nse_holiday (the full local pkl if present, else the committed
@@ -185,35 +185,48 @@ def next_trading_day(d: dt.date) -> dt.date:
     is_nse_holiday up front is what lets Monday's own run see Tuesday's
     holiday in advance and target Wednesday directly instead.
 
-    REFUSES LOUDLY, 2026-11-15 on (OPERATIONS.md's "2027 NSE holiday
-    master" section, PROJECT_CONTEXT.md Section 7 finding #15): used to
-    DEGRADE to the old reactive-only, fetch_log-based check, one
-    candidate day at a time, whenever is_nse_holiday raised
-    HolidayCalendarMissing for a candidate's year -- logged as a visible
-    WARNING, but silently correct-looking to anything not reading logs. A
-    documented intention to reload the calendar before it runs out is
-    exactly the pattern finding #15 names (a flag that needs a human to
-    act on it dies the moment nobody does). Replaced with a hard refusal:
-    HolidayCalendarMissing now propagates out of this function uncaught.
-    The caller (main(), below) catches it there, emails
-    notify_evening_skipped, and returns BEFORE the dead-man's-switch
-    heartbeat call -- so an uncovered year turns into a healthchecks.io
-    DOWN alert the same night, not a silent degradation discovered weeks
-    later. See data_layer.nse_holidays for why a year ever goes
-    uncovered, and OPERATIONS.md for the 2027-specific status.
+    DEGRADES to weekend-only, 2026-11-19 (OPERATIONS_UNATTENDED.md
+    "Holiday-calendar guard now degrades instead of refusing", a
+    DELIBERATE REVERSAL of the 2026-11-15 refuse-loudly change below --
+    read that entry for why the operating context changed, not just
+    what changed). From 2026-11-15 to 2026-11-19 this propagated
+    HolidayCalendarMissing uncaught, and the caller refused the whole
+    run. That was right for a gap someone could fix the same day; it is
+    the wrong trade for a three-month unattended window with nobody
+    watching, where "refuse" means the forward test silently stops for
+    weeks. Now: whenever is_nse_holiday raises HolidayCalendarMissing
+    for a candidate's year, that candidate is treated as an ORDINARY
+    TRADING DAY (weekend-only from here on for that candidate) rather
+    than skipped -- logged as a visible WARNING, and returned as
+    `degraded=True` so the caller can alert loudly (notify_
+    holiday_calendar_degraded, below) without aborting the run. A real
+    holiday that slips through this way produces no bhavcopy that day,
+    which the existing staleness/no-bhavcopy handling already catches
+    (mild, already-covered failure mode) -- the alternative, refusing
+    outright, is not mild: it is the forward test going dark.
 
-    Only used for the idempotency guard below and the report line; the
-    watchlist itself is always computed from `data_date`, the actual
-    latest day with published bhavcopy, never from this."""
+    Returns (next_trading_day, degraded) -- `degraded` is True iff ANY
+    candidate day along the way hit an uncovered year. Only used for the
+    idempotency guard below and the report line; the watchlist itself is
+    always computed from `data_date`, the actual latest day with
+    published bhavcopy, never from this."""
     nxt = d + dt.timedelta(days=1)
+    degraded = False
     while True:
         if nxt.weekday() >= 5:  # Saturday=5, Sunday=6
             nxt += dt.timedelta(days=1)
             continue
-        if is_nse_holiday(nxt):  # raises HolidayCalendarMissing if nxt.year is uncovered -- see docstring
-            nxt += dt.timedelta(days=1)
-            continue
-        return nxt
+        try:
+            if is_nse_holiday(nxt):
+                nxt += dt.timedelta(days=1)
+                continue
+        except HolidayCalendarMissing:
+            log(f"WARNING: next_trading_day cannot confirm whether {nxt} is an NSE holiday -- "
+                f"no calendar entry for {nxt.year}. Degrading to weekend-only for this date "
+                f"(treating it as an ordinary trading day) rather than refusing -- see this "
+                f"function's own docstring. An explicit alert is sent by the caller.")
+            degraded = True
+        return nxt, degraded
 
 
 def already_has_watchlist_run(target_trade_date: dt.date) -> bool:
@@ -253,6 +266,32 @@ def notify_evening_skipped(trade_date: dt.date, short_reason: str, detail: str) 
         record_notification("evening_skipped", trade_date, reason=short_reason)
     else:
         log("  evening-skipped email NOT sent -- will retry next run")
+
+
+def notify_holiday_calendar_degraded(as_of_date: dt.date, target_trade_date: dt.date) -> None:
+    """The loud alert for next_trading_day's degrade path (2026-11-19) --
+    kept at FULL VOLUME even though the run no longer stops: this is the
+    one signal a human has that the holiday calendar needs reloading,
+    now that an uncovered year no longer makes healthchecks.io go DOWN.
+    Deduped per as_of_date, same idiom as notify_evening_skipped, so a
+    15-minute catch-up re-fire or a manual re-run doesn't resend."""
+    if already_notified("holiday_calendar_degraded", as_of_date):
+        return
+    subject = f"FIBO EVENING: HOLIDAY CALENDAR DEGRADED - {target_trade_date}"
+    body = (
+        f"next_trading_day could not confirm {target_trade_date}'s year against the NSE "
+        f"holiday calendar (data_layer.nse_holidays.HolidayCalendarMissing) -- degraded to "
+        f"weekend-only for this date instead of refusing. The run completed normally; this "
+        f"email is the only signal that the calendar needs reloading.\n\n"
+        f"Reload data/raw/nse_cm_holidays.pkl (and, for CI, data/raw/nse_cm_holidays_"
+        f"fallback.json) with the new year's NSE trading-holiday circular -- see "
+        f"OPERATIONS_UNATTENDED.md's dated holiday-reload entry for the exact command.\n\n"
+        f"as_of_date={as_of_date}  target_trade_date={target_trade_date}"
+    )
+    if send_email(subject, body, log=log):
+        record_notification("holiday_calendar_degraded", as_of_date, target_trade_date=str(target_trade_date))
+    else:
+        log("  holiday-calendar-degraded email NOT sent -- will retry next run")
 
 
 def _zone_distance(close: float, zone_low: float, zone_high: float) -> str:
@@ -471,18 +510,14 @@ def main() -> None:
             f"NSE's index-close file may not be published yet, or the fetch failed as no_data. "
             f"Anything reading index_eod for {data_date} right now would see stale/missing data.")
 
-    try:
-        target_trade_date = next_trading_day(data_date)
-    except HolidayCalendarMissing as e:
-        # REFUSE LOUDLY, don't degrade -- see next_trading_day's own
-        # docstring. Returning here, before the heartbeat ping at the end
-        # of this function, is what turns an uncovered year into a
-        # healthchecks.io DOWN alert instead of a silent weekend-only
-        # fallback nobody notices until a real holiday slips through.
-        log(f"REFUSING TO COMPUTE: {e}")
-        notify_evening_skipped(requested_date, "holiday calendar missing", str(e))
-        con.close()
-        return
+    target_trade_date, calendar_degraded = next_trading_day(data_date)
+    if calendar_degraded:
+        # DEGRADE, don't refuse -- see next_trading_day's own docstring
+        # and OPERATIONS_UNATTENDED.md. The run continues (reaches the
+        # heartbeat below); this is the loud, independent alert that
+        # replaces the healthchecks.io DOWN signal a refusal used to
+        # produce.
+        notify_holiday_calendar_degraded(data_date, target_trade_date)
     # Detected once, from the clock (src/fibo_live/clock.py), against the
     # actual data date rather than requested_date -- this job runs after
     # close by design, so it is expected to read REPLAY almost always;

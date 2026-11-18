@@ -80,7 +80,7 @@ def test_two_valid_runs_for_the_same_target_select_the_latest_by_timestamp_not_t
         f.write(json.dumps(_watchlist_row("stale-run", 115.4)) + "\n")
         f.write(json.dumps(_watchlist_row("corrected-run", 108.23)) + "\n")
 
-    latest_run = fibo_morning.assert_watchlist_current(target, log_path=log_path)
+    latest_run, _ = fibo_morning.assert_watchlist_current(target, log_path=log_path)
     assert latest_run["run_id"] == "corrected-run", (
         "assert_watchlist_current must select the LATEST valid run by timestamp, not the first logged"
     )
@@ -117,7 +117,7 @@ def test_run_with_the_correct_as_of_date_passes(tmp_path):
     close -- no weekend or holiday in the gap at all."""
     log_path = tmp_path / "events.jsonl"
     _log_watchlist_run(log_path, TRADE_DATE, TRADE_DATE - dt.timedelta(days=1), run_id="run-fresh")
-    latest_run = fibo_morning.assert_watchlist_current(TRADE_DATE, log_path=log_path)
+    latest_run, _ = fibo_morning.assert_watchlist_current(TRADE_DATE, log_path=log_path)
     assert latest_run["run_id"] == "run-fresh"
 
 
@@ -141,7 +141,7 @@ def test_picks_the_latest_of_several_valid_runs_targeting_the_same_day(tmp_path)
                         ts=dt.datetime.combine(correct_as_of, dt.time(19, 0)), run_id="run-older")
     _log_watchlist_run(log_path, TRADE_DATE, correct_as_of,
                         ts=dt.datetime.combine(correct_as_of, dt.time(23, 0)), run_id="run-newer")
-    latest_run = fibo_morning.assert_watchlist_current(TRADE_DATE, log_path=log_path)
+    latest_run, _ = fibo_morning.assert_watchlist_current(TRADE_DATE, log_path=log_path)
     assert latest_run["run_id"] == "run-newer"
 
 
@@ -154,7 +154,7 @@ def test_friday_evening_watchlist_is_valid_on_monday_morning(tmp_path):
     log_path = tmp_path / "events.jsonl"
     _log_watchlist_run(log_path, MONDAY, FRIDAY_BEFORE_MONDAY,
                         ts=dt.datetime.combine(FRIDAY_BEFORE_MONDAY, dt.time(18, 30)), run_id="run-friday")
-    latest_run = fibo_morning.assert_watchlist_current(MONDAY, log_path=log_path)
+    latest_run, _ = fibo_morning.assert_watchlist_current(MONDAY, log_path=log_path)
     assert latest_run["run_id"] == "run-friday"
 
 
@@ -179,24 +179,28 @@ def test_thursday_evening_watchlist_is_valid_on_monday_after_a_friday_holiday(tm
 
     _log_watchlist_run(log_path, MONDAY, THURSDAY_BEFORE_HOLIDAY_FRIDAY,
                         ts=dt.datetime.combine(THURSDAY_BEFORE_HOLIDAY_FRIDAY, dt.time(18, 30)), run_id="run-thursday")
-    latest_run = fibo_morning.assert_watchlist_current(MONDAY, log_path=log_path)
+    latest_run, _ = fibo_morning.assert_watchlist_current(MONDAY, log_path=log_path)
     assert latest_run["run_id"] == "run-thursday"
 
 
-def test_friday_holiday_run_raises_holiday_calendar_missing_rather_than_degrading(tmp_path, monkeypatch):
-    """The flip side, and a gap this project used to carry rather than
-    fix: if the holiday calendar is NOT available (HolidayCalendarMissing
-    -- the real situation on a GitHub Actions runner for an uncovered
-    year, since data/raw/nse_cm_holidays.pkl is not committed and the
-    fallback JSON covers fewer years), previous_trading_day USED TO fall
-    back to weekend-only and silently compute the wrong expected as_of_date
-    -- a Thursday-sourced watchlist would be wrongly refused, or worse,
-    a wrong one could be wrongly accepted, with no visible signal either
-    way. 2026-11-15 (OPERATIONS.md, PROJECT_CONTEXT.md Section 7 finding
-    #15): this now REFUSES LOUDLY instead -- HolidayCalendarMissing
-    propagates out of assert_watchlist_current uncaught, and main() (see
-    test_holiday_week_oct2026.py's own coverage) turns that into a durable
-    REFUSED session_status event, not a silent wrong guess."""
+def test_missing_calendar_degrades_to_weekend_only_instead_of_refusing(tmp_path, monkeypatch):
+    """REVERSED 2026-11-19 (OPERATIONS_UNATTENDED.md "Holiday-calendar
+    guard now degrades instead of refusing", a deliberate reversal of
+    the 2026-11-15 refuse-loudly change this test used to assert --
+    the operating context changed: a three-month unattended window
+    makes "refuse" mean the forward test silently stops for weeks,
+    which is worse than the mild, already-covered failure mode of
+    running on an undetected holiday (no bhavcopy that day, caught by
+    the existing staleness guard).
+
+    Ordinary weekday case, deliberately NOT the Friday-holiday shape
+    (that one is covered by test_thursday_evening_watchlist_is_valid_on_
+    monday_after_a_friday_holiday above): with the calendar unconfirmable
+    for every date, previous_trading_day degrades to weekend-only, which
+    for a Wednesday with no real holiday in the gap gives exactly the
+    right answer (Tuesday) anyway -- this is the common case while a
+    year is uncovered. assert_watchlist_current must NOT raise, and must
+    report degraded=True so the caller can alert without refusing."""
     log_path = tmp_path / "events.jsonl"
 
     def raise_missing(d):
@@ -204,18 +208,31 @@ def test_friday_holiday_run_raises_holiday_calendar_missing_rather_than_degradin
 
     monkeypatch.setattr(fibo_morning, "is_nse_holiday", raise_missing)
 
-    _log_watchlist_run(log_path, MONDAY, THURSDAY_BEFORE_HOLIDAY_FRIDAY,
-                        ts=dt.datetime.combine(THURSDAY_BEFORE_HOLIDAY_FRIDAY, dt.time(18, 30)), run_id="run-thursday")
-    with pytest.raises(fibo_morning.HolidayCalendarMissing):
-        fibo_morning.assert_watchlist_current(MONDAY, log_path=log_path)
+    as_of = TRADE_DATE - dt.timedelta(days=1)  # ordinary Tuesday
+    _log_watchlist_run(log_path, TRADE_DATE, as_of,
+                        ts=dt.datetime.combine(as_of, dt.time(20, 0)), run_id="run-tuesday")
+    latest_run, degraded = fibo_morning.assert_watchlist_current(TRADE_DATE, log_path=log_path)
+    assert latest_run["run_id"] == "run-tuesday"
+    assert degraded is True, "a calendar-missing year must be reported as degraded, not silently absorbed"
 
 
 def test_previous_trading_day_skips_weekend_only_when_no_holiday(monkeypatch):
     monkeypatch.setattr(fibo_morning, "is_nse_holiday", lambda d: False)
-    assert fibo_morning.previous_trading_day(MONDAY) == FRIDAY_BEFORE_MONDAY
+    assert fibo_morning.previous_trading_day(MONDAY) == (FRIDAY_BEFORE_MONDAY, False)
 
 
 def test_previous_trading_day_skips_a_confirmed_weekday_holiday_too(monkeypatch):
     friday = FRIDAY_BEFORE_MONDAY
     monkeypatch.setattr(fibo_morning, "is_nse_holiday", lambda d: d == friday)
-    assert fibo_morning.previous_trading_day(MONDAY) == THURSDAY_BEFORE_HOLIDAY_FRIDAY
+    assert fibo_morning.previous_trading_day(MONDAY) == (THURSDAY_BEFORE_HOLIDAY_FRIDAY, False)
+
+
+def test_previous_trading_day_degrades_rather_than_raising_on_missing_calendar(monkeypatch):
+    """2026-11-19: the direct unit-level counterpart to the
+    assert_watchlist_current test above -- no exception, degraded=True,
+    and (for this ordinary-weekday case) the correct date anyway."""
+    def raise_missing(d):
+        raise fibo_morning.HolidayCalendarMissing("no calendar on this runner")
+
+    monkeypatch.setattr(fibo_morning, "is_nse_holiday", raise_missing)
+    assert fibo_morning.previous_trading_day(TRADE_DATE) == (TRADE_DATE - dt.timedelta(days=1), True)

@@ -14,6 +14,14 @@ what to inspect, the exact command).
 prefixed `REFUSING TO COMPUTE:`) names the reason. Match that reason
 string against the section headers below.
 
+**Since 2026-11-19, one more signal type exists that is NOT a refusal**:
+an email subject starting `FIBO EVENING: HOLIDAY CALENDAR DEGRADED` or
+`FIBO MORNING: HOLIDAY CALENDAR DEGRADED` -- the job completed normally
+(heartbeat reached, no `REFUSED` session_status), but ran with the
+holiday calendar unable to confirm a date. See "Holiday-calendar guard
+now degrades instead of refusing" below for what this means and the
+one-command fix.
+
 ---
 
 ## `LineageWouldChangeError` ("isin_lineage would change after backfill")
@@ -166,3 +174,127 @@ recovery:
   (`corporate_actions`/`isin_lineage` gained a row some OTHER way than
   this project's own `build_isin_lineage.py`). Investigate which of
   `margin_tripwire.py`'s two conditions fired before touching anything.
+
+---
+
+## 2026-12: load next year's NSE holiday calendar before it's needed
+
+### What it means
+
+`data_layer.nse_holidays`' two sources (`data/raw/nse_cm_holidays.pkl`,
+the laptop's own full copy; `data/raw/nse_cm_holidays_fallback.json`,
+the committed copy a GitHub Actions runner's fresh checkout relies on)
+cover 2016-2026 only, as of 2026-11-19. NSE typically publishes the
+following year's trading-holiday circular in December. **Check monthly
+starting December 2026** -- the exact command below both checks and
+loads in one step, so there is nothing to do by hand beyond running it.
+
+### The exact command
+
+```
+python scripts/fetch_nse_holiday_calendar.py --year 2027
+```
+
+- If NSE has not published 2027 yet, this refuses loudly and writes
+  nothing (`HolidayCalendarNotPublished`, exit code 1) -- safe to
+  re-run on the same schedule next month.
+- If it has, this fetches the real CM-segment circular, writes both
+  `nse_cm_holidays.pkl` and `nse_cm_holidays_fallback.json`, and prints
+  the exact `git add`/`git commit` for the fallback file (the one path
+  this project's `.gitignore` carves out). **Commit it** -- an
+  uncommitted fallback file still leaves a GitHub Actions runner's
+  fresh checkout uncovered for 2027.
+- `--dry-run` fetches and reports without writing anything; this is how
+  the script was verified against the already-trusted 2026 calendar
+  before being trusted for 2027 (`python scripts/fetch_nse_holiday_
+  calendar.py --year 2026 --dry-run` reproduced NSE's real, live 20-date
+  2026 CM calendar byte-for-byte against the stored one, 2026-11-19).
+
+### Why this script didn't exist until 2026-11-19
+
+The original 2016-2026 calendar was "fetched directly from NSE in an
+earlier phase of this project" (`data_layer/nse_holidays.py`'s own
+docstring) by a one-off, uncommitted script. Every month since, the
+monthly-recheck note existed only as a documented intention -- exactly
+the pattern `PROJECT_CONTEXT.md` Section 7 finding #15 names (a flag
+nobody is forced to act on dies). This script is the fix: a single,
+tested, re-runnable command, so the January outage this whole section
+exists to prevent takes one command to resolve, by anyone, not a fresh
+investigation into how the original calendar was ever built.
+
+---
+
+## Holiday-calendar guard now degrades instead of refusing (2026-11-19) -- a deliberate reversal of 2026-11-15
+
+### What changed
+
+From 2026-11-15 to 2026-11-19, `fibo_evening.py`'s `next_trading_day`
+and `fibo_morning.py`'s `previous_trading_day` let `HolidayCalendarMissing`
+propagate uncaught the moment a candidate date's year wasn't covered by
+either calendar source -- the evening job emailed `notify_evening_
+skipped` and stopped before the heartbeat; the morning job logged a
+`REFUSED` session_status and stopped before `login()`. **Reversed
+2026-11-19**: both functions now catch `HolidayCalendarMissing`
+themselves, log a WARNING, treat the unconfirmable candidate as an
+ORDINARY TRADING DAY (weekend-only from there), and return a `degraded`
+flag. The caller no longer stops the run on this condition -- it sends
+a loud, independent email (`notify_holiday_calendar_degraded`, new in
+both scripts, kept at FULL VOLUME, same `send_email`/dedup mechanism
+every other alert here already uses) and continues.
+
+### Why: the operating context changed, not the underlying judgment
+
+Refusing outright was the right trade on 2026-11-15, for the problem
+that existed then: a single evening/morning run hitting an uncovered
+year, with a human checking in daily, able to reload the calendar the
+same day. The *same* mechanism is the wrong trade for the problem that
+exists now: the 2026-12/2027-01 unattended window above, where nobody
+may check in for weeks. In that setting, "refuse" doesn't mean "caught
+safely" -- it means the forward test silently stops producing
+watchlists every single night (evening) or every single morning
+(morning) until someone happens to notice and runs the reload command.
+A documented alert nobody reads in time is operationally identical to
+no alert at all; a correctly-firing degrade-and-continue is not.
+
+The two failure modes were weighed directly, not assumed:
+- **Weekend-only degradation is mild, and already covered.** If a real,
+  uncovered-year holiday slips through as an assumed trading day, the
+  evening job's bhavcopy fetch simply finds nothing published that day
+  (exactly like any other day with no data yet), and the EXISTING
+  staleness/no-bhavcopy handling (`assert_data_current`, the backward-
+  walk fetch loop) already deals with that case correctly -- it is not
+  a new failure mode, it's the ordinary "nothing published yet" path
+  this job runs every single day regardless.
+- **Refusing outright, for three unattended months, is not mild.** It
+  is the forward test going dark, discovered only when a human
+  eventually goes looking -- the exact outcome `PROJECT_CONTEXT.md`
+  Section 2's "momentum basket check-in ~2027-01-27, calendar-uncertain"
+  entry was already worried about for a DIFFERENT, adjacent reason.
+
+### What did NOT change
+
+- `data_layer.nse_holidays.is_nse_holiday` itself is untouched -- it
+  still raises `HolidayCalendarMissing` for an uncovered year, by
+  design (that module's own docstring: the choice of what to do about
+  it belongs to each caller, not to it). Only the two Fibo call sites'
+  own degrade-vs-refuse choice reversed.
+- `fibo_morning.py`'s separate, pre-existing `is_non_trading_day` check
+  already silently treated an uncovered year as "not confirmed a
+  holiday" (returns `False` on `HolidayCalendarMissing`) -- that is a
+  different, older code path, untouched by this change, and it never
+  sends an alert either way. Only the two newly-degrading functions
+  (`next_trading_day`, `previous_trading_day`) now alert.
+- The loudest fix remains loading the real calendar (the section above)
+  -- degrading gracefully is a safety net for the gap between "the
+  calendar ran out" and "someone reloads it," not a reason to stop
+  reloading it.
+
+### Verified by test
+
+`tests/test_holiday_week_oct2026.py` and `tests/test_fibo_morning_
+watchlist_freshness.py`: both `next_trading_day`/`previous_trading_day`
+return `(date, degraded)` instead of raising; `assert_watchlist_current`
+propagates the flag instead of raising; both `main()`s complete
+normally (heartbeat reached / no holiday-calendar `REFUSED` event) and
+each sends exactly one `HOLIDAY CALENDAR DEGRADED` email. Full `fibo`/
+`holiday` selection (211 tests) passes.
