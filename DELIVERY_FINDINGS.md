@@ -96,6 +96,41 @@ verifiably changes the computed result rather than being passed through
 inertly. No stop-and-report was warranted. Proceeding to Section 10
 step 4 (the real DEV run, the SELECTION null, and the gate) is next.
 
+## Pre-commitments, recorded before the DEV run (before any number exists)
+
+**The user's prediction, for the calibration record -- verdict only, no
+mechanism claim**: **this fails the gate.** Stated reasons: this
+project's base rate is 20 strategies tested and 1 passed; the ~1% MDE
+(Section 6) requires an effect as large as momentum's own per-period
+margin to clear; and the signal is only weakly related to momentum
+(Spearman 0.15-0.21), so it gets no free ride from the one mechanism
+that has actually worked here. Explicitly a prediction about the
+VERDICT, not about WHY -- the user's own mechanism-prediction record in
+this project stands at 0 for 6.
+
+This is recorded alongside, not in place of, Claude's own prediction
+already fixed in `PREREGISTRATION_DELIVERY.md` Section 9 (DEV fails,
+most likely at condition (b), with the same base-rate reasoning but
+flagging more uncertainty since this is a new signal family) -- both
+predictions existed before any DEV number, so both are checkable for
+calibration afterward, independently.
+
+**What each outcome means, fixed now so it cannot be reinterpreted
+after the number exists:**
+
+| Result | Meaning |
+|---|---|
+| Spread above the SELECTION null's 95th percentile AND the other gate conditions (Section 5) clear | **PASS.** Justifies a forward paper test and nothing more, per rule 6. Not a validated edge. |
+| Spread positive but below the 95th percentile | **NOT a near-miss, NOT grounds for a variant.** A null result at this power. Rule 7 closes the family. |
+| Spread negative or zero | **Null.** Family closes. |
+
+There is no fourth reading. A below-threshold or negative result is not
+an invitation to retry at a 90-day baseline, all-days delivery, or any
+other configuration (amendment 4) -- that temptation is exactly what
+produced the Swing family's six variants and its own holdout failure,
+named explicitly as the failure mode this pre-commitment exists to
+block.
+
 ## DEV result
 
 Not yet run.
