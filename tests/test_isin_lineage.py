@@ -129,6 +129,34 @@ def test_two_different_companies_sharing_a_symbol_are_not_linked(monkeypatch):
     assert entities["INE333C01019"] != entities["INE999Z01027"]  # NOT merged into one entity
 
 
+def test_known_date_deterministic_for_an_isin_traded_under_two_symbol_names(monkeypatch):
+    """Found 2026-11-18 while building gap_backfill's before/after lineage
+    diff (BUGS.md Bug #33's fix): an isin that traded under more than one
+    SYMBOL (a rename, same ISIN -- real, e.g. IN9623B01058: FRLDVR through
+    2016-05-12, then FELDVR from 2016-05-13) produces TWO rows in `ranges`
+    grouped by (symbol, isin). An unlinked isin's known_date fallback used
+    to be `.iloc[0]` of that unordered multi-row match -- non-deterministic
+    across calls on byte-identical data, since build_isin_date_ranges has
+    no ORDER BY and DuckDB's own GROUP BY row order is not guaranteed
+    stable. Two independent build_lineage() calls back to back, nothing
+    else touching prices_eod in between, disagreed on 74-104 isins'
+    known_date in the real warehouse before this was fixed to `.min()`.
+    This fixture reproduces the exact two-symbol-same-isin shape and
+    asserts both calls agree, and agree on the semantically correct
+    (earliest) date."""
+    import data_layer.isin_lineage as mod
+
+    fake_ranges = _fake_ranges([
+        {"symbol": "OLDNAME", "isin": "INE999Z01011", "first_date": dt.date(2016, 1, 1), "last_date": dt.date(2016, 5, 12)},
+        {"symbol": "NEWNAME", "isin": "INE999Z01011", "first_date": dt.date(2016, 5, 13), "last_date": dt.date(2026, 11, 18)},
+    ])
+    monkeypatch.setattr(mod, "build_isin_date_ranges", lambda con: fake_ranges)
+
+    results = [mod.build_lineage(con=None)[0] for _ in range(10)]
+    known_dates = {df.loc[df["isin"] == "INE999Z01011", "known_date"].iloc[0] for df in results}
+    assert known_dates == {dt.date(2016, 1, 1)}  # deterministic AND the true earliest date
+
+
 def test_serial_not_increasing_in_date_order_is_ambiguous_not_guessed(monkeypatch):
     import data_layer.isin_lineage as mod
 

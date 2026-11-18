@@ -164,7 +164,25 @@ def build_lineage(con: duckdb.DuckDBPyConnection) -> tuple[pd.DataFrame, pd.Data
     final_rows = []
     for isin in all_isins:
         entity_id = resolve_entity(isin)
-        known_date = transition_map.get(isin, ranges.loc[ranges["isin"] == isin, "first_date"].iloc[0])
+        # .min(), not .iloc[0]: an isin with no transition_map entry (never
+        # resolved as anyone's successor) can still have MULTIPLE rows in
+        # `ranges` if it traded under more than one SYMBOL over time (a
+        # rename, same ISIN -- confirmed real, e.g. IN9623B01058 traded as
+        # FRLDVR through 2016-05-12, then FELDVR from 2016-05-13 onward).
+        # build_isin_date_ranges has no ORDER BY, so DuckDB's own GROUP BY
+        # row order is not guaranteed stable across calls -- `.iloc[0]` on
+        # that unordered multi-row match picked an ARBITRARY one of the
+        # isin's symbol-specific first_dates, non-deterministically, call
+        # to call, on byte-identical underlying data (found 2026-11-18
+        # while building gap_backfill's before/after lineage diff, BUGS.md
+        # Bug #33's fix: two build_lineage() calls back to back, nothing
+        # else touching prices_eod in between, disagreed on 74-104 isins'
+        # known_date). `.min()` is both deterministic AND the semantically
+        # correct value regardless: an unlinked isin's known_date should be
+        # its own true earliest observed trade_date across every symbol it
+        # has ever traded under, not whichever symbol-row DuckDB happened
+        # to return first.
+        known_date = transition_map.get(isin, ranges.loc[ranges["isin"] == isin, "first_date"].min())
         final_rows.append(dict(
             isin=isin,
             entity_id=entity_id,
