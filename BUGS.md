@@ -3573,3 +3573,31 @@ restore failure, their own intentional `{"status": "NOT_RECOVERABLE",
 with (they mark permanently-unreproducible figures, e.g. the original
 3.87, that predate this persistence mechanism). See OPERATIONS.md for
 the standing hazard note this incident produced.
+
+**UNIVERSE CHECK, 2026-11-19, 20min timebox: universe is innocent, Bug
+#34 stays open.** Compared the eligible universe at each of the 5
+holdout rebalance dates between old code (`e9aa5e0`, pre-e4ce43c/Bug
+#30/Bug #33) and current HEAD, both against today's warehouse, same
+loaded exclusion list (79 same-ISIN + 40 lineage entities, identical
+both runs). Three set levels checked per date -- `full` (passes the
+momentum/tercile dropna), `bench` (also has a forward return, the
+actual candidate pool), `mom` (top decile, the real selection):
+
+| date | full (old/new) | bench (old/new) | mom (old/new) | any set differs |
+|---|---|---|---|---|
+| 2025-04-11 | 1215/1215 | 1132/1132 | 114/114 | NO |
+| 2025-07-14 | 1231/1231 | 1127/1127 | 113/113 | NO |
+| 2025-10-14 | 1260/1260 | 1153/1153 | 116/116 | NO |
+| 2026-01-14 | 1358/1358 | 1270/1270 | 127/127 | NO |
+| 2026-04-22 | 1410/1410 | 1281/1281 | 129/129 | NO |
+
+Zero set-difference at every date, every level -- not just matching
+counts, the actual `entity_id` sets are identical both ways. This
+closes off the universe-construction layer as a candidate entirely;
+combined with the prior commits (code identical, exclusion lists
+identical, corporate_actions/isin_lineage/prices_eod all frozen), the
+cause is now isolated to something inside the per-entity VALUE
+computation itself (momentum value, forward return, or liquidity
+tercile assignment) for entities already common to both universes --
+not which entities are admitted. Not investigated further per the
+20-minute timebox. Bug #34 remains OPEN.
