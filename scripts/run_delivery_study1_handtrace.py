@@ -99,7 +99,8 @@ def main() -> None:
           f"exclusion-flagged rows ({100*(len(panel)-len(up_panel))/len(panel):.3f}%).")
 
     all_dates = sorted(panel["trade_date"].unique())
-    rdates = rebalance_dates(all_dates, HORIZON_DAYS)
+    delivery_max_date = delivery["trade_date"].max()
+    rdates = rebalance_dates(all_dates, HORIZON_DAYS, delivery_max_date=delivery_max_date)
     print(f"\nRebalance dates: {len(rdates)} usable "
           f"(nominal stride-63 count before warmup/tail trim: {len(all_dates[::63])}).")
     print(f"  first={pd.Timestamp(rdates[0]).date()}  last={pd.Timestamp(rdates[-1]).date()}")

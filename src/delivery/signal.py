@@ -120,17 +120,34 @@ def select_top_decile(signal_at_date: pd.DataFrame) -> tuple[pd.DataFrame, float
     return sel, cutoff
 
 
-def rebalance_dates(all_trade_dates: list, horizon_days: int) -> list:
+def rebalance_dates(all_trade_dates: list, horizon_days: int, *, delivery_max_date=None) -> list:
     """Quarterly, non-overlapping: every 63rd trading day of the full
     available index (`all_dates[::63]`, the identical construction
     momentum's own holdout script uses), kept only if it has enough prior
     history for both windows (>= MEASUREMENT_DAYS + BASELINE_DAYS trading
     days) and enough forward data remaining (>= horizon_days) --
-    PREREGISTRATION_DELIVERY.md Section 1, 'Rebalance dates'."""
+    PREREGISTRATION_DELIVERY.md Section 1, 'Rebalance dates'.
+
+    BUG FIXED (found running Section 10 step 4, before any aggregate
+    number was reported as the DEV result): this function originally
+    strided over the FULL price panel's own date range, which extends
+    past `delivery_eod`'s own 2016-2025 coverage into 2026 (price data
+    continues; delivery data does not). That produced two degenerate
+    rebalance dates (2026-03-18, 2026-06-23) whose entire 21-day
+    measurement window falls past delivery coverage, with pools of 12
+    and 1 eligible entities respectively -- a data-coverage artifact, not
+    a real reading. `delivery_max_date` (required by every caller in this
+    study, no default) clips the candidate dates to delivery_eod's own
+    max date BEFORE striding, exactly as `PREREGISTRATION_DELIVERY.md`
+    Section 1 already specified in words ("the full trading-day index
+    intersected with delivery_eod's own coverage") -- the prose was
+    correct; this function's first implementation did not match it."""
     dates = sorted(all_trade_dates)
     strided = dates[::63]
     out = []
     for d in strided:
+        if delivery_max_date is not None and d > pd.Timestamp(delivery_max_date):
+            continue  # clipped against delivery_eod's own coverage, not the (longer) price panel's
         idx = dates.index(d)
         if idx >= MEASUREMENT_DAYS + BASELINE_DAYS and idx + horizon_days < len(dates):
             out.append(d)

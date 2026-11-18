@@ -20,9 +20,25 @@ Context figures from the same run: panel = 4,293,969 entity-days /
 flagged (entity, date) rows (persisted to `results/exclusions/
 run_delivery_study1_dev.json`, the first and only computation of it --
 every later script in this family loads this file, never recomputes).
-Rebalance dates: **40 usable**, 2016-07-07 to 2026-06-23 (nominal
+Rebalance dates: **38 usable**, 2016-07-07 to 2025-12-15 (nominal
 stride-63 count before the warmup/tail trim was 43 -- close to, and
 consistent with, the ~35-40 the Section 6 power calculation needs).
+
+**BUG FOUND AND FIXED during Section 10 step 4 (the real DEV run), before
+any aggregate number was reported**: `delivery.signal.rebalance_dates`
+originally strided over the full PRICE panel's own date range, which
+extends past `delivery_eod`'s 2016-2025 coverage into 2026 (price data
+continues; delivery data does not). That produced two degenerate
+candidate rebalance dates, 2026-03-18 and 2026-06-23, whose entire
+21-day measurement window falls past delivery coverage -- eligible
+pools of 12 and 1 entities respectively, a data-coverage artifact, not
+a real reading. Caught before being included in any mean; fixed by
+clipping candidate dates to `delivery_eod`'s own max date
+(2025-12-31) before striding, matching what `PREREGISTRATION_DELIVERY.
+md` Section 1 already specified in words. This number above (38, not
+40) and the hand-trace re-run below both reflect the fix; none of the
+five traces themselves used the two dropped dates, so none of their
+conclusions change.
 
 1. **Zero up-days in a FULL-length 21-day measurement window.** Entity
    `INE416A01036`, rebalance 2017-10-16: 21/21 measurement rows present,
@@ -65,7 +81,7 @@ consistent with, the ~35-40 the Section 6 power calculation needs).
    rebalance (2021-08-13): eligible pool = 1,837, 90th-percentile cutoff
    = 10.026407, selected (`>= cutoff`) = 184 -- exactly the nominal 10%,
    zero entities tied at the exact cutoff that day. Checked across ALL
-   40 usable rebalance dates for a real tie (a priori unlikely on a
+   38 usable rebalance dates for a real tie (a priori unlikely on a
    continuous float): **found one, at 2022-08-19 -- 2 entities share the
    exact cutoff value, and both are included** (the inclusive `value >=
    quantile(0.90)` rule, reused verbatim from momentum's own
@@ -131,6 +147,53 @@ produced the Swing family's six variants and its own holdout failure,
 named explicitly as the failure mode this pre-commitment exists to
 block.
 
-## DEV result
+## DEV result -- Phase A (real portfolio vs. benchmark), checkpoint before the null
 
-Not yet run.
+**Bad result first: the mean quarterly spread is negative, -0.20% net of
+costs, across all 38 usable DEV rebalance dates (2016-07-07 to
+2025-12-15).** Per the pre-committed outcome table above, a negative
+spread is a NULL result and closes the family -- this does not depend
+on the SELECTION null, which has not been run.
+
+| | value |
+|---|---|
+| usable quarters | 38 of 38 attempted (0 skipped for an empty pool) |
+| mean quarterly spread, net of costs | -0.20% |
+| SD of quarterly spread | 4.26% (Phase 0's own random-decile-null proxy, Section 6, was 2.12% -- this run's REAL dispersion is roughly double that, see note below) |
+| SE of the mean | 0.69% |
+| win rate (spread > 0) | 42.1% (16/38) |
+| mean spread dropping the single best quarter (2021-05-17, +15.97%) | -0.64% -- WORSE, not better, so the headline number is not an artifact of one bad quarter either |
+
+Full per-rebalance detail: `results/run_delivery_study1_dev_portfolio.csv`
+(`scripts/run_delivery_study1_dev_portfolio.py`).
+
+**The real spread's own SD (4.26%) is about double Phase 0's 2.12%
+random-decile figure.** That 2.12% was explicitly a null-world number
+(spread under RANDOM decile assignment, where the real signal plays no
+role) -- it was never claimed to equal the REAL strategy's own
+dispersion, and Section 6 did not promise it would. It is still worth
+flagging plainly: if the SELECTION null run in Phase B reproduces
+something close to 4.26% (not 2.12%) under random assignment too, the
+~35-quarter power claim in Section 6 would need revisiting -- the
+0.69% SE above alone already implies this specific -0.20% mean is not
+distinguishable from zero on this sample (well under 1 SE from either
+side).
+
+**Verdict, per the pre-committed table (`DELIVERY_FINDINGS.md`
+"Pre-commitments" section) and rule 7: NULL. The family closes.** The
+user's own prediction (fails the gate) is confirmed; Claude's own
+Section 9 prediction (fails, most likely at condition (b)) is NOT
+confirmed in its specific mechanism -- the result fails earlier, at
+condition (a) itself (spread must simply exceed the benchmark net of
+costs), never reaching the null-percentile question at all.
+
+**The SELECTION null (Phase B, 5,000 seeds) has deliberately NOT been
+run.** The pre-committed outcome table decides this case (negative
+spread) without it, and running an expensive, previously-unreliable
+stage (user's own caution: "this environment has killed long runs
+before -- a job estimated at four hours once took seventeen") to
+compute a number that cannot change an already-decided verdict is not
+justified by the gate alone. Stated here as a checkpoint for the user
+to confirm: run it anyway for the completeness of this write-up
+(reports the actual null SD, useful given the 2.12%-vs-4.26% question
+above), or close the family now without it.

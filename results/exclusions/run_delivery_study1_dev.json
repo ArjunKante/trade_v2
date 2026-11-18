@@ -1,7 +1,7 @@
 {
   "result_id": "run_delivery_study1_dev",
   "produced_by": "scripts/run_delivery_study1_handtrace.py",
-  "generated_at": "2026-11-19T01:23:32.963844",
+  "generated_at": "2026-11-19T01:39:09.723362",
   "notes": "Delivery Study 1 DEV hand-trace -- combined Bug #1 + Bug #11 guard, computed once here.",
   "detector_source_hashes": {
     "src/data_layer/lineage_jump_guard.py": "sha256:b35575d2e39fde2b966b808823527ec3c858239fa214e97133a4a95643bb724e",
