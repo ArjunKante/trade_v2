@@ -34,6 +34,25 @@ CREATE TABLE IF NOT EXISTS prices_eod (
     revision_seq    INTEGER NOT NULL
 );
 
+-- NSE delivery position (MTO report), imported from the sibling trade-info
+-- project's own prices_raw table -- a separate table, not new columns on
+-- prices_eod, so this import carries zero risk to every existing reader of
+-- that table. Keyed on bare isin (not entity_id): joins against prices_eod/
+-- isin_lineage the same way adjustment_factors and index_eod do, via isin
+-- for prices_eod and via isin_lineage when entity-level resolution is
+-- needed. See scripts/backfill_delivery_percent.py for the import itself,
+-- the entity-resolution match report it produces, and the 2016-2025 scope.
+CREATE TABLE IF NOT EXISTS delivery_eod (
+    isin              VARCHAR NOT NULL,
+    trade_date        DATE NOT NULL,
+    delivery_volume   BIGINT,
+    delivery_percent  DOUBLE,
+    known_date        DATE NOT NULL,
+    fetched_at        TIMESTAMP NOT NULL,
+    source            VARCHAR NOT NULL,
+    revision_seq      INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS fundamentals_filings (
     isin             VARCHAR NOT NULL,
     symbol           VARCHAR NOT NULL,
