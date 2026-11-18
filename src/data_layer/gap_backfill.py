@@ -79,23 +79,57 @@ DOWNSTREAM CHAIN rebuilt after any auto-fill (BUGS.md Bug #30, item 2):
     revised something inside the first sealed window or resumed a frozen
     feed; propagates as TripwireFailedAfterBackfillError.
 
+LINEAGE, CLOSED 2026-11-18 (BUGS.md Bug #33): the "narrow edge case, not
+verified" exclusion of isin_lineage from this rebuild chain was wrong --
+confirmed, not narrow. Two synthetic-warehouse reproductions showed an
+ordinary backfilled day can shift a successor ISIN's known_date, or flip
+a clean predecessor/successor link to overlapping_date_ranges_not_a_
+clean_handover, silently splitting one entity's continuous history into
+two. isin_lineage is NOT rebuilt-and-persisted unconditionally the way
+adjustment_factors/entity_panel are, for a concrete reason, not caution:
+margin_tripwire.assert_corporate_actions_and_lineage_still_frozen asserts
+isin_lineage's row count AND MAX(fetched_at) are UNCHANGED since
+2026-09-19 -- and isin_lineage.build_lineage always stamps fetched_at=
+now(). Persisting a fresh build unconditionally, even one with identical
+content, would bump fetched_at and trip that tripwire on every single
+autofill, forever -- the same "automatic path becomes unreachable" trap
+this module's docstring already names for an earlier, rejected design
+(the open-ended MOMENTUM_WINDOW_2 boundary, above).
+
+Instead: build_lineage is run TWICE -- once before this run's fill
+touches prices_eod at all, once after -- and the two fresh computations
+are diffed against EACH OTHER, content only (isin, entity_id,
+predecessor_isin, link_method, known_date -- never fetched_at/
+revision_seq, which always differ on every call). Deliberately NOT
+diffed against what is currently PERSISTED in isin_lineage: that table
+was intentionally frozen 2026-09-19 for margin_tripwire's own purposes
+and has legitimately drifted from "what build_lineage() would produce
+today" ever since, for reasons with nothing to do with any one gap fill
+(prices_eod has grown for two months of ordinary trading days). Diffing
+against that stale snapshot would find a large, pre-existing mismatch on
+EVERY run regardless of what this fill touched -- the same "automatic
+path becomes unreachable forever" trap this module's docstring already
+names twice above, reintroduced a third time if not caught. The
+before/after comparison isolates exactly what THIS fill changed, nothing
+else. Either way, isin_lineage itself is never written here -- if
+nothing changed, there is nothing to persist that isn't already true;
+if something changed, it must not be persisted silently (an automatic
+rebuild must never apply a different link without review) and
+LineageWouldChangeError is raised instead -- the fill's raw prices_eod
+rows and the two materializations above are NOT reverted (same
+precedent as TripwireFailedAfterBackfillError: surfaced loudly, not
+rolled back), but the run ends in a required human decision rather than
+a quiet success. This is Bug #33's own candidate fix, built: "re-run
+build_lineage and diff ... refusing on any changed/dropped link" --
+diffing before-vs-after rather than before-vs-persisted, for the reason
+above.
+
 NOT rebuilt, and why:
   - lineage_jump_guard.find_unexplained_jumps / same_isin_jump_guard's
     equivalent / compute_momentum_universe's own unexplained_jump_
     boundaries: none of these are materialized tables. Every call reads
     prices_eod/isin_lineage fresh -- there is nothing to rematerialize;
     they self-heal the instant the underlying rows are correct.
-  - isin_lineage: NOT purely independent of prices_eod -- isin_lineage.
-    build_isin_date_ranges reads each (symbol, isin) pair's first/last
-    observed trade_date FROM prices_eod, so a backfill could in
-    principle shift a lineage boundary if the filled date happens to be
-    a company's very first or very last trading day on record. Not
-    automatically rebuilt here: re-running build_lineage is a heavier,
-    independently-reviewed operation (ISIN continuity resolution), not
-    something to fire silently as a side effect of an operational gap
-    fill. An AUTO_FILL date is, by construction, recent and ordinary
-    (not a listing/delisting edge for dozens of entities at once) --
-    flagged as a narrow, residual limitation rather than assumed safe.
   - index_eod: populated by a wholly separate source (NSE_INDEX_CLOSE_
     ALL, data_layer.index_nse) that does not read prices_eod at all;
     there is no table in this codebase derived from BOTH prices_eod and
@@ -109,10 +143,12 @@ from pathlib import Path
 from typing import Callable
 
 import duckdb
+import pandas as pd
 
 from data_layer.adjustment import materialize_adjustment_factors
 from data_layer.entity_panel import materialize_entity_panel
 from data_layer.holdout import MOMENTUM_WINDOW_2_START
+from data_layer.isin_lineage import build_lineage
 from data_layer.margin_tripwire import (
     FrozenTableResumedError,
     HOLDOUT_WINDOW_END,
@@ -196,6 +232,44 @@ class TripwireFailedAfterBackfillError(Exception):
     caller can refuse exactly like any other data-integrity failure."""
 
 
+class LineageWouldChangeError(Exception):
+    """Raised when recomputing isin_lineage after an auto-fill would
+    produce different content than what is currently persisted (BUGS.md
+    Bug #33) -- the new lineage is NOT written. Message carries only
+    isins and dates, never price data, same discipline as
+    GapRequiresHumanDecisionError. The raw prices_eod fill and the
+    adjustment_factors/entity_panel rematerializations that already ran
+    are NOT reverted -- same precedent as TripwireFailedAfterBackfillError."""
+
+
+_LINEAGE_CONTENT_COLS = ["entity_id", "predecessor_isin", "link_method", "known_date"]
+
+
+def _lineage_content_diff(old_df: pd.DataFrame, new_df: pd.DataFrame) -> list[str]:
+    """isins whose (entity_id, predecessor_isin, link_method, known_date)
+    differs between two build_lineage() outputs, or that exist on only
+    one side -- empty list means the two computations agree completely.
+    Pure dataframe diff, no connection -- callers pass a BEFORE-fill and
+    an AFTER-fill build_lineage() result (module docstring explains why
+    this must be before-vs-after, never before-vs-currently-persisted).
+    Never compares fetched_at/source/revision_seq, which legitimately
+    differ on every build_lineage() call regardless of content."""
+    old = old_df[["isin"] + _LINEAGE_CONTENT_COLS].copy()
+    new = new_df[["isin"] + _LINEAGE_CONTENT_COLS].copy()
+
+    for df in (old, new):
+        df["predecessor_isin"] = df["predecessor_isin"].fillna("<NONE>")
+        df["known_date"] = pd.to_datetime(df["known_date"]).dt.date
+
+    merged = old.merge(new, on="isin", how="outer", suffixes=("_old", "_new"), indicator=True)
+    changed_isins: set[str] = set(merged.loc[merged["_merge"] != "both", "isin"])
+    both = merged[merged["_merge"] == "both"]
+    for col in _LINEAGE_CONTENT_COLS:
+        mismatched = both.loc[both[f"{col}_old"] != both[f"{col}_new"], "isin"]
+        changed_isins.update(mismatched)
+    return sorted(changed_isins)
+
+
 @dataclass(frozen=True)
 class GapDecision:
     trade_date: dt.date
@@ -259,6 +333,9 @@ def run_gap_check_and_autofill(
     GapRequiresHumanDecisionError if any gap is too old or inside a
     window a result has been recorded against -- after filling
     everything else first, not instead of it. Raises
+    LineageWouldChangeError if recomputing isin_lineage after the fill
+    would change any isin's resolution (BUGS.md Bug #33) -- checked
+    before the margin tripwire, which would otherwise mask it. Raises
     TripwireFailedAfterBackfillError if the tripwire fails immediately
     after an auto-fill."""
     missing = find_missing_trading_days(con)
@@ -273,6 +350,12 @@ def run_gap_check_and_autofill(
     if auto:
         log(f"price gap check: {len(auto)} recent, non-sealed missing trading day(s) -- "
             f"auto-filling: {[d.trade_date.isoformat() for d in auto]}")
+        # Captured BEFORE prices_eod is touched -- the baseline this fill's
+        # own effect on isin_lineage is measured against. Must not be the
+        # currently-persisted isin_lineage table (module docstring: that
+        # snapshot is frozen as of 2026-09-19 and has already drifted from
+        # "what build_lineage() produces today" for unrelated reasons).
+        pre_lineage_df, _ = build_lineage(con)
         for d in auto:
             n = load_bhavcopy_to_duckdb(con, d.trade_date, raw_dir, series_include=series_include)
             result["rows_loaded"] += n
@@ -284,6 +367,22 @@ def run_gap_check_and_autofill(
         log("price gap check: rebuilding downstream chain (adjustment_factors, entity panel)...")
         materialize_adjustment_factors(con)
         materialize_entity_panel(con)
+
+        log("price gap check: verifying isin_lineage is unaffected by this fill (BUGS.md Bug #33)...")
+        post_lineage_df, _ = build_lineage(con)
+        changed = _lineage_content_diff(pre_lineage_df, post_lineage_df)
+        if changed:
+            raise LineageWouldChangeError(
+                "auto-filling {} would change isin_lineage's resolution for {} isin(s): {} -- "
+                "NOT persisted. The price fill and adjustment_factors/entity_panel rebuilds above "
+                "already happened and are not reverted; a human must review the lineage change "
+                "before isin_lineage itself is touched. See BUGS.md Bug #33.".format(
+                    [d.trade_date.isoformat() for d in auto], len(changed), changed[:10],
+                )
+            )
+        log("price gap check: isin_lineage unaffected -- not rewritten (its own freeze invariant "
+            "stays intact; see margin_tripwire.assert_corporate_actions_and_lineage_still_frozen).")
+
         log("price gap check: running margin tripwire after backfill...")
         try:
             assert_no_in_window_price_revision(con)

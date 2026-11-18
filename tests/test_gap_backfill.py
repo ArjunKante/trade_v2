@@ -3,13 +3,16 @@ backfill's AUTO_FILL vs ALERT_STOP policy, and the downstream
 rematerialization + tripwire chain it runs after any auto-fill.
 
 Every dependency gap_backfill calls out to (load_bhavcopy_to_duckdb,
-materialize_adjustment_factors, materialize_entity_panel, both tripwire
-asserts, find_missing_trading_days) is monkeypatched on the gap_backfill
-module itself -- these tests are about the POLICY and WIRING, not a
-re-test of any of those functions' own behavior (each has its own
-coverage elsewhere). No real warehouse, network, or filesystem touched
-(WINDOW_FILL_AUDIT_LOG is redirected to tmp_path in every test that can
-reach it).
+materialize_adjustment_factors, materialize_entity_panel, build_lineage,
+_lineage_content_changed, both tripwire asserts, find_missing_trading_days)
+is monkeypatched on the gap_backfill module itself -- these tests are
+about the POLICY and WIRING, not a re-test of any of those functions' own
+behavior (each has its own coverage elsewhere; isin_lineage.build_lineage's
+own real behavior is covered by tests/test_isin_lineage.py, and the real
+diff logic added for BUGS.md Bug #33 is covered by
+test_lineage_content_changed_* below against a real in-memory connection).
+No real warehouse, network, or filesystem touched (WINDOW_FILL_AUDIT_LOG
+is redirected to tmp_path in every test that can reach it).
 
 The blocking set is DERIVED from each SealedWindow's own
 result_recorded_at field (user instruction, 2026-11-18: "the rule is 'a
@@ -117,7 +120,7 @@ class _Recorder:
         self.calls.append((a, k))
 
 
-def _patch_chain(monkeypatch, missing, tripwire_a_raises=None, tripwire_b_raises=None):
+def _patch_chain(monkeypatch, missing, tripwire_a_raises=None, tripwire_b_raises=None, lineage_changed=None):
     monkeypatch.setattr(gb, "find_missing_trading_days", lambda con: missing)
     load_calls = []
     monkeypatch.setattr(gb, "load_bhavcopy_to_duckdb",
@@ -126,6 +129,13 @@ def _patch_chain(monkeypatch, missing, tripwire_a_raises=None, tripwire_b_raises
     materialize_ep = _Recorder()
     monkeypatch.setattr(gb, "materialize_adjustment_factors", materialize_af)
     monkeypatch.setattr(gb, "materialize_entity_panel", materialize_ep)
+    # build_lineage/_lineage_content_diff's own real behavior (the BUGS.md
+    # Bug #33 fix) is exercised directly against real dataframes/connections
+    # below -- here, only the WIRING (is it called before AND after the
+    # fill, does a non-empty diff raise and skip the tripwire) is under
+    # test, same as every other dependency.
+    monkeypatch.setattr(gb, "build_lineage", lambda con: (None, None))
+    monkeypatch.setattr(gb, "_lineage_content_diff", lambda old_df, new_df: lineage_changed or [])
 
     def _assert_a(con):
         if tripwire_a_raises:
@@ -209,6 +219,148 @@ def test_tripwire_failure_after_autofill_raises_tripwire_failed_error(monkeypatc
     _patch_chain(monkeypatch, [MissingTradingDay(recent, REASON_MISSING)], **kwargs)
     with pytest.raises(gb.TripwireFailedAfterBackfillError):
         gb.run_gap_check_and_autofill(con=None, raw_dir=Path("."), as_of=TODAY, log=print)
+
+
+# --------------------------------------------------------------------------
+# BUGS.md Bug #33: isin_lineage must be verified unaffected, not silently
+# rewritten -- and when it WOULD change, the fill must not end in a quiet
+# success.
+# --------------------------------------------------------------------------
+
+def test_lineage_unaffected_proceeds_to_tripwire_as_before(monkeypatch):
+    """The common case (Bug #33's own text: most gaps don't land on any
+    entity's first/last observed day): no lineage change, so the run
+    proceeds exactly as it did before this fix -- tripwire runs and passes."""
+    recent = TODAY - dt.timedelta(days=5)
+    _patch_chain(monkeypatch, [MissingTradingDay(recent, REASON_MISSING)], lineage_changed=[])
+    logged = []
+    result = gb.run_gap_check_and_autofill(con=None, raw_dir=Path("."), as_of=TODAY, log=logged.append)
+    assert result["auto_filled"] == [recent]
+    assert any("isin_lineage unaffected" in m for m in logged)
+    assert any("margin tripwire passed" in m for m in logged)
+
+
+def test_lineage_would_change_raises_and_skips_tripwire(monkeypatch):
+    """Bug #33's actual reproduced failure mode: the fill lands on an
+    entity's own first/last observed day and would change its lineage
+    resolution. Must raise LineageWouldChangeError, name the affected
+    isin, and never reach (or pass) the margin tripwire on this call --
+    the raw price fill and the two materializations are NOT reverted,
+    same precedent as TripwireFailedAfterBackfillError."""
+    recent = TODAY - dt.timedelta(days=5)
+    load_calls, materialize_af, materialize_ep = _patch_chain(
+        monkeypatch, [MissingTradingDay(recent, REASON_MISSING)], lineage_changed=["INE999Z01011"]
+    )
+    with pytest.raises(gb.LineageWouldChangeError) as exc_info:
+        gb.run_gap_check_and_autofill(con=None, raw_dir=Path("."), as_of=TODAY, log=print)
+    assert "INE999Z01011" in str(exc_info.value)
+    assert load_calls == [recent]  # the raw fill already happened
+    assert len(materialize_af.calls) == 1  # so did the two rematerializations
+    assert len(materialize_ep.calls) == 1
+
+
+def test_lineage_check_runs_before_margin_tripwire(monkeypatch):
+    """Ordering matters: if isin_lineage would change, that must be
+    caught and raised BEFORE the margin tripwire's own lineage-frozen
+    check runs -- the tripwire check would likely pass anyway (isin_
+    lineage is never actually written), which would mask the real
+    problem with a misleadingly generic 'tripwire passed' log line."""
+    recent = TODAY - dt.timedelta(days=5)
+    tripwire_calls = []
+    _patch_chain(monkeypatch, [MissingTradingDay(recent, REASON_MISSING)], lineage_changed=["INE999Z01011"])
+    monkeypatch.setattr(gb, "assert_corporate_actions_and_lineage_still_frozen",
+                         lambda con: tripwire_calls.append(con))
+    with pytest.raises(gb.LineageWouldChangeError):
+        gb.run_gap_check_and_autofill(con=None, raw_dir=Path("."), as_of=TODAY, log=print)
+    assert tripwire_calls == []
+
+
+# --------------------------------------------------------------------------
+# _lineage_content_diff: the actual diff logic (before-fill build_lineage()
+# vs after-fill build_lineage(), never against the persisted table -- see
+# the module docstring for why). Pure dataframe comparison, no connection.
+# --------------------------------------------------------------------------
+
+def _lineage_row(isin, entity_id, predecessor_isin, known_date, link_method="nsdl_structural"):
+    return {
+        "isin": isin, "entity_id": entity_id, "predecessor_isin": predecessor_isin,
+        "link_method": link_method, "known_date": known_date,
+        "fetched_at": dt.datetime.now(), "source": "TEST", "revision_seq": 1,
+    }
+
+
+def test_lineage_content_diff_empty_when_identical():
+    import pandas as pd
+    old = pd.DataFrame([_lineage_row("INE001A01001", "INE001A01001", None, dt.date(2020, 1, 1))])
+    new = pd.DataFrame([_lineage_row("INE001A01001", "INE001A01001", None, dt.date(2020, 1, 1))])
+    assert gb._lineage_content_diff(old, new) == []
+
+
+def test_lineage_content_diff_detects_a_dropped_link():
+    """Bug #33's second reproduction: a clean predecessor link reverts to
+    None (overlapping_date_ranges_not_a_clean_handover) after a backfill."""
+    import pandas as pd
+    old = pd.DataFrame([_lineage_row("INE002A01002", "INE001A01001", "INE001A01001", dt.date(2021, 6, 1))])
+    new = pd.DataFrame([_lineage_row("INE002A01002", "INE002A01002", None, dt.date(2021, 6, 1), "chain_start")])
+    assert gb._lineage_content_diff(old, new) == ["INE002A01002"]
+
+
+def test_lineage_content_diff_detects_a_shifted_known_date():
+    """Bug #33's first reproduction: a successor's known_date (transition
+    date) shifts earlier once the missing days before it are filled."""
+    import pandas as pd
+    old = pd.DataFrame([_lineage_row("INE003A01003", "INE001A01001", "INE001A01001", dt.date(2021, 6, 5))])
+    new = pd.DataFrame([_lineage_row("INE003A01003", "INE001A01001", "INE001A01001", dt.date(2021, 6, 3))])
+    assert gb._lineage_content_diff(old, new) == ["INE003A01003"]
+
+
+def test_lineage_content_diff_ignores_fetched_at_and_revision_seq():
+    import pandas as pd
+    old = pd.DataFrame([_lineage_row("INE004A01004", "INE004A01004", None, dt.date(2020, 1, 1))])
+    new_row = _lineage_row("INE004A01004", "INE004A01004", None, dt.date(2020, 1, 1))
+    new_row["fetched_at"] = dt.datetime.now() + dt.timedelta(days=1)
+    new_row["revision_seq"] = 2
+    new = pd.DataFrame([new_row])
+    assert gb._lineage_content_diff(old, new) == []
+
+
+def test_lineage_content_diff_detects_added_or_removed_isin():
+    import pandas as pd
+    old = pd.DataFrame([_lineage_row("INE005A01005", "INE005A01005", None, dt.date(2020, 1, 1))])
+    new = pd.DataFrame([
+        _lineage_row("INE005A01005", "INE005A01005", None, dt.date(2020, 1, 1)),
+        _lineage_row("INE006A01006", "INE006A01006", None, dt.date(2020, 1, 1)),
+    ])
+    assert gb._lineage_content_diff(old, new) == ["INE006A01006"]
+
+
+# --------------------------------------------------------------------------
+# End-to-end sanity against the real build_lineage(), unmocked: confirms
+# build_lineage() is called exactly twice (before and after the fill) and
+# that a real, unmocked no-op diff against itself is empty -- catches a
+# regression where the "before" snapshot was accidentally captured after
+# prices_eod was already touched.
+# --------------------------------------------------------------------------
+
+def test_build_lineage_called_before_and_after_the_fill(monkeypatch):
+    import pandas as pd
+    recent = TODAY - dt.timedelta(days=5)
+    monkeypatch.setattr(gb, "find_missing_trading_days", lambda con: [MissingTradingDay(recent, REASON_MISSING)])
+    monkeypatch.setattr(gb, "load_bhavcopy_to_duckdb", lambda con, d, raw_dir, series_include=None: 100)
+    monkeypatch.setattr(gb, "materialize_adjustment_factors", lambda con: None)
+    monkeypatch.setattr(gb, "materialize_entity_panel", lambda con: None)
+    monkeypatch.setattr(gb, "assert_no_in_window_price_revision", lambda con: None)
+    monkeypatch.setattr(gb, "assert_corporate_actions_and_lineage_still_frozen", lambda con: None)
+
+    build_calls = []
+
+    def fake_build_lineage(con):
+        build_calls.append(con)
+        return pd.DataFrame(columns=["isin"] + gb._LINEAGE_CONTENT_COLS), pd.DataFrame()
+
+    monkeypatch.setattr(gb, "build_lineage", fake_build_lineage)
+    gb.run_gap_check_and_autofill(con="FAKE_CON", raw_dir=Path("."), as_of=TODAY, log=print)
+    assert build_calls == ["FAKE_CON", "FAKE_CON"]  # called exactly twice, before and after
 
 
 # --------------------------------------------------------------------------

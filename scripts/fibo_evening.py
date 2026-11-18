@@ -78,6 +78,7 @@ from data_layer.adjustment import materialize_adjustment_factors
 from data_layer.db import get_connection
 from data_layer.gap_backfill import (
     GapRequiresHumanDecisionError,
+    LineageWouldChangeError,
     TripwireFailedAfterBackfillError,
     run_gap_check_and_autofill,
 )
@@ -530,6 +531,11 @@ def main() -> None:
     except GapRequiresHumanDecisionError as e:
         log(f"REFUSING TO COMPUTE: {e}")
         notify_evening_skipped(requested_date, "price gap needs review", str(e))
+        con.close()
+        return
+    except LineageWouldChangeError as e:
+        log(f"REFUSING TO COMPUTE: {e}")
+        notify_evening_skipped(requested_date, "isin_lineage would change after backfill", str(e))
         con.close()
         return
     except TripwireFailedAfterBackfillError as e:

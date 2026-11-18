@@ -818,7 +818,16 @@ because `adjustment_factors` had no rows for those dates and the
 panel's inner join dropped them again — silently, with the raw data
 now visibly present. Any backfill path must rebuild its full downstream
 chain and verify, or it restores the appearance of correctness without
-the substance.
+the substance. Second confirmed instance, same backfill path, found two
+days later (BUGS.md Bug #33): the chain had been mapped —
+`adjustment_factors` and `entity_prices_daily` rebuilt — but one link,
+`isin_lineage`, was excluded on the reasoning "narrow edge case, not
+verified." It was neither: an ordinary backfilled day can shift a
+successor ISIN's known_date or flip a clean handover to an unresolved
+overlap, silently splitting one entity's continuous history into two.
+An exclusion from the rebuild chain needs the same verification as an
+inclusion — "derived table" has no silent exception for "this one is
+harder to rebuild safely."
 
 ---
 
